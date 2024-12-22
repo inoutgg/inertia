@@ -1,0 +1,6 @@
+export GOFUMPT_SPLIT_LONG_LINES="on"
+export GOTOOLCHAIN="local"
+
+if use flake; then
+    use flake
+fi

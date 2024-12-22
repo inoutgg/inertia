@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "name": "@inoutgg/inertia",
+  "version": "0.1.0",
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@inertiajs/react": "^2.0.0"
+  }
+}
