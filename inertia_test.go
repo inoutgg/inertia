@@ -45,7 +45,6 @@ func TestNew(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -63,8 +62,6 @@ func TestNew(t *testing.T) {
 }
 
 func TestFromFS(t *testing.T) {
-	t.Parallel()
-
 	// Test cases
 	tests := []struct {
 		name        string
@@ -101,8 +98,6 @@ func TestFromFS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name+" (FromFS)", func(t *testing.T) {
-			t.Parallel()
-
 			renderer, err := FromFS(testFS(), tt.path, tt.config)
 
 			if tt.wantErr {
@@ -117,8 +112,6 @@ func TestFromFS(t *testing.T) {
 		})
 
 		t.Run(tt.name+" (MustFromFS)", func(t *testing.T) {
-			t.Parallel()
-
 			if tt.wantPanic {
 				assert.Panics(t, func() {
 					MustFromFS(testFS(), tt.path, tt.config)

@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -27,10 +26,6 @@ const (
 )
 
 const DefaultRootViewID = "app"
-
-type ctxKey struct{}
-
-var kCtxKey ctxKey = ctxKey{}
 
 // Page represents an Inertia.js page that is sent to the client.
 type Page struct {
@@ -111,14 +106,15 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 //
 // To create a new Renderer, use the New or FromFS functions.
 type Renderer struct {
-	t          *template.Template
+	t *template.Template
+
 	ssrClient  SsrClient
 	rootViewID string
 	version    string
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, opts *Options) *Page {
-	rawProps := opts.Props
+func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Context) *Page {
+	rawProps := rCtx.Props
 	props := r.makeProps(req, componentName, rawProps)
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
@@ -134,8 +130,8 @@ func (r *Renderer) newPage(req *http.Request, componentName string, opts *Option
 		MergeProps:     mergeProps,
 		URL:            req.RequestURI,
 		Version:        r.version,
-		ClearHistory:   opts.ClearHistory,
-		EncryptHistory: opts.EncryptHistory,
+		ClearHistory:   rCtx.ClearHistory,
+		EncryptHistory: rCtx.EncryptHistory,
 	}
 }
 
@@ -145,7 +141,7 @@ func (r *Renderer) Version() string { return r.version }
 // Render sends a page component using Inertia.js protocol.
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, opts *Options) error {
+func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, opts *Context) error {
 	p := r.newPage(req, name, opts)
 
 	if isInertiaRequest(req) {
@@ -275,7 +271,7 @@ func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, pr
 func (r *Renderer) makeMergeProps(req *http.Request, props []*Prop, blacklist []string) []string {
 	mergeProps := make([]string, 0, len(props))
 	for _, p := range props {
-		if slices.Contains(blacklist, p.key) && !p.mergeable {
+		if slices.Contains(blacklist, p.key) || !p.mergeable {
 			continue
 		}
 
@@ -296,57 +292,6 @@ type TemplateData struct {
 	// T is an optional custom data that can be passed to the template.
 	// It is copied from the Options struct to the template context.
 	T any
-}
-
-// Options represents rendering options.
-type Options struct {
-	EncryptHistory bool
-	ClearHistory   bool
-	Props          []*Prop
-
-	// T is an optional custom data that can be passed to the template.
-	T any
-}
-
-// Option represents an optional function that can be used to configurate the rendering process.
-type Option func(*Options)
-
-// WithClearHistory sets the history clear.
-func WithClearHistory() Option {
-	return func(opt *Options) { opt.ClearHistory = true }
-}
-
-// WithEncryptHistory instructs the client to encrypt the history state.
-func WithEncryptHistory() Option {
-	return func(opt *Options) { opt.EncryptHistory = true }
-}
-
-// WithProps sets the props for the page.
-func WithProps(props ...*Prop) Option {
-	return func(opt *Options) { opt.Props = props }
-}
-
-// Render sends a page component using Inertia.js protocol, allowing server-side rendering
-// of components that interact seamlessly with the Inertia.js client.
-func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
-	options := Options{}
-	for _, opt := range opts {
-		opt(&options)
-	}
-
-	render, ok := r.Context().Value(kCtxKey).(Renderer)
-	if !ok {
-		return errors.New("inertia: renderer not found in request context - did you forget to use the middleware?")
-	}
-	if err := render.Render(w, r, componentName, &options); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MustRender is like Render, but panics if an error occurs.
-func MustRender(w http.ResponseWriter, req *http.Request, name string, opts ...Option) {
-	must.Must1(Render(w, req, name, opts...))
 }
 
 // Location sends a redirect response to the client.

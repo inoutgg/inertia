@@ -4,12 +4,15 @@ import (
 	"net/http"
 )
 
+var (
+	_ http.ResponseWriter                       = (*responseWriter)(nil)
+	_ interface{ Unwrap() http.ResponseWriter } = (*responseWriter)(nil)
+)
+
 const nFrontChunkSize = 4
 
-var _ http.ResponseWriter = (*responseWriter)(nil)
-
-// responseWriter is a wrapper around http.ResponseWriter that captures
-// the status code and whether the response has been written to.
+// responseWriter is a wrapper around http.ResponseWriter that defer
+// response writing until the flush method is called.
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -39,8 +42,14 @@ func (w *responseWriter) Empty() bool {
 	return len(w.back) == 0
 }
 
-// flush writes the buffered response to the underlying http.ResponseWriter.
-func (w *responseWriter) flush() error {
+// Unwrap returns the underlying http.ResponseWriter.
+// It is convenient for middleware that need to access the original response writer.
+func (w *responseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// Flush writes the buffered response to the underlying http.ResponseWriter.
+func (w *responseWriter) Flush() error {
 	w.ResponseWriter.WriteHeader(w.statusCode)
 
 	if w.nFront > 0 {

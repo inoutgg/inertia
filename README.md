@@ -24,6 +24,10 @@ func WithDefaultProps(props ...[]*inertia.Prop) inertia.Option {
 }
 ```
 
+## Vite
+
+This library provides a minimal adapter for the [Vite](https://vitejs.dev/) build tool available via `go.inout.gg/contrib/vite`.
+
 ## License
 
 MIT licensed

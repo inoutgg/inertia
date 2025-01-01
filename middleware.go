@@ -2,12 +2,18 @@ package inertia
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 
 	"go.inout.gg/foundations/http/httpmiddleware"
+	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia/internal/inertiaheader"
 )
+
+type ctxKey struct{}
+
+var kCtxKey ctxKey = ctxKey{}
 
 // https://inertiajs.com/redirects#303-response-code
 var seeOtherMethods = []string{http.MethodPatch, http.MethodPut, http.MethodDelete}
@@ -60,7 +66,7 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 
 			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 			defer func() {
-				if err := wrapped.flush(); err != nil {
+				if err := wrapped.Flush(); err != nil {
 					// TODO: handle error
 				}
 			}()
@@ -78,4 +84,55 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 			// }
 		})
 	}
+}
+
+// Context represents a Inertia.js page context.
+type Context struct {
+	EncryptHistory bool
+	ClearHistory   bool
+	Props          []*Prop
+
+	// T is an optional custom data that can be passed to the template.
+	T any
+}
+
+// Option configures rendering context.
+type Option func(*Context)
+
+// WithClearHistory sets the history clear.
+func WithClearHistory() Option {
+	return func(opt *Context) { opt.ClearHistory = true }
+}
+
+// WithEncryptHistory instructs the client to encrypt the history state.
+func WithEncryptHistory() Option {
+	return func(opt *Context) { opt.EncryptHistory = true }
+}
+
+// WithProps sets the props for the page.
+func WithProps(props ...*Prop) Option {
+	return func(opt *Context) { opt.Props = props }
+}
+
+// Render sends a page component using Inertia.js protocol, allowing server-side rendering
+// of components that interact seamlessly with the Inertia.js client.
+func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
+	rCtx := Context{}
+	for _, opt := range opts {
+		opt(&rCtx)
+	}
+
+	render, ok := r.Context().Value(kCtxKey).(*Renderer)
+	if !ok {
+		return errors.New("inertia: renderer not found in request context - did you forget to use the middleware?")
+	}
+	if err := render.Render(w, r, componentName, &rCtx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MustRender is like Render, but panics if an error occurs.
+func MustRender(w http.ResponseWriter, req *http.Request, name string, opts ...Option) {
+	must.Must1(Render(w, req, name, opts...))
 }

@@ -2,6 +2,14 @@ package inertia
 
 import "cmp"
 
+const DefaultDeferredGroup = "default"
+
+// Prop represents a single page property.
+//
+// Use convinient intstanciation functions to create a new property
+// such as NewProp, NewDeferred, NewAlways and NewOptional.
+//
+// Props can be attached to a rendering context using WithProps helper.
 type Prop struct {
 	mergeable bool
 	deferred  bool
@@ -14,15 +22,24 @@ type Prop struct {
 	valFn func() any // optional, deferred
 }
 
+// DeferredOptions represents a
 type DeferredOptions struct {
+	// Group defines deferred prop resolution group.
+	//
+	// If Group is not provided, it defaults to DefaultDeferredGroup.
 	Group string
+
+	// Merge defines props update resolution. If it is false prop is
+	// overridden, otherwise merged.
+	//
+	// Default to false.
 	Merge bool
 }
 
 // NewDeferred creates a new deferred prop that is resolved only when
 // it's requested.
 //
-// If the maybeGroup is not provided, it defaults to "default".
+// If opts is nil, default options is used.
 func NewDeferred(key string, fn func() any, opts *DeferredOptions) *Prop {
 	p := &Prop{
 		deferred:  true,
@@ -34,7 +51,7 @@ func NewDeferred(key string, fn func() any, opts *DeferredOptions) *Prop {
 	}
 
 	if opts != nil {
-		p.group = cmp.Or(opts.Group, "default")
+		p.group = cmp.Or(opts.Group, DefaultDeferredGroup)
 		p.mergeable = opts.Merge
 	}
 

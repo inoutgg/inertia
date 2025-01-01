@@ -28,6 +28,7 @@
               golangci-lint
               gofumpt
               go
+              nodejs
             ]
             ++ [ ciTestCommand ];
         };
