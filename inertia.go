@@ -5,7 +5,6 @@
 package inertia
 
 import (
-	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -118,7 +117,6 @@ func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Contex
 	props := r.makeProps(req, componentName, rawProps)
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
-		req,
 		rawProps,
 		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
 	)
@@ -186,7 +184,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 
 // makeRootView creates a root view element with the given page data.
 func (r *Renderer) makeRootView(p *Page) (template.HTML, error) {
-	var w bytes.Buffer
+	var w strings.Builder
 
 	_ = must.Must(w.WriteString(`<div id="`))
 	_ = must.Must(w.WriteString(r.rootViewID))
@@ -268,7 +266,7 @@ func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, pr
 
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func (r *Renderer) makeMergeProps(req *http.Request, props []*Prop, blacklist []string) []string {
+func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	mergeProps := make([]string, 0, len(props))
 	for _, p := range props {
 		if slices.Contains(blacklist, p.key) || !p.mergeable {

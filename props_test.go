@@ -111,3 +111,21 @@ func TestProps(t *testing.T) {
 		})
 	})
 }
+
+func TestPropsCollections(t *testing.T) {
+	t.Run("Props", func(t *testing.T) {
+		t.Parallel()
+
+		props := Props{
+			NewProp("key1", "val1", nil),
+			NewProp("key2", "val2", nil),
+		}
+
+		assert.Equal(t, 2, props.Len())
+		assert.Len(t, props.Props(), 2)
+		assert.Equal(t, "key1", props.Props()[0].key)
+		assert.Equal(t, "val1", props.Props()[0].value())
+		assert.Equal(t, "key2", props.Props()[1].key)
+		assert.Equal(t, "val2", props.Props()[1].value())
+	})
+}

@@ -4,6 +4,9 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    flake-utils.inputs = {
+      nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -28,6 +31,7 @@
               golangci-lint
               gofumpt
               go
+              gotools
               nodejs
             ]
             ++ [ ciTestCommand ];

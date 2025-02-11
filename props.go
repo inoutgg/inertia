@@ -1,6 +1,10 @@
 package inertia
 
-import "cmp"
+import (
+	"cmp"
+)
+
+var _ Proper = (Props)(nil)
 
 const DefaultDeferredGroup = "default"
 
@@ -109,3 +113,19 @@ func (p *Prop) value() any {
 
 	return p.val
 }
+
+// Proper is an interface that represents a collection of props.
+// It is used to attach props to the rendering context.
+type Proper interface {
+	// Props returns the list of props.
+	Props() []*Prop
+
+	// Len returns the number of props.
+	Len() int
+}
+
+// Props is a collection of props.
+type Props []*Prop
+
+func (p Props) Len() int       { return len(p) }
+func (p Props) Props() []*Prop { return p }

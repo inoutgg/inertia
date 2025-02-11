@@ -130,6 +130,13 @@ func TestFromFS(t *testing.T) {
 	}
 }
 
+func TestRenderer_Version(t *testing.T) {
+	t.Parallel()
+
+	renderer := New(testTpl, &Config{Version: "1.0.0"})
+	assert.Equal(t, "1.0.0", renderer.Version(), "renderer version should match config")
+}
+
 func TestExtractHeaderValueList(t *testing.T) {
 	t.Parallel()
 

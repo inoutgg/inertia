@@ -19,21 +19,22 @@ var kCtxKey ctxKey = ctxKey{}
 var seeOtherMethods = []string{http.MethodPatch, http.MethodPut, http.MethodDelete}
 
 type MiddlewareConfig struct {
-	// HandleEmptyResponse is a function that is called when the response is empty.
-	HandleEmptyResponse http.HandlerFunc
+	// EmptyResponseHandler is a function that is called when the response is empty.
+	EmptyResponseHandler http.HandlerFunc
 
-	// HandleVersionMismatch is a function that is called when the version mismatch occurs.
-	HandleVersionMismatch http.HandlerFunc
+	// OnVersionMismatch is a function that is called when the version mismatch occurs.
+	OnVersionMismatch http.HandlerFunc
 }
 
 func (m *MiddlewareConfig) defaults() {
-	if m.HandleEmptyResponse == nil {
-		m.HandleEmptyResponse = func(w http.ResponseWriter, r *http.Request) {
+	if m.EmptyResponseHandler == nil {
+		m.EmptyResponseHandler = func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Empty response", http.StatusNoContent)
 		}
 	}
-	if m.HandleVersionMismatch == nil {
-		m.HandleVersionMismatch = func(w http.ResponseWriter, r *http.Request) {
+
+	if m.OnVersionMismatch == nil {
+		m.OnVersionMismatch = func(w http.ResponseWriter, r *http.Request) {
 			Location(w, r, r.RequestURI)
 		}
 	}
@@ -50,43 +51,41 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set(inertiaheader.HeaderVary, inertiaheader.HeaderXInertia)
+			h := w.Header()
 			r = r.WithContext(context.WithValue(r.Context(), kCtxKey, renderer))
+
+			h.Set(inertiaheader.HeaderVary, inertiaheader.HeaderXInertia)
 
 			if !isInertiaRequest(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// externalVersion := r.Header.Get(headerXInertiaVersion)
-			// if externalVersion != renderer.Version() {
-			// 	Location(w, r, r.RequestURI)
-			// 	return
-			// }
-
-			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-			defer func() {
-				if err := wrapped.Flush(); err != nil {
-					// TODO: handle error
-				}
-			}()
-
-			next.ServeHTTP(wrapped, r)
-
-			if wrapped.statusCode == http.StatusFound &&
-				slices.Contains(seeOtherMethods, r.Method) {
-				wrapped.WriteHeader(http.StatusSeeOther)
+			externalVersion := r.Header.Get(inertiaheader.HeaderXInertiaVersion)
+			if externalVersion != renderer.Version() {
+				Location(w, r, r.RequestURI)
+				return
 			}
 
-			// if wrapped.Empty() {
-			// 	config.HandleEmptyResponse(wrapped, r)
-			// 	return
-			// }
+			ww := newResponseWriter(w)
+			next.ServeHTTP(ww, r)
+
+			if ww.statusCode == http.StatusFound &&
+				slices.Contains(seeOtherMethods, r.Method) {
+				ww.WriteHeader(http.StatusSeeOther)
+			}
+
+			if ww.Empty() {
+				config.EmptyResponseHandler(w, r)
+				return
+			}
+
+			_ = ww.flush()
 		})
 	}
 }
 
-// Context represents a Inertia.js page context.
+// Context represents an Inertia.js page context.
 type Context struct {
 	EncryptHistory bool
 	ClearHistory   bool
@@ -110,8 +109,19 @@ func WithEncryptHistory() Option {
 }
 
 // WithProps sets the props for the page.
-func WithProps(props ...*Prop) Option {
-	return func(opt *Context) { opt.Props = props }
+// Calling this function multiple times will append the props.
+func WithProps(props Proper) Option {
+	return func(opt *Context) {
+		if props == nil {
+			return
+		}
+
+		if opt.Props == nil {
+			opt.Props = make([]*Prop, 0, props.Len())
+		}
+
+		opt.Props = append(opt.Props, props.Props()...)
+	}
 }
 
 // Render sends a page component using Inertia.js protocol, allowing server-side rendering

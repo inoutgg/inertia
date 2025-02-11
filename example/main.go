@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 
 	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia"
@@ -27,6 +29,9 @@ const rootTemplate = `<!doctype html>
 </html>`
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	renderer := inertia.New(
 		must.Must(vite.NewTemplate(rootTemplate, nil)),
 		nil,
@@ -35,8 +40,17 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		inertia.MustRender(w, r, "Index")
+		inertia.MustRender(w, r, "Index", inertia.WithProps(inertia.Props{
+			inertia.NewProp("key", "val", nil),
+		}))
 	}))
 
-	must.Must1(http.ListenAndServe(":8080", middleware.Middleware(mux)))
+	go func() {
+		must.Must1(http.ListenAndServe(":8080", middleware.Middleware(mux)))
+	}()
+
+	log.Info("Server is running", slog.String("addr", "http://localhost:8080"))
+	<-ctx.Done()
+
+	log.Info("Shutting down server")
 }
