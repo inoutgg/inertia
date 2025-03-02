@@ -112,7 +112,7 @@ type Renderer struct {
 	version    string
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Context) *Page {
+func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
 	rawProps := rCtx.Props
 	props := r.makeProps(req, componentName, rawProps)
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
@@ -139,8 +139,8 @@ func (r *Renderer) Version() string { return r.version }
 // Render sends a page component using Inertia.js protocol.
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, opts *Context) error {
-	p := r.newPage(req, name, opts)
+func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx *RenderContext) error {
+	p := r.newPage(req, name, renderCtx)
 
 	if isInertiaRequest(req) {
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
@@ -157,7 +157,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	w.Header().Set(inertiaheader.HeaderContentType, contentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 
-	data := TemplateData{T: opts.T}
+	data := TemplateData{T: renderCtx.T}
 	if r.ssrClient != nil {
 		ssrData, err := r.ssrClient.Render(p)
 		if err != nil {
@@ -277,6 +277,29 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	}
 
 	return mergeProps
+}
+
+func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer) map[string]any {
+	m := make(map[string]any)
+	for _, errorer := range errorers {
+		bag := m
+		errorBag := errorer.ErrorBag()
+		if errorBag != DefaultErrorBag {
+			if bag, ok := m[errorBag].(map[string]any); !ok {
+				bag = make(map[string]any)
+				m[errorBag] = bag
+			}
+		}
+
+		errs := errorer.ValidationErrors()
+		for _, err := range errs {
+			// We might want to validate that the field does not intersect with
+			// any error bags.
+			bag[err.Field()] = err.Error()
+		}
+	}
+
+	return m
 }
 
 // TemplateData represents the data that is passed to the HTML template.

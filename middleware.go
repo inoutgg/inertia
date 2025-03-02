@@ -85,49 +85,68 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 	}
 }
 
-// Context represents an Inertia.js page context.
-type Context struct {
-	EncryptHistory bool
-	ClearHistory   bool
-	Props          []*Prop
+// RenderContext represents an Inertia.js page context.
+type RenderContext struct {
+	EncryptHistory  bool
+	ClearHistory    bool
+	Props           []*Prop
+	ValidationError []ValidationError
 
 	// T is an optional custom data that can be passed to the template.
 	T any
 }
 
 // Option configures rendering context.
-type Option func(*Context)
+type Option func(*RenderContext)
 
 // WithClearHistory sets the history clear.
 func WithClearHistory() Option {
-	return func(opt *Context) { opt.ClearHistory = true }
+	return func(opt *RenderContext) { opt.ClearHistory = true }
 }
 
 // WithEncryptHistory instructs the client to encrypt the history state.
 func WithEncryptHistory() Option {
-	return func(opt *Context) { opt.EncryptHistory = true }
+	return func(opt *RenderContext) { opt.EncryptHistory = true }
 }
 
 // WithProps sets the props for the page.
+//
 // Calling this function multiple times will append the props.
 func WithProps(props Proper) Option {
-	return func(opt *Context) {
+	return func(renderCtx *RenderContext) {
 		if props == nil {
 			return
 		}
 
-		if opt.Props == nil {
-			opt.Props = make([]*Prop, 0, props.Len())
+		if renderCtx.Props == nil {
+			renderCtx.Props = make([]*Prop, 0, props.Len())
 		}
 
-		opt.Props = append(opt.Props, props.Props()...)
+		renderCtx.Props = append(renderCtx.Props, props.Props()...)
+	}
+}
+
+// WithValidationErrors sets the validation errors for the page.
+//
+// Calling this function multiple times will append the errors.
+func WithValidationErrors(errs ValidationErrorer) Option {
+	return func(renderCtx *RenderContext) {
+		if errs == nil {
+			return
+		}
+
+		if renderCtx.ValidationError == nil {
+			renderCtx.ValidationError = make([]ValidationError, 0, )
+		}
+
+		renderCtx.ValidationError = append(renderCtx.ValidationError, errs.ValidationErrors()...)
 	}
 }
 
 // Render sends a page component using Inertia.js protocol, allowing server-side rendering
 // of components that interact seamlessly with the Inertia.js client.
 func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
-	rCtx := Context{}
+	rCtx := RenderContext{}
 	for _, opt := range opts {
 		opt(&rCtx)
 	}

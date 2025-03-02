@@ -9,6 +9,7 @@ import (
 
 	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia"
+	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
 	"go.inout.gg/inertia/contrib/vite"
 )
 
@@ -43,6 +44,13 @@ func main() {
 		inertia.MustRender(w, r, "Index", inertia.WithProps(inertia.Props{
 			inertia.NewProp("key", "val", nil),
 		}))
+	}))
+
+	mux.Handle("/createTodo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		inertia.MustRender(w, r, "Index", inertia.WithValidationErrors(inertia.WithErrorBag(
+			"createTodo", inertiavalidationerrors.Map{
+				"title": "Title is required",
+			})))
 	}))
 
 	go func() {

@@ -4,7 +4,10 @@ import (
 	"cmp"
 )
 
-var _ Proper = (Props)(nil)
+var (
+	_ Proper = (Props)(nil)
+	_ Proper = (*Prop)(nil)
+)
 
 const DefaultDeferredGroup = "default"
 
@@ -90,6 +93,7 @@ type PropOptions struct {
 }
 
 // NewProp creates a new regular prop.
+// opts can be nil.
 func NewProp(key string, val any, opts *PropOptions) *Prop {
 	p := &Prop{
 		ignorable: true,
@@ -113,6 +117,9 @@ func (p *Prop) value() any {
 
 	return p.val
 }
+
+func (p *Prop) Props() []*Prop { return []*Prop{p} }
+func (p *Prop) Len() int       { return 1 }
 
 // Proper is an interface that represents a collection of props.
 // It is used to attach props to the rendering context.

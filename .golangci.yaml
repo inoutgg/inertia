@@ -1,0 +1,13 @@
+run:
+  timeout: "5m"
+  concurrency: 8
+  allow-parallel-runners: true
+
+linters:
+  disable-all: true
+  enable:
+    - revive
+    - govet
+    - staticcheck # https://staticcheck.dev/docs/checks
+    - errcheck
+    - ineffassign
