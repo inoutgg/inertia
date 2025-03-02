@@ -2,6 +2,7 @@ package inertia
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,6 +31,8 @@ func TestSsrRender(t *testing.T) {
 		Component: "Test",
 		Props:     map[string]interface{}{"foo": "bar"},
 	}
+	pageJson, err := json.Marshal(page)
+	assert.NoError(t, err)
 
 	t.Run("successfully renders page", func(t *testing.T) {
 		expected := &SsrTemplateData{
@@ -40,6 +43,15 @@ func TestSsrRender(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method)
 			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			body := r.Body
+			defer body.Close()
+
+			buf, err := io.ReadAll(body)
+			assert.NoError(t, err)
+
+			// Assert that the request body matches the expected JSON
+			assert.Equal(t, buf, pageJson)
 
 			w.Header().Set("Content-Type", "application/json")
 			require.NoError(t, json.NewEncoder(w).Encode(expected))
