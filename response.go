@@ -72,7 +72,7 @@ func (w *responseWriter) flush() error {
 	w.flushed = true
 
 	w.ResponseWriter.WriteHeader(w.statusCode)
-	w.ResponseWriter.Write(w.buf.AvailableBuffer())
+	w.ResponseWriter.Write(w.buf.Bytes())
 
 	w.buf.Reset()
 	bufPool.Put(w.buf)
