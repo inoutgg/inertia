@@ -47,6 +47,10 @@ type Config struct {
 	// Default is "app".
 	RootViewID string
 
+	// RootViewAttrs is a map of attributes for the root HTML element.
+	// Setting data-page does not have any effect.
+	RootViewAttrs map[string]string
+
 	// SsrClient is a server-side rendering client.
 	// If SsrClient is nil, the server-side rendering is disabled.
 	SsrClient SsrClient
@@ -67,10 +71,11 @@ func New(t *template.Template, config *Config) *Renderer {
 	config.defaults()
 
 	r := &Renderer{
-		t:          t,
-		ssrClient:  config.SsrClient,
-		version:    config.Version,
-		rootViewID: config.RootViewID,
+		t:             t,
+		ssrClient:     config.SsrClient,
+		version:       config.Version,
+		rootViewID:    config.RootViewID,
+		rootViewAttrs: config.RootViewAttrs,
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -107,9 +112,10 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 type Renderer struct {
 	t *template.Template
 
-	ssrClient  SsrClient
-	rootViewID string
-	version    string
+	ssrClient     SsrClient
+	rootViewID    string
+	rootViewAttrs map[string]string
+	version       string
 }
 
 func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
@@ -189,15 +195,30 @@ func (r *Renderer) makeRootView(p *Page) (template.HTML, error) {
 	_ = must.Must(w.WriteString(`<div id="`))
 	_ = must.Must(w.WriteString(r.rootViewID))
 	_ = must.Must(w.WriteString(`" `))
-	_ = must.Must(w.WriteString(`data-page="`))
 
+	_ = must.Must(w.WriteString(`data-page="`))
 	pageBytes, err := json.Marshal(p)
 	if err != nil {
 		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
-
 	template.HTMLEscape(&w, pageBytes)
-	_ = must.Must(w.WriteString(`"></div>`))
+	_ = must.Must(w.WriteString(`" `))
+
+	if r.rootViewAttrs != nil {
+		for k, v := range r.rootViewAttrs {
+			// Skip the data-page attribute as it's already set.
+			if k == "data-page" {
+				continue
+			}
+
+			_ = must.Must(w.WriteString(k))
+			_ = must.Must(w.WriteString(`="`))
+			template.HTMLEscape(&w, []byte(v))
+			_ = must.Must(w.WriteString(`" `))
+		}
+	}
+
+	_ = must.Must(w.WriteString(`></div>`))
 
 	return template.HTML(w.String()), nil
 }
