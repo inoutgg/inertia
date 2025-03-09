@@ -43,7 +43,7 @@ type validationError struct {
 // NewValidationError creates a new validation error.
 //
 // opts can be nil.
-func NewValidationError(field string, message string, opts *ValidationErrorOptions) ValidationError {
+func NewValidationError(field string, message string, opts *ValidationErrorOptions) *validationError {
 	err := &validationError{
 		field:    field,
 		message:  message,
@@ -67,15 +67,24 @@ func (errs ValidationErrors) ValidationErrors() []ValidationError { return errs 
 func (errs ValidationErrors) Len() int                            { return len(errs) }
 func (errs ValidationErrors) ErrorBag() string                    { return "" }
 
+// WithErrorBag assigns an error bag to the ValidationErrors.
+func (errs ValidationErrors) WithErrorBag(errorBag string) ValidationErrorer {
+	return WithErrorBag(errorBag, errs)
+}
+
 type wrappedValidationErrorer struct {
 	errorBag string
 	errorer  ValidationErrorer
 }
 
+// WithErrorBag assigns an error bag to the wrapped errorer.
 func WithErrorBag(errorBag string, errorer ValidationErrorer) ValidationErrorer {
 	return &wrappedValidationErrorer{errorBag, errorer}
 }
 
-func (w *wrappedValidationErrorer) ErrorBag() string                    { return w.errorBag }
-func (w *wrappedValidationErrorer) ValidationErrors() []ValidationError { return w.ValidationErrors() }
-func (w *wrappedValidationErrorer) Len() int                            { return w.Len() }
+func (w *wrappedValidationErrorer) ErrorBag() string { return w.errorBag }
+func (w *wrappedValidationErrorer) ValidationErrors() []ValidationError {
+	return w.errorer.ValidationErrors()
+}
+
+func (w *wrappedValidationErrorer) Len() int { return w.errorer.Len() }

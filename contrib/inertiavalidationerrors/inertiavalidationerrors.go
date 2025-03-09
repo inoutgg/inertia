@@ -1,6 +1,10 @@
 package inertiavalidationerrors
 
-import "go.inout.gg/inertia"
+import (
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
+	"go.inout.gg/inertia"
+)
 
 var _ inertia.ValidationErrorer = (*Map)(nil)
 
@@ -20,3 +24,39 @@ func (m Map) ValidationErrors() []inertia.ValidationError {
 func (m Map) Len() int { return len(m) }
 
 func (m Map) ErrorBag() string { return "" }
+
+// WithErrorBag assigns the errorBag to the Map.
+func (m Map) WithErrorBag(errorBag string) inertia.ValidationErrorer {
+	return inertia.WithErrorBag(errorBag, m)
+}
+
+// FromValidationErrors creates a Map from a validator error.
+//
+// FromValidationErrors supports nested errors implemented via the Unwrap() error
+// method. Unwrap() []error interface is not supported.
+func FromValidationErrors(err error, t ut.Translator) (Map, bool) {
+	switch cerr := err.(type) {
+	case validator.ValidationErrors:
+		{
+			m := make(Map)
+			for _, e := range cerr {
+				f := e.Field()
+				msg := e.Translate(t)
+				m[f] = msg
+			}
+
+			return m, true
+		}
+
+	case interface{ Unwrap() error }:
+		err = cerr.Unwrap()
+		if err == nil {
+			return nil, false
+		}
+
+		return FromValidationErrors(err, t)
+
+	default:
+		return nil, false
+	}
+}
