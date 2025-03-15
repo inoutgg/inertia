@@ -128,17 +128,3 @@ func TestFromValidationErrors(t *testing.T) {
 		})
 	}
 }
-
-func TestMap_WithErrorBag(t *testing.T) {
-	m := Map{"Name": "Name is required"}
-
-	assert.Equal(t, "", m.ErrorBag())
-
-	withBag := m.WithErrorBag("login")
-
-	assert.Equal(t, "login", withBag.ErrorBag())
-	assert.Equal(t, 1, withBag.Len())
-
-	// Original map should be unchanged
-	assert.Equal(t, "", m.ErrorBag())
-}

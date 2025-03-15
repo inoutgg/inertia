@@ -87,10 +87,10 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 
 // RenderContext represents an Inertia.js page context.
 type RenderContext struct {
-	EncryptHistory  bool
-	ClearHistory    bool
-	Props           []*Prop
-	ValidationError []ValidationError
+	encryptHistory    bool
+	clearHistory      bool
+	props             []*Prop
+	validationErrorer []ValidationErrorer
 
 	// T is an optional custom data that can be passed to the template.
 	T any
@@ -101,12 +101,12 @@ type Option func(*RenderContext)
 
 // WithClearHistory sets the history clear.
 func WithClearHistory() Option {
-	return func(opt *RenderContext) { opt.ClearHistory = true }
+	return func(opt *RenderContext) { opt.clearHistory = true }
 }
 
 // WithEncryptHistory instructs the client to encrypt the history state.
 func WithEncryptHistory() Option {
-	return func(opt *RenderContext) { opt.EncryptHistory = true }
+	return func(opt *RenderContext) { opt.encryptHistory = true }
 }
 
 // WithProps sets the props for the page.
@@ -118,28 +118,28 @@ func WithProps(props Proper) Option {
 			return
 		}
 
-		if renderCtx.Props == nil {
-			renderCtx.Props = make([]*Prop, 0, props.Len())
+		if renderCtx.props == nil {
+			renderCtx.props = make([]*Prop, 0, props.Len())
 		}
 
-		renderCtx.Props = append(renderCtx.Props, props.Props()...)
+		renderCtx.props = append(renderCtx.props, props.Props()...)
 	}
 }
 
 // WithValidationErrors sets the validation errors for the page.
 //
 // Calling this function multiple times will append the errors.
-func WithValidationErrors(errs ValidationErrorer) Option {
+func WithValidationErrors(errorers ValidationErrorer) Option {
 	return func(renderCtx *RenderContext) {
-		if errs == nil {
+		if errorers == nil {
 			return
 		}
 
-		if renderCtx.ValidationError == nil {
-			renderCtx.ValidationError = make([]ValidationError, 0, )
+		if renderCtx.validationErrorer == nil {
+			renderCtx.validationErrorer = make([]ValidationErrorer, 0)
 		}
 
-		renderCtx.ValidationError = append(renderCtx.ValidationError, errs.ValidationErrors()...)
+		renderCtx.validationErrorer = append(renderCtx.validationErrorer, errorers)
 	}
 }
 

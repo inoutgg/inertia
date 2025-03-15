@@ -15,7 +15,7 @@ type Map map[string]string
 func (m Map) ValidationErrors() []inertia.ValidationError {
 	errors := make([]inertia.ValidationError, 0, len(m))
 	for k, v := range m {
-		errors = append(errors, inertia.NewValidationError(k, v, nil))
+		errors = append(errors, inertia.NewValidationError(k, v))
 	}
 
 	return errors
@@ -24,11 +24,6 @@ func (m Map) ValidationErrors() []inertia.ValidationError {
 func (m Map) Len() int { return len(m) }
 
 func (m Map) ErrorBag() string { return "" }
-
-// WithErrorBag assigns the errorBag to the Map.
-func (m Map) WithErrorBag(errorBag string) inertia.ValidationErrorer {
-	return inertia.WithErrorBag(errorBag, m)
-}
 
 // FromValidationErrors creates a Map from a validator error.
 //

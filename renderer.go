@@ -119,7 +119,7 @@ type Renderer struct {
 }
 
 func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
-	rawProps := rCtx.Props
+	rawProps := append(rCtx.props, r.makeValidationErrors(req, rCtx.validationErrorer))
 	props := r.makeProps(req, componentName, rawProps)
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
@@ -134,8 +134,8 @@ func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Render
 		MergeProps:     mergeProps,
 		URL:            req.RequestURI,
 		Version:        r.version,
-		ClearHistory:   rCtx.ClearHistory,
-		EncryptHistory: rCtx.EncryptHistory,
+		ClearHistory:   rCtx.clearHistory,
+		EncryptHistory: rCtx.encryptHistory,
 	}
 }
 
@@ -300,27 +300,21 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	return mergeProps
 }
 
-func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer) map[string]any {
-	m := make(map[string]any)
+func (r *Renderer) makeValidationErrors(req *http.Request, errorers []ValidationErrorer) *Prop {
+	errorBag := extractErrorBag(req)
+	m := make(map[string]string)
 	for _, errorer := range errorers {
-		bag := m
-		errorBag := errorer.ErrorBag()
-		if errorBag != DefaultErrorBag {
-			if bag, ok := m[errorBag].(map[string]any); !ok {
-				bag = make(map[string]any)
-				m[errorBag] = bag
-			}
-		}
-
 		errs := errorer.ValidationErrors()
 		for _, err := range errs {
-			// We might want to validate that the field does not intersect with
-			// any error bags.
-			bag[err.Field()] = err.Error()
+			m[err.Field()] = err.Error()
 		}
 	}
 
-	return m
+	if errorBag != DefaultErrorBag {
+		return NewAlways(errorBag, map[string]map[string]string{errorBag: m})
+	}
+
+	return NewAlways("errors", m)
 }
 
 // TemplateData represents the data that is passed to the HTML template.
@@ -361,6 +355,15 @@ func isInertiaRequest(req *http.Request) bool {
 // matching the given componentName.
 func isPartialComponentRequest(req *http.Request, componentName string) bool {
 	return req.Header.Get(inertiaheader.HeaderXInertiaPartialComponent) == componentName
+}
+
+func extractErrorBag(req *http.Request) string {
+	errorBag := req.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
+	if errorBag == "" {
+		return DefaultErrorBag
+	}
+
+	return errorBag
 }
 
 // extractHeaderValueList extracts a list of values from a comma-separated inertiaheader.Header value.

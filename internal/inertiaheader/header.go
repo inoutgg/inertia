@@ -8,6 +8,7 @@ const (
 	HeaderXInertiaPartialExcept    = "X-Inertia-Partial-Except"    // client, blacklist
 	HeaderXInertiaPartialComponent = "X-Inertia-Partial-Component" // client
 	HeaderXInertiaReset            = "X-Inertia-Reset"             // client, force reload
+	HeaderXInertiaErrorBag         = "X-Inertia-Error-Bag"         // client
 
 	HeaderVary        = "Vary"
 	HeaderContentType = "Content-Type"

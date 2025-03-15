@@ -47,10 +47,9 @@ func main() {
 	}))
 
 	mux.Handle("/createTodo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		inertia.MustRender(w, r, "Index", inertia.WithValidationErrors(inertia.WithErrorBag(
-			"createTodo", inertiavalidationerrors.Map{
-				"title": "Title is required",
-			})))
+		inertia.MustRender(w, r, "Index", inertia.WithValidationErrors(inertiavalidationerrors.Map{
+			"title": "Title is required",
+		}))
 	}))
 
 	go func() {

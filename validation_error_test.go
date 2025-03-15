@@ -4,51 +4,60 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestWithErrorBag(t *testing.T) {
-	m := NewValidationError("Name", "Name is required", nil)
+func TestNewValidationError(t *testing.T) {
+	err := NewValidationError("email", "Email is invalid")
 
-	t.Run("Initial validation error", func(t *testing.T) {
-		assert.Equal(t, "", m.ErrorBag())
-		assert.Equal(t, 1, m.Len())
-		assert.Equal(t, "Name", m.ValidationErrors()[0].Field())
-		assert.Equal(t, "Name is required", m.ValidationErrors()[0].Error())
-	})
+	assert.Equal(t, "email", err.field, "Field should match")
+	assert.Equal(t, "Email is invalid", err.message, "Message should match")
+	assert.Equal(t, "", err.errorBag, "ErrorBag should be empty")
+}
 
-	t.Run("One wrapping", func(t *testing.T) {
-		withBag := WithErrorBag("login", m)
+func TestValidationError_Error(t *testing.T) {
+	err := NewValidationError("email", "Email is invalid")
+	assert.Equal(t, "Email is invalid", err.Error(), "Error() should return the message")
+}
 
-		assert.Equal(t, "login", withBag.ErrorBag())
-		assert.Equal(t, 1, withBag.Len())
+func TestValidationError_Field(t *testing.T) {
+	err := NewValidationError("email", "Email is invalid")
+	assert.Equal(t, "email", err.Field(), "Field() should return the field name")
+}
 
-		// Original validation error should be unchanged
-		assert.Equal(t, "", m.ErrorBag())
+func TestValidationError_ValidationErrors(t *testing.T) {
+	err := NewValidationError("email", "Email is invalid")
+	errors := err.ValidationErrors()
 
-		// Ensure validation errors are still accessible
-		assert.Equal(t, "Name", withBag.ValidationErrors()[0].Field())
-		assert.Equal(t, "Name is required", withBag.ValidationErrors()[0].Error())
-	})
+	require.Len(t, errors, 1, "ValidationErrors() should return a slice with 1 element")
+	assert.Same(t, err, errors[0], "The returned validation error should be the same instance")
+}
 
-	t.Run("Multiple wrappings", func(t *testing.T) {
-		withBag := WithErrorBag("login", m)
-		withSecondBag := WithErrorBag("register", withBag)
+func TestValidationError_Len(t *testing.T) {
+	err := NewValidationError("email", "Email is invalid")
+	assert.Equal(t, 1, err.Len(), "Len() should return 1")
+}
 
-		// Should use the latest error bag
-		assert.Equal(t, "register", withSecondBag.ErrorBag())
-		assert.Equal(t, 1, withSecondBag.Len())
+func TestValidationErrors_ValidationErrors(t *testing.T) {
+	err1 := NewValidationError("email", "Email is invalid")
+	err2 := NewValidationError("password", "Password is too short")
 
-		// Previous wrapped error should maintain its error bag
-		assert.Equal(t, "login", withBag.ErrorBag())
+	errs := ValidationErrors{err1, err2}
+	returnedErrs := errs.ValidationErrors()
 
-		// Test one more level of wrapping
-		withThirdBag := WithErrorBag("profile", withSecondBag)
+	require.Len(t, returnedErrs, 2, "ValidationErrors() should return 2 errors")
+	assert.Same(t, err1, returnedErrs[0], "First error should be the same instance")
+	assert.Same(t, err2, returnedErrs[1], "Second error should be the same instance")
+}
 
-		assert.Equal(t, "profile", withThirdBag.ErrorBag())
-		assert.Equal(t, 1, withThirdBag.Len())
+func TestValidationErrors_Len(t *testing.T) {
+	err1 := NewValidationError("email", "Email is invalid")
+	err2 := NewValidationError("password", "Password is too short")
 
-		// Make sure the ValidationErrors are still accessible through all wrappers
-		assert.Equal(t, "Name", withThirdBag.ValidationErrors()[0].Field())
-		assert.Equal(t, "Name is required", withThirdBag.ValidationErrors()[0].Error())
-	})
+	errs := ValidationErrors{err1, err2}
+	assert.Equal(t, 2, errs.Len(), "Len() should return 2")
+
+	// Test empty errors
+	emptyErrs := ValidationErrors{}
+	assert.Equal(t, 0, emptyErrs.Len(), "Len() should return 0 for empty errors")
 }
