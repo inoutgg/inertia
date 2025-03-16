@@ -1,3 +1,4 @@
+//go:generate mockgen -destination ssr_mock.go -package inertiatest go.inout.gg/inertia SsrClient
 package inertiatest
 
 import (
@@ -16,6 +17,7 @@ type RequestConfig struct {
 	Blacklist        []string
 	ResetProps       []string
 	PartialComponent string
+	ErrorBag         string
 }
 
 // NewEmptyRequest creates a new request with an empty body.
@@ -44,6 +46,9 @@ func NewRequest(
 	}
 	if config.PartialComponent != "" {
 		r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, config.PartialComponent)
+	}
+	if config.ErrorBag != "" {
+		r.Header.Set(inertiaheader.HeaderXInertiaErrorBag, config.ErrorBag)
 	}
 
 	return r, httptest.NewRecorder()

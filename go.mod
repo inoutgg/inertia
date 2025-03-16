@@ -8,6 +8,7 @@ require (
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/stretchr/testify v1.10.0
 	go.inout.gg/foundations v0.0.0-20241026193500-56d8f820fb0d
+	go.uber.org/mock v0.5.0
 )
 
 require (

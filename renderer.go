@@ -237,8 +237,8 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 			k := p.key
 			if p.ignorable {
 				// It should be fine to go through slices here, as the number of props is expected to be small.
-				if !slices.Contains(whitelist, k) ||
-					slices.Contains(blacklist, k) {
+				if len(whitelist) > 0 && !slices.Contains(whitelist, k) ||
+					len(blacklist) > 0 && slices.Contains(blacklist, k) {
 					continue
 				}
 			}
@@ -247,7 +247,7 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 		}
 	} else {
 		for _, p := range props {
-			// Skip lazy (deferred, optional) props on first render.
+			// Skip lazy (deferred, optional) props on the first render.
 			if p.lazy {
 				continue
 			}
@@ -290,7 +290,7 @@ func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, pr
 func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	mergeProps := make([]string, 0, len(props))
 	for _, p := range props {
-		if slices.Contains(blacklist, p.key) || !p.mergeable {
+		if len(blacklist) > 0 && slices.Contains(blacklist, p.key) || !p.mergeable {
 			continue
 		}
 
@@ -311,7 +311,7 @@ func (r *Renderer) makeValidationErrors(req *http.Request, errorers []Validation
 	}
 
 	if errorBag != DefaultErrorBag {
-		return NewAlways(errorBag, map[string]map[string]string{errorBag: m})
+		return NewAlways(errorBag, map[string]map[string]string{"errors": m})
 	}
 
 	return NewAlways("errors", m)
@@ -369,7 +369,7 @@ func extractErrorBag(req *http.Request) string {
 // extractHeaderValueList extracts a list of values from a comma-separated inertiaheader.Header value.
 func extractHeaderValueList(h string) []string {
 	if h == "" {
-		return []string{}
+		return nil
 	}
 
 	fields := strings.Split(h, ",")

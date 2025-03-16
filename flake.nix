@@ -31,6 +31,7 @@
               golangci-lint
               gofumpt
               go
+              mockgen
               gotools
               nodejs
             ]
