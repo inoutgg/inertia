@@ -3,10 +3,10 @@
   "name": "@inoutgg/inertia",
   "version": "0.1.0",
   "devDependencies": {
-    "@inertiajs/react": "^2.0.0",
+    "@inertiajs/react": "^2.0.5",
     "@vitejs/plugin-react": "^4.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "vite": "^5.0.0"
+    "vite": "^6.2.2"
   }
 }
