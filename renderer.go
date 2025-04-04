@@ -16,6 +16,7 @@ import (
 
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
+
 	"go.inout.gg/inertia/internal/inertiaheader"
 )
 
@@ -28,32 +29,22 @@ const DefaultRootViewID = "app"
 
 // Page represents an Inertia.js page that is sent to the client.
 type Page struct {
-	Component      string              `json:"component"`
 	Props          map[string]any      `json:"props"`
+	DeferredProps  map[string][]string `json:"deferredProps,omitempty"`
+	Component      string              `json:"component"`
 	URL            string              `json:"url"`
 	Version        string              `json:"version"`
+	MergeProps     []string            `json:"mergeProps,omitempty"`
 	EncryptHistory bool                `json:"encryptHistory"`
 	ClearHistory   bool                `json:"clearHistory"`
-	DeferredProps  map[string][]string `json:"deferredProps,omitempty"`
-	MergeProps     []string            `json:"mergeProps,omitempty"`
 }
 
 // Config represents the configuration for the Renderer.
 type Config struct {
-	// Version represents a version of the inertia build.
-	Version string
-
-	// RootViewID is an ID of the root HTML element.
-	// Default is "app".
-	RootViewID string
-
-	// RootViewAttrs is a map of attributes for the root HTML element.
-	// Setting data-page does not have any effect.
+	SsrClient     SsrClient
 	RootViewAttrs map[string]string
-
-	// SsrClient is a server-side rendering client.
-	// If SsrClient is nil, the server-side rendering is disabled.
-	SsrClient SsrClient
+	Version       string
+	RootViewID    string
 }
 
 // defaults sets the default values for the configuration.
@@ -66,8 +57,10 @@ func (c *Config) defaults() {
 // If config is nil, the default configuration is used.
 func New(t *template.Template, config *Config) *Renderer {
 	if config == nil {
+		//nolint:exhaustruct
 		config = &Config{}
 	}
+
 	config.defaults()
 
 	r := &Renderer{
@@ -91,6 +84,7 @@ func FromFS(fsys fs.FS, path string, config *Config) (*Renderer, error) {
 	debug.Assert(path != "", "expected path to be defined")
 
 	t := template.New("inertia")
+
 	t, err := t.ParseFS(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to parse templates: %w", err)
@@ -119,7 +113,10 @@ type Renderer struct {
 }
 
 func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
-	rawProps := append(rCtx.props, r.makeValidationErrors(req, rCtx.validationErrorer))
+	rawProps := make([]*Prop, 0, len(rCtx.props)+1)
+	rawProps = append(rawProps, rCtx.props...)
+	rawProps = append(rawProps, r.makeValidationErrors(req, rCtx.validationErrorer))
+
 	props := r.makeProps(req, componentName, rawProps)
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
@@ -146,14 +143,14 @@ func (r *Renderer) Version() string { return r.version }
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx *RenderContext) error {
-	p := r.newPage(req, name, renderCtx)
+	page := r.newPage(req, name, renderCtx)
 
 	if isInertiaRequest(req) {
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
 		w.WriteHeader(http.StatusOK)
 
-		if err := json.NewEncoder(w).Encode(p); err != nil {
+		if err := json.NewEncoder(w).Encode(page); err != nil {
 			return fmt.Errorf("inertia: failed to encode JSON response: %w", err)
 		}
 
@@ -163,17 +160,18 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	w.Header().Set(inertiaheader.HeaderContentType, contentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 
-	data := TemplateData{T: renderCtx.T}
+	data := TemplateData{T: renderCtx.T, InertiaHead: "", InertiaBody: ""}
+
 	if r.ssrClient != nil {
-		ssrData, err := r.ssrClient.Render(p)
+		ssrData, err := r.ssrClient.Render(req.Context(), page)
 		if err != nil {
-			return err
+			return fmt.Errorf("inertia: failed to render SSR data: %w", err)
 		}
 
-		data.InertiaHead = template.HTML(ssrData.Head)
-		data.InertiaBody = template.HTML(ssrData.Body)
+		data.InertiaHead = template.HTML(ssrData.Head) //nolint:gosec
+		data.InertiaBody = template.HTML(ssrData.Body) //nolint:gosec
 	} else {
-		body, err := r.makeRootView(p)
+		body, err := r.makeRootView(page)
 		if err != nil {
 			return fmt.Errorf("inertia: failed to create an HTML container: %w", err)
 		}
@@ -189,7 +187,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 }
 
 // makeRootView creates a root view element with the given page data.
-func (r *Renderer) makeRootView(p *Page) (template.HTML, error) {
+func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	var w strings.Builder
 
 	_ = must.Must(w.WriteString(`<div id="`))
@@ -197,10 +195,12 @@ func (r *Renderer) makeRootView(p *Page) (template.HTML, error) {
 	_ = must.Must(w.WriteString(`" `))
 
 	_ = must.Must(w.WriteString(`data-page="`))
-	pageBytes, err := json.Marshal(p)
+
+	pageBytes, err := json.Marshal(page)
 	if err != nil {
 		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
+
 	template.HTMLEscape(&w, pageBytes)
 	_ = must.Must(w.WriteString(`" `))
 
@@ -220,6 +220,7 @@ func (r *Renderer) makeRootView(p *Page) (template.HTML, error) {
 
 	_ = must.Must(w.WriteString(`></div>`))
 
+	//nolint:gosec
 	return template.HTML(w.String()), nil
 }
 
@@ -233,26 +234,26 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
 
-		for _, p := range props {
-			k := p.key
-			if p.ignorable {
+		for _, prop := range props {
+			key := prop.key
+			if prop.ignorable {
 				// It should be fine to go through slices here, as the number of props is expected to be small.
-				if len(whitelist) > 0 && !slices.Contains(whitelist, k) ||
-					len(blacklist) > 0 && slices.Contains(blacklist, k) {
+				if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
+					len(blacklist) > 0 && slices.Contains(blacklist, key) {
 					continue
 				}
 			}
 
-			m[k] = p.value()
+			m[key] = prop.value()
 		}
 	} else {
-		for _, p := range props {
+		for _, prop := range props {
 			// Skip lazy (deferred, optional) props on the first render.
-			if p.lazy {
+			if prop.lazy {
 				continue
 			}
 
-			m[p.key] = p.value()
+			m[prop.key] = prop.value()
 		}
 	}
 
@@ -270,16 +271,17 @@ func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, pr
 	}
 
 	m := make(map[string][]string, len(props))
-	for _, p := range props {
-		if !p.deferred {
+
+	for _, prop := range props {
+		if !prop.deferred {
 			continue
 		}
 
-		if _, ok := m[p.group]; !ok {
-			m[p.group] = []string{}
+		if _, ok := m[prop.group]; !ok {
+			m[prop.group] = []string{}
 		}
 
-		m[p.group] = append(m[p.group], p.key)
+		m[prop.group] = append(m[prop.group], prop.key)
 	}
 
 	return m
@@ -289,6 +291,7 @@ func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, pr
 // being replaced on the client side.
 func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	mergeProps := make([]string, 0, len(props))
+
 	for _, p := range props {
 		if len(blacklist) > 0 && slices.Contains(blacklist, p.key) || !p.mergeable {
 			continue
@@ -303,6 +306,7 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 func (r *Renderer) makeValidationErrors(req *http.Request, errorers []ValidationErrorer) *Prop {
 	errorBag := extractErrorBag(req)
 	m := make(map[string]string)
+
 	for _, errorer := range errorers {
 		errs := errorer.ValidationErrors()
 		for _, err := range errs {
@@ -319,15 +323,9 @@ func (r *Renderer) makeValidationErrors(req *http.Request, errorers []Validation
 
 // TemplateData represents the data that is passed to the HTML template.
 type TemplateData struct {
-	// InertiaHead is an HTML fragment that will be injected into the <head> tag.
+	T           any
 	InertiaHead template.HTML
-
-	// InertiaBody is an HTML fragment that will be injected into the <body> tag.
 	InertiaBody template.HTML
-
-	// T is an optional custom data that can be passed to the template.
-	// It is copied from the Options struct to the template context.
-	T any
 }
 
 // Location sends a redirect response to the client.

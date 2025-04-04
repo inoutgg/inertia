@@ -33,6 +33,8 @@ type validationError struct {
 // NewValidationError creates a new validation error.
 //
 // opts can be nil.
+//
+//nolint:revive
 func NewValidationError(field string, message string) *validationError {
 	return &validationError{
 		field:    field,

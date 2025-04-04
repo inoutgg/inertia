@@ -18,18 +18,17 @@ const DefaultDeferredGroup = "default"
 //
 // Props can be attached to a rendering context using WithProps helper.
 type Prop struct {
+	val       any
+	valFn     func() any // optional, deferred
+	key       string
+	group     string // deferred
 	mergeable bool
 	deferred  bool
 	lazy      bool // optional, deferred
 	ignorable bool // false if always prop
-
-	key   string
-	group string // deferred
-	val   any
-	valFn func() any // optional, deferred
 }
 
-// DeferredOptions represents a
+// DeferredOptions represents a.
 type DeferredOptions struct {
 	// Group defines deferred prop resolution group.
 	//
@@ -48,28 +47,30 @@ type DeferredOptions struct {
 //
 // If opts is nil, default options is used.
 func NewDeferred(key string, fn func() any, opts *DeferredOptions) *Prop {
-	p := &Prop{
-		deferred:  true,
-		lazy:      true,
-		ignorable: true,
+	//nolint:exhaustruct
+	prop := &Prop{
+		deferred:  true, // important
+		lazy:      true, // important
+		ignorable: true, // important
 		key:       key,
 		valFn:     fn,
-		group:     "default",
+		group:     DefaultDeferredGroup,
 	}
 
 	if opts != nil {
-		p.group = cmp.Or(opts.Group, DefaultDeferredGroup)
-		p.mergeable = opts.Merge
+		prop.group = cmp.Or(opts.Group, DefaultDeferredGroup)
+		prop.mergeable = opts.Merge
 	}
 
-	return p
+	return prop
 }
 
 // NewAlways create a new props that is always included in the response.
 // It ignores the X-Inertia-Partial-Data and X-Inertia-Partial-Except headers.
 func NewAlways(key string, value any) *Prop {
+	//nolint:exhaustruct
 	return &Prop{
-		ignorable: false,
+		ignorable: false, // important
 		key:       key,
 		val:       value,
 	}
@@ -78,9 +79,10 @@ func NewAlways(key string, value any) *Prop {
 // NewOptional creates a new prop that is included in the response only if
 // it's requested.
 func NewOptional(key string, fn func() any) *Prop {
+	//nolint:exhaustruct
 	return &Prop{
-		ignorable: true,
-		lazy:      true,
+		ignorable: true, // important
+		lazy:      true, // important
 		key:       key,
 		valFn:     fn,
 	}
@@ -95,17 +97,18 @@ type PropOptions struct {
 // NewProp creates a new regular prop.
 // opts can be nil.
 func NewProp(key string, val any, opts *PropOptions) *Prop {
-	p := &Prop{
-		ignorable: true,
+	//nolint:exhaustruct
+	prop := &Prop{
+		ignorable: true, // important
 		key:       key,
 		val:       val,
 	}
 
 	if opts != nil {
-		p.mergeable = opts.Merge
+		prop.mergeable = opts.Merge
 	}
 
-	return p
+	return prop
 }
 
 // value returns the prop value.

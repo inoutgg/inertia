@@ -11,13 +11,19 @@ var (
 	_ interface{ Unwrap() http.ResponseWriter } = (*responseWriter)(nil)
 )
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(nil) }}
+//nolint:gochecknoglobals
+var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
 	return &responseWriter{
 		ResponseWriter: w,
 		statusCode:     http.StatusOK,
-		buf:            bufPool.Get().(*bytes.Buffer),
+		size:           0,
+		flushed:        false,
+		dirty:          false,
+
+		//nolint:forcetypeassert
+		buf: bufPool.Get().(*bytes.Buffer),
 	}
 }
 
@@ -25,12 +31,11 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 // response writing until the flush method is called.
 type responseWriter struct {
 	http.ResponseWriter
-	statusCode int
 	buf        *bytes.Buffer
+	statusCode int
 	size       int
-
-	flushed bool
-	dirty   bool
+	flushed    bool
+	dirty      bool
 }
 
 func (w *responseWriter) WriteHeader(code int) {
@@ -45,6 +50,7 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 	w.size += n
 
 	if err != nil {
+		//nolint:wrapcheck
 		return n, err
 	}
 
@@ -64,18 +70,16 @@ func (w *responseWriter) Unwrap() http.ResponseWriter {
 }
 
 // flush writes the buffered response to the underlying http.ResponseWriter.
-func (w *responseWriter) flush() error {
+func (w *responseWriter) flush() {
 	if w.flushed {
-		return nil
+		return
 	}
 
 	w.flushed = true
 
 	w.ResponseWriter.WriteHeader(w.statusCode)
-	w.ResponseWriter.Write(w.buf.Bytes())
+	_, _ = w.ResponseWriter.Write(w.buf.Bytes())
 
 	w.buf.Reset()
 	bufPool.Put(w.buf)
-
-	return nil
 }

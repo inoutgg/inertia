@@ -8,6 +8,7 @@ import (
 	"go.inout.gg/inertia/internal/inertiatest"
 )
 
+//nolint:gochecknoglobals
 var tpl = template.Must(template.New("<inertia-test>").Parse(`<!doctype html>
 <html>
 <head>{{ .InertiaHead }}</head>
@@ -15,14 +16,11 @@ var tpl = template.Must(template.New("<inertia-test>").Parse(`<!doctype html>
 </html>
 `))
 
-func testHandler(w http.ResponseWriter, r *http.Request) {
-	Render(w, r, "inertia", nil)
-}
-
 func newMiddleware(h http.Handler, renderer *Renderer) http.Handler {
 	if renderer == nil {
 		renderer = New(tpl, nil)
 	}
+
 	mux := http.NewServeMux()
 	middleware := Middleware(renderer)(mux)
 
@@ -51,7 +49,6 @@ func TestMiddleware_RedirectToSeeOther(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

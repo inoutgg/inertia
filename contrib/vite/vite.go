@@ -16,14 +16,9 @@ import (
 const DefaultViteAddress = "http://localhost:5173"
 
 type Config struct {
+	Manifest     Manifest
 	TemplateName string
-
-	// ViteAddress is the address of the Vite dev server.
-	// When running with -tags=production, this address is ignored.
-	ViteAddress string
-
-	// Manifest is a Vite manifest file that contains information about Vite resources.
-	Manifest Manifest
+	ViteAddress  string
 }
 
 func (c *Config) defaults() {
@@ -41,8 +36,10 @@ func (c *Config) defaults() {
 // templates are blank.
 func NewTemplate(content string, config *Config) (*template.Template, error) {
 	if config == nil {
+		//nolint:exhaustruct
 		config = &Config{}
 	}
+
 	config.defaults()
 
 	t := newTemplate(config)
@@ -60,13 +57,15 @@ func Must(content string, c *Config) *template.Template {
 
 // FromFS creates a new template from a file system.
 // See New for more information.
-func FromFS(fsys fs.FS, path string, c *Config) (*template.Template, error) {
-	if c == nil {
-		c = &Config{}
+func FromFS(fsys fs.FS, path string, cfg *Config) (*template.Template, error) {
+	if cfg == nil {
+		//nolint:exhaustruct
+		cfg = &Config{}
 	}
-	c.defaults()
 
-	t := newTemplate(c)
+	cfg.defaults()
+
+	t := newTemplate(cfg)
 	if _, err := t.ParseFS(fsys, path); err != nil {
 		return nil, fmt.Errorf("inertia: failed to parse template: %w", err)
 	}

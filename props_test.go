@@ -7,112 +7,125 @@ import (
 )
 
 func TestProps(t *testing.T) {
+	t.Parallel()
+
 	t.Run("NewDeferred", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("Without options", func(t *testing.T) {
 			t.Parallel()
-			p := NewDeferred("key", func() any { return "val" }, nil)
 
-			assert.Equal(t, "key", p.key)
-			assert.Equal(t, "val", p.value())
-			assert.Equal(t, p.group, "default")
+			prop := NewDeferred("key", func() any { return "val123" }, nil)
 
-			assert.True(t, p.lazy)
-			assert.True(t, p.ignorable)
-			assert.True(t, p.deferred)
-			assert.False(t, p.mergeable)
+			assert.Equal(t, "key", prop.key)
+			assert.Equal(t, "val123", prop.value())
+			assert.Equal(t, "default", prop.group)
+
+			assert.True(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.True(t, prop.deferred)
+			assert.False(t, prop.mergeable)
 		})
 
 		t.Run("Custom group", func(t *testing.T) {
 			t.Parallel()
-			p := NewDeferred("key", func() any { return "val" }, &DeferredOptions{
+
+			prop := NewDeferred("key", func() any { return "deferred-val" }, &DeferredOptions{
 				Group: "custom",
 			})
 
-			assert.Equal(t, "key", p.key)
-			assert.Equal(t, "val", p.value())
-			assert.Equal(t, p.group, "custom")
+			assert.Equal(t, "key", prop.key)
+			assert.Equal(t, "deferred-val", prop.value())
+			assert.Equal(t, "custom", prop.group)
 
-			assert.True(t, p.lazy)
-			assert.True(t, p.ignorable)
-			assert.True(t, p.deferred)
-			assert.False(t, p.mergeable)
+			assert.True(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.True(t, prop.deferred)
+			assert.False(t, prop.mergeable)
 		})
 
 		t.Run("Mergeable", func(t *testing.T) {
 			t.Parallel()
-			p := NewDeferred("key", func() any { return "val" }, &DeferredOptions{
+
+			prop := NewDeferred("key", func() any { return "val" }, &DeferredOptions{
 				Merge: true,
 			})
 
-			assert.Equal(t, "key", p.key)
-			assert.Equal(t, "val", p.value())
-			assert.Equal(t, p.group, "default")
+			assert.Equal(t, "key", prop.key)
+			assert.Equal(t, "val", prop.value())
+			assert.Equal(t, "default", prop.group)
 
-			assert.True(t, p.lazy)
-			assert.True(t, p.ignorable)
-			assert.True(t, p.deferred)
-			assert.True(t, p.mergeable)
+			assert.True(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.True(t, prop.deferred)
+			assert.True(t, prop.mergeable)
 		})
 	})
 
 	t.Run("NewAlways", func(t *testing.T) {
 		t.Parallel()
-		p := NewAlways("key", "val")
 
-		assert.Equal(t, "key", p.key)
-		assert.Equal(t, "val", p.value())
+		prop := NewAlways("key", "val")
 
-		assert.False(t, p.lazy)
-		assert.False(t, p.ignorable)
-		assert.False(t, p.deferred)
-		assert.False(t, p.mergeable)
+		assert.Equal(t, "key", prop.key)
+		assert.Equal(t, "val", prop.value())
+
+		assert.False(t, prop.lazy)
+		assert.False(t, prop.ignorable)
+		assert.False(t, prop.deferred)
+		assert.False(t, prop.mergeable)
 	})
 
 	t.Run("NewOptional", func(t *testing.T) {
 		t.Parallel()
-		p := NewOptional("key", func() any { return "val" })
 
-		assert.Equal(t, "key", p.key)
-		assert.Equal(t, "val", p.value())
+		prop := NewOptional("key", func() any { return "val" })
 
-		assert.True(t, p.lazy)
-		assert.True(t, p.ignorable)
-		assert.False(t, p.deferred)
-		assert.False(t, p.mergeable)
+		assert.Equal(t, "key", prop.key)
+		assert.Equal(t, "val", prop.value())
+
+		assert.True(t, prop.lazy)
+		assert.True(t, prop.ignorable)
+		assert.False(t, prop.deferred)
+		assert.False(t, prop.mergeable)
 	})
 
 	t.Run("NewProp", func(t *testing.T) {
+		t.Parallel()
+
 		t.Run("Without options", func(t *testing.T) {
 			t.Parallel()
-			p := NewProp("key", "val", nil)
 
-			assert.Equal(t, "key", p.key)
-			assert.Equal(t, "val", p.value())
+			prop := NewProp("key", "val", nil)
 
-			assert.False(t, p.lazy)
-			assert.True(t, p.ignorable)
-			assert.False(t, p.deferred)
-			assert.False(t, p.mergeable)
+			assert.Equal(t, "key", prop.key)
+			assert.Equal(t, "val", prop.value())
+
+			assert.False(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.False(t, prop.deferred)
+			assert.False(t, prop.mergeable)
 		})
 
 		t.Run("With options", func(t *testing.T) {
 			t.Parallel()
-			p := NewProp("key", "val", &PropOptions{Merge: true})
 
-			assert.Equal(t, "key", p.key)
-			assert.Equal(t, "val", p.value())
+			prop := NewProp("key", "val", &PropOptions{Merge: true})
 
-			assert.False(t, p.lazy)
-			assert.True(t, p.ignorable)
-			assert.False(t, p.deferred)
-			assert.True(t, p.mergeable)
+			assert.Equal(t, "key", prop.key)
+			assert.Equal(t, "val", prop.value())
+
+			assert.False(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.False(t, prop.deferred)
+			assert.True(t, prop.mergeable)
 		})
 	})
 }
 
 func TestPropsCollections(t *testing.T) {
+	t.Parallel()
+
 	t.Run("Props", func(t *testing.T) {
 		t.Parallel()
 

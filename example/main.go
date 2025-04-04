@@ -8,11 +8,13 @@ import (
 	"os/signal"
 
 	"go.inout.gg/foundations/must"
+
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
 	"go.inout.gg/inertia/contrib/vite"
 )
 
+//nolint:exhaustruct,gochecknoglobals
 var log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
 
 const rootTemplate = `<!doctype html>
@@ -53,11 +55,12 @@ func main() {
 	}))
 
 	go func() {
+		//nolint:gosec
 		must.Must1(http.ListenAndServe(":8080", middleware.Middleware(mux)))
 	}()
 
-	log.Info("Server is running", slog.String("addr", "http://localhost:8080"))
+	log.InfoContext(ctx, "Server is running", slog.String("addr", "http://localhost:8080"))
 	<-ctx.Done()
 
-	log.Info("Shutting down server")
+	log.InfoContext(ctx, "Shutting down server")
 }

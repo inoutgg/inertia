@@ -20,6 +20,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         ciTestCommand = pkgs.writeScriptBin "ci-test" ''
+          golangci-lint run ./...
           go test -count=1 -race -v ./...
         '';
       in
@@ -36,11 +37,6 @@
               nodejs
             ]
             ++ [ ciTestCommand ];
-        };
-
-        env = {
-          GOFUMPT_SPLIT_LONG_LINES = "on";
-          GOTOOLCHAIN = "local";
         };
 
         formatter = pkgs.nixfmt-rfc-style;

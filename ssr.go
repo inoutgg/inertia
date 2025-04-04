@@ -2,6 +2,7 @@ package inertia
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -19,7 +20,7 @@ type SsrTemplateData struct {
 // SsrClient is a client that makes requests to a server-side rendering service.
 type SsrClient interface {
 	// Render makes a request to the server-side rendering service with the given page data.
-	Render(*Page) (*SsrTemplateData, error)
+	Render(context.Context, *Page) (*SsrTemplateData, error)
 }
 
 // ssr is an HTTP client that makes requests to a server-side rendering service.
@@ -38,16 +39,17 @@ func NewHTTPSsrClient(url string, client *http.Client) SsrClient {
 	return &ssr{client, url}
 }
 
-func (s *ssr) Render(p *Page) (*SsrTemplateData, error) {
+func (s *ssr) Render(ctx context.Context, p *Page) (*SsrTemplateData, error) {
 	b, err := json.Marshal(p)
 	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to marshal page: %w", err)
 	}
 
-	r, err := http.NewRequest(http.MethodGet, s.url, bytes.NewReader(b))
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url, bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to create HTTP request: %w", err)
 	}
+
 	r.Header.Set(inertiaheader.HeaderContentType, contentTypeJSON)
 
 	resp, err := s.client.Do(r)

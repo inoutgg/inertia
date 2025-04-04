@@ -10,11 +10,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"go.inout.gg/inertia/internal/inertiaheader"
 	"go.inout.gg/inertia/internal/inertiatest"
-	"go.uber.org/mock/gomock"
 )
 
+//nolint:gochecknoglobals
 var testTemplate = `<!DOCTYPE html>
 <html>
 <head>
@@ -24,6 +26,8 @@ var testTemplate = `<!DOCTYPE html>
 				{{ .InertiaBody }}
 </body>
 </html>`
+
+//nolint:gochecknoglobals
 var testTpl = template.Must(template.New("test").Parse(testTemplate))
 
 func testFS() fstest.MapFS {
@@ -40,9 +44,9 @@ func TestNew(t *testing.T) {
 
 	// Test cases
 	tests := []struct {
-		name      string
 		config    *Config
 		tpl       *template.Template
+		name      string
 		wantPanic bool
 	}{
 		{name: "invalidate template", tpl: nil, wantPanic: true},
@@ -59,6 +63,7 @@ func TestNew(t *testing.T) {
 				assert.Panics(t, func() {
 					New(tt.tpl, tt.config)
 				}, "New should panic")
+
 				return
 			}
 
@@ -108,12 +113,13 @@ func TestFromFS(t *testing.T) {
 			renderer, err := FromFS(testFS(), tt.path, tt.config)
 
 			if tt.wantErr {
-				assert.Error(t, err, "FromFS should return error with invalid template path")
+				require.Error(t, err, "FromFS should return error with invalid template path")
 				assert.Nil(t, renderer, "renderer should be nil when error occurs")
+
 				return
 			}
 
-			assert.NoError(t, err, "FromFS should not return error with valid template path")
+			require.NoError(t, err, "FromFS should not return error with valid template path")
 			assert.NotNil(t, renderer, "renderer should not be nil")
 			assert.Equal(t, tt.wantVersion, renderer.Version(), "renderer version should match config")
 		})
@@ -123,10 +129,12 @@ func TestFromFS(t *testing.T) {
 				assert.Panics(t, func() {
 					MustFromFS(testFS(), tt.path, tt.config)
 				}, "FromFS should panic")
+
 				return
 			}
 
 			var renderer *Renderer
+
 			assert.NotPanics(t, func() {
 				renderer = MustFromFS(testFS(), tt.path, tt.config)
 			}, "FromFS should not panic with valid template path")
@@ -156,33 +164,36 @@ func TestRenderer_Render(t *testing.T) {
 
 	// Create a mock SSR client
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+
+	t.Cleanup(func() {
+		ctrl.Finish()
+	})
 
 	mockSsrClient := NewMockSsrClient(ctrl)
-	mockSsrClient.EXPECT().Render(gomock.Any()).Return(&SsrTemplateData{
+	mockSsrClient.EXPECT().Render(gomock.Any(), gomock.Any()).Return(&SsrTemplateData{
 		Head: "<title>SSR Title</title>",
 		Body: "<div>SSR Content</div>",
 	}, nil).AnyTimes()
 
 	errorMockSsrClient := NewMockSsrClient(ctrl)
-	errorMockSsrClient.EXPECT().Render(gomock.Any()).Return(nil, errors.New("SSR error")).AnyTimes()
+	errorMockSsrClient.EXPECT().Render(gomock.Any(), gomock.Any()).Return(nil, errors.New("SSR error")).AnyTimes()
 
 	// Define a validation function type
 	type responseValidator func(t *testing.T, body []byte)
 
 	// Test cases for the Render method
 	tests := []struct {
-		name                 string
 		renderer             *Renderer
 		reqConfig            *inertiatest.RequestConfig
+		expectedHeaders      map[string]string
+		validateResponse     responseValidator
+		name                 string
 		componentName        string
 		options              []Option
-		expectedStatusCode   int
-		expectedHeaders      map[string]string
 		expectedBodyContains []string
+		expectedStatusCode   int
 		expectJSON           bool
 		expectError          bool
-		validateResponse     responseValidator // Function to validate response
 	}{
 		{
 			name: "non-inertia request - html response",
@@ -200,6 +211,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:  false,
 			expectError: false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				bodyStr := string(body)
 				assert.Contains(t, bodyStr, `<div id="app" data-page="`)
 				assert.Contains(t, bodyStr, template.HTMLEscapeString(`"component":"TestComponent"`))
@@ -225,6 +238,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:  true,
 			expectError: false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "failed to parse JSON response")
@@ -250,6 +265,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:  false,
 			expectError: false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				bodyStr := string(body)
 				assert.Contains(t, bodyStr, "<title>SSR Title</title>")
 				assert.Contains(t, bodyStr, "<div>SSR Content</div>")
@@ -265,7 +282,9 @@ func TestRenderer_Render(t *testing.T) {
 			componentName: "TestComponent",
 			options:       []Option{},
 			expectError:   true,
-			validateResponse: func(t *testing.T, body []byte) {
+			validateResponse: func(t *testing.T, _ []byte) {
+				t.Helper()
+
 				// No validation needed as we expect an error
 			},
 		},
@@ -287,6 +306,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				bodyStr := string(body)
 				assert.Contains(t, bodyStr, `<div id="app" data-page="`)
 				assert.Contains(t, bodyStr, `class="container"`)
@@ -311,14 +332,16 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props, ok := page["props"].(map[string]interface{})
+				props, ok := page["props"].(map[string]any)
 				require.True(t, ok, "props not found")
 
-				errors, ok := props["errors"].(map[string]interface{})
+				errors, ok := props["errors"].(map[string]any)
 				require.True(t, ok, "errors not found")
 
 				assert.Equal(t, "Name is required", errors["name"], "name error doesn't match")
@@ -345,17 +368,19 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props, ok := page["props"].(map[string]interface{})
+				props, ok := page["props"].(map[string]any)
 				require.True(t, ok, "props not found")
 
-				customErrors, ok := props["custom_errors"].(map[string]interface{})
+				customErrors, ok := props["custom_errors"].(map[string]any)
 				require.True(t, ok, "custom_errors not found")
 
-				errors, ok := customErrors["errors"].(map[string]interface{})
+				errors, ok := customErrors["errors"].(map[string]any)
 				require.True(t, ok, "errors not found")
 
 				assert.Equal(t, "Name is required", errors["name"], "name error doesn't match")
@@ -388,6 +413,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:  true,
 			expectError: false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "failed to parse JSON response")
@@ -425,6 +452,8 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         true,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "failed to parse JSON response")
@@ -458,20 +487,22 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
 				// Check props
-				props, ok := page["props"].(map[string]interface{})
+				props, ok := page["props"].(map[string]any)
 				require.True(t, ok, "props not found")
 				assert.Equal(t, "Visible Content", props["visible"], "visible prop doesn't match")
 
 				// Check deferred props
-				deferredProps, ok := page["deferredProps"].(map[string]interface{})
+				deferredProps, ok := page["deferredProps"].(map[string]any)
 				require.True(t, ok, "deferredProps not found")
 
-				group1, ok := deferredProps["group1"].([]interface{})
+				group1, ok := deferredProps["group1"].([]any)
 				require.True(t, ok, "group1 not found in deferredProps")
 
 				assert.Contains(t, group1, "lazy", "lazy not found in group1")
@@ -497,22 +528,24 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
 				// Check merge props
-				mergeProps, ok := page["mergeProps"].([]interface{})
+				mergeProps, ok := page["mergeProps"].([]any)
 				require.True(t, ok, "mergeProps not found")
 
 				assert.Contains(t, mergeProps, "mergeProp", "mergeProp not found in mergeProps")
 
 				// Check props
-				props, ok := page["props"].(map[string]interface{})
+				props, ok := page["props"].(map[string]any)
 				require.True(t, ok, "props not found")
 				assert.Equal(t, "Normal Value", props["normalProp"], "normalProp doesn't match")
 
-				mergeProp, ok := props["mergeProp"].(map[string]interface{})
+				mergeProp, ok := props["mergeProp"].(map[string]any)
 				require.True(t, ok, "mergeProp not found or not a map")
 				assert.Equal(t, "value", mergeProp["key"], "mergeProp.key doesn't match")
 			},
@@ -539,9 +572,11 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
 				// Just check that the response is valid JSON - the blacklisted prop
 				// should be excluded from merge
-				var responseObj map[string]interface{}
+				var responseObj map[string]any
 				err := json.Unmarshal(body, &responseObj)
 				require.NoError(t, err, "Failed to parse response JSON")
 
@@ -562,7 +597,9 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
@@ -584,7 +621,9 @@ func TestRenderer_Render(t *testing.T) {
 			expectJSON:         false,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
-				var page map[string]interface{}
+				t.Helper()
+
+				var page map[string]any
 				err := json.Unmarshal(body, &page)
 				require.NoError(t, err, "Failed to parse response JSON")
 
@@ -616,6 +655,7 @@ func TestRenderer_Render(t *testing.T) {
 				assert.Error(t, err, "expected an error but got none")
 				return
 			}
+
 			require.NoError(t, err, "unexpected error")
 
 			// Check status code
@@ -649,11 +689,11 @@ func TestLocation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
 		reqConfig      *inertiatest.RequestConfig
+		expectedHeader map[string]string
+		name           string
 		url            string
 		expectedStatus int
-		expectedHeader map[string]string
 	}{
 		{
 			name:           "non-inertia request",

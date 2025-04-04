@@ -8,33 +8,37 @@ import (
 
 	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
+
 	"go.inout.gg/inertia/internal/inertiaheader"
 )
 
 type ctxKey struct{}
 
-var kCtxKey ctxKey = ctxKey{}
+//nolint:gochecknoglobals
+var kCtxKey = ctxKey{}
 
 // https://inertiajs.com/redirects#303-response-code
+//
+//nolint:gochecknoglobals
 var seeOtherMethods = []string{http.MethodPatch, http.MethodPut, http.MethodDelete}
 
 type MiddlewareConfig struct {
 	// EmptyResponseHandler is a function that is called when the response is empty.
 	EmptyResponseHandler http.HandlerFunc
 
-	// OnVersionMismatch is a function that is called when the version mismatch occurs.
-	OnVersionMismatch http.HandlerFunc
+	// VersionMismatchHandler is a function that is called when the version mismatch occurs.
+	VersionMismatchHandler http.HandlerFunc
 }
 
 func (m *MiddlewareConfig) defaults() {
 	if m.EmptyResponseHandler == nil {
-		m.EmptyResponseHandler = func(w http.ResponseWriter, r *http.Request) {
+		m.EmptyResponseHandler = func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "Empty response", http.StatusNoContent)
 		}
 	}
 
-	if m.OnVersionMismatch == nil {
-		m.OnVersionMismatch = func(w http.ResponseWriter, r *http.Request) {
+	if m.VersionMismatchHandler == nil {
+		m.VersionMismatchHandler = func(w http.ResponseWriter, r *http.Request) {
 			Location(w, r, r.RequestURI)
 		}
 	}
@@ -42,6 +46,7 @@ func (m *MiddlewareConfig) defaults() {
 
 // Middleware provides the HTTP handling layer for Inertia.js server-side integration.
 func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddleware.MiddlewareFunc {
+	//nolint:exhaustruct
 	config := MiddlewareConfig{}
 	for _, opt := range opts {
 		opt(&config)
@@ -67,33 +72,31 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 				return
 			}
 
-			ww := newResponseWriter(w)
-			next.ServeHTTP(ww, r)
+			rww := newResponseWriter(w)
+			next.ServeHTTP(rww, r)
 
-			if ww.statusCode == http.StatusFound &&
+			if rww.statusCode == http.StatusFound &&
 				slices.Contains(seeOtherMethods, r.Method) {
-				ww.WriteHeader(http.StatusSeeOther)
+				rww.WriteHeader(http.StatusSeeOther)
 			}
 
-			if ww.Empty() {
+			if rww.Empty() {
 				config.EmptyResponseHandler(w, r)
 				return
 			}
 
-			_ = ww.flush()
+			rww.flush()
 		})
 	}
 }
 
 // RenderContext represents an Inertia.js page context.
 type RenderContext struct {
-	encryptHistory    bool
-	clearHistory      bool
+	T                 any // T is an optional custom data that can be passed to the template.
 	props             []*Prop
 	validationErrorer []ValidationErrorer
-
-	// T is an optional custom data that can be passed to the template.
-	T any
+	encryptHistory    bool
+	clearHistory      bool
 }
 
 // Option configures rendering context.
@@ -146,6 +149,7 @@ func WithValidationErrors(errorers ValidationErrorer) Option {
 // Render sends a page component using Inertia.js protocol, allowing server-side rendering
 // of components that interact seamlessly with the Inertia.js client.
 func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
+	//nolint:exhaustruct
 	rCtx := RenderContext{}
 	for _, opt := range opts {
 		opt(&rCtx)
@@ -153,11 +157,15 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, opts .
 
 	render, ok := r.Context().Value(kCtxKey).(*Renderer)
 	if !ok {
-		return errors.New("inertia: renderer not found in request context - did you forget to use the middleware?")
+		return errors.New(
+			"inertia: renderer not found in request context - did you forget to use the middleware?",
+		)
 	}
+
 	if err := render.Render(w, r, componentName, &rCtx); err != nil {
 		return err
 	}
+
 	return nil
 }
 

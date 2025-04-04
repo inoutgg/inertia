@@ -10,6 +10,7 @@
 package inertia
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,16 +41,16 @@ func (m *MockSsrClient) EXPECT() *MockSsrClientMockRecorder {
 }
 
 // Render mocks base method.
-func (m *MockSsrClient) Render(arg0 *Page) (*SsrTemplateData, error) {
+func (m *MockSsrClient) Render(arg0 context.Context, arg1 *Page) (*SsrTemplateData, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Render", arg0)
+	ret := m.ctrl.Call(m, "Render", arg0, arg1)
 	ret0, _ := ret[0].(*SsrTemplateData)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Render indicates an expected call of Render.
-func (mr *MockSsrClientMockRecorder) Render(arg0 any) *gomock.Call {
+func (mr *MockSsrClientMockRecorder) Render(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Render", reflect.TypeOf((*MockSsrClient)(nil).Render), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Render", reflect.TypeOf((*MockSsrClient)(nil).Render), arg0, arg1)
 }

@@ -1,13 +1,142 @@
+version: "2"
+
 run:
-  timeout: "5m"
-  concurrency: 8
-  allow-parallel-runners: true
+  timeout: 10m
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+
+    golines:
+      max-len: 120
+      tab-len: 8
+
+    gci:
+      sections:
+        - blank
+        - standard
+        - default
+        - localmodule
+        - dot
 
 linters:
-  disable-all: true
-  enable:
-    - revive
-    - govet
-    - staticcheck # https://staticcheck.dev/docs/checks
-    - errcheck
-    - ineffassign
+  default: all
+  disable:
+    - cyclop # cyclomatic complexity, biased bs
+    - err113 # wants errors to be defined as var upfront, annoying
+    - funlen # detects long functions, annoying
+    - gocognit # calculates cognitive complexity, biased bs
+    - gocyclo # another cyclomatic complexity, biased bs
+    - godox # bans TODOs. BS
+    - inamedparam # we don't use named parameters in interfaces
+    - ireturn # bans returning interface types, buggy and biased bs
+    - lll # detects long lines, annoying
+    - maintidx # detects maintainability index, annoying biased bs
+    - mnd # detects magic numbers, annoying
+    - nestif # detects nested if statements, stupid
+    - nlreturn # blank lines after return statements, annoying
+    - testpackage # requires to create tests in separate packages like package_test
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+    rules:
+      - path: _test\.go
+        linters:
+          - exhaustruct
+
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: "math/rand$"
+              desc: use "math/rand/v2"
+            - pkg: "github.com/jackc/pgx/v4"
+              desc: use "github.com/jackc/pgx/v5"
+            - pkg: "github.com/pkg/errors"
+              desc: use stdlib
+            - pkg: "database/sql"
+              desc: use "github.com/jackc/pgx/v5"
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    sloglint:
+      context: all
+
+    # report only misuses of `t.Parallel()`
+    paralleltest:
+      ignore-missing: true
+      ignore-missing-subtests: true
+
+    tagliatelle:
+      case:
+        rules:
+          json: camel
+
+    testifylint:
+      enable-all: true
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow
+
+    exhaustruct:
+      exclude:
+        - github.com/jackc/pgx/v5/pgtype.Numeric
+
+    varnamelen:
+      ignore-names:
+        - a # comparison argument
+        - b # comparison argument, bytes, buffer
+        - ch # channel
+        - db # database
+        - e # event
+        - ev # event
+        - f # file
+        - fn # function
+        - fs # file system
+        - h # handler, hash
+        - hi # high
+        - i # idx
+        - id # id
+        - ip # ip address
+        - j # idx
+        - k # idx
+        - l # len
+        - lo # low
+        - m # map, message
+        - mu # mutex
+        - n # number, no
+        - ns # namespace
+        - ok # ok
+        - r # reader, request
+        - s # string
+        - sb # string builder
+        - t # test, time
+        - tc # test case
+        - to # to
+        - ts # timestamp
+        - tt # test
+        - tx # transaction
+        - v # value
+        - w # writer, response
+        - wg # waitgroup
+        - js # javascript

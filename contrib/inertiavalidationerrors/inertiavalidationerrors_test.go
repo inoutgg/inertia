@@ -18,7 +18,7 @@ type TestStruct struct {
 	Age   int    `validate:"required,gt=0"`
 }
 
-// Double wrapped error
+// Double wrapped error.
 type CustomError struct {
 	err error
 }
@@ -49,10 +49,10 @@ func TestFromValidationErrors(t *testing.T) {
 	v, trans := setupValidator()
 
 	tests := []struct {
-		name           string
 		input          error
-		shouldSucceed  bool
+		name           string
 		expectedFields []string
+		shouldSucceed  bool
 	}{
 		{
 			name: "valid validation error",
@@ -116,7 +116,7 @@ func TestFromValidationErrors(t *testing.T) {
 			assert.Equal(t, tc.shouldSucceed, ok)
 
 			if tc.shouldSucceed {
-				assert.Equal(t, len(tc.expectedFields), len(m))
+				assert.Len(t, m, len(tc.expectedFields))
 
 				for _, field := range tc.expectedFields {
 					assert.Contains(t, m, field)
