@@ -478,9 +478,13 @@ func TestRenderer_Render(t *testing.T) {
 			options: []Option{
 				WithProps(Props{
 					NewProp("visible", "Visible Content", nil),
-					NewDeferred("lazy", func() any { return "Lazy Content" }, &DeferredOptions{
-						Group: "group1",
-					}),
+					NewDeferred(
+						"lazy",
+						LazyFunc(func() any { return "Lazy Content" }),
+						&DeferredOptions{
+							Group: "group1",
+						},
+					),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,

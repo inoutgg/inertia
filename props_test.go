@@ -15,7 +15,7 @@ func TestProps(t *testing.T) {
 		t.Run("Without options", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "val123" }, nil)
+			prop := NewDeferred("key", LazyFunc(func() any { return "val123" }), nil)
 
 			assert.Equal(t, "key", prop.key)
 			assert.Equal(t, "val123", prop.value())
@@ -30,7 +30,9 @@ func TestProps(t *testing.T) {
 		t.Run("Custom group", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "deferred-val" }, &DeferredOptions{
+			prop := NewDeferred("key", LazyFunc(func() any {
+				return "deferred-val"
+			}), &DeferredOptions{
 				Group: "custom",
 			})
 
@@ -47,7 +49,7 @@ func TestProps(t *testing.T) {
 		t.Run("Mergeable", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "val" }, &DeferredOptions{
+			prop := NewDeferred("key", LazyFunc(func() any { return "val" }), &DeferredOptions{
 				Merge: true,
 			})
 
@@ -79,7 +81,7 @@ func TestProps(t *testing.T) {
 	t.Run("NewOptional", func(t *testing.T) {
 		t.Parallel()
 
-		prop := NewOptional("key", func() any { return "val" })
+		prop := NewOptional("key", LazyFunc(func() any { return "val" }))
 
 		assert.Equal(t, "key", prop.key)
 		assert.Equal(t, "val", prop.value())

@@ -19,7 +19,7 @@ const DefaultDeferredGroup = "default"
 // Props can be attached to a rendering context using WithProps helper.
 type Prop struct {
 	val       any
-	valFn     func() any // optional, deferred
+	valFn     Lazy // optional, deferred
 	key       string
 	group     string // deferred
 	mergeable bool
@@ -42,11 +42,25 @@ type DeferredOptions struct {
 	Merge bool
 }
 
+type (
+	// Lazy represents prop's value that is resolved only when it's requested.
+	Lazy interface{ Value() any }
+
+	// The LazyFunc type is an adapter to allow the use of ordinary functions
+	// where Lazy is expected.
+	// If f is a function with the appropriate signature, LazyFunc(f) is a
+	// [Lazy] that calls f.
+	LazyFunc func() any
+)
+
+// Value calls `fn()`.
+func (fn LazyFunc) Value() any { return fn() }
+
 // NewDeferred creates a new deferred prop that is resolved only when
 // it's requested.
 //
 // If opts is nil, default options is used.
-func NewDeferred(key string, fn func() any, opts *DeferredOptions) *Prop {
+func NewDeferred(key string, fn Lazy, opts *DeferredOptions) *Prop {
 	//nolint:exhaustruct
 	prop := &Prop{
 		deferred:  true, // important
@@ -78,7 +92,7 @@ func NewAlways(key string, value any) *Prop {
 
 // NewOptional creates a new prop that is included in the response only if
 // it's requested.
-func NewOptional(key string, fn func() any) *Prop {
+func NewOptional(key string, fn Lazy) *Prop {
 	//nolint:exhaustruct
 	return &Prop{
 		ignorable: true, // important
@@ -114,7 +128,7 @@ func NewProp(key string, val any, opts *PropOptions) *Prop {
 // value returns the prop value.
 func (p *Prop) value() any {
 	if p.valFn != nil {
-		p.val = p.valFn()
+		p.val = p.valFn.Value()
 		p.valFn = nil
 	}
 

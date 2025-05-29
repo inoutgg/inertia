@@ -140,3 +140,4 @@ linters:
         - w # writer, response
         - wg # waitgroup
         - js # javascript
+        - d # debug
