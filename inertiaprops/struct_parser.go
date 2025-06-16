@@ -1,4 +1,4 @@
-package inertia
+package inertiaprops
 
 import (
 	"cmp"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"go.inout.gg/inertia"
 )
 
 const (
@@ -20,16 +22,17 @@ var (
 )
 
 var (
-	propDiscard   = "-"         //nolint:gochecknoglobals
-	propOmitEmpty = "omitempty" //nolint:gochecknoglobals
-	propMergeable = "mergeable" //nolint:gochecknoglobals
+	propDiscard    = "-"          //nolint:gochecknoglobals
+	propOmitEmpty  = "omitempty"  //nolint:gochecknoglobals
+	propMergeable  = "mergeable"  //nolint:gochecknoglobals
+	propConcurrent = "concurrent" //nolint:gochecknoglobals
 )
 
 var lazyType reflect.Type //nolint:gochecknoglobals
 
 //nolint:gochecknoinits
 func init() {
-	lazyType = reflect.TypeOf((*Lazy)(nil)).Elem()
+	lazyType = reflect.TypeOf((*inertia.Lazy)(nil)).Elem()
 }
 
 // ParseFields parses the fields from the msg. msg is expected to be a
@@ -39,7 +42,7 @@ func init() {
 // inertia:"-" omits the field from the response.
 // inertia:"field_name,optional|deferred|always|<empty>,mergeable|<empty>,omitempty|<empty>"
 // inertiagroup:"group"
-func ParseStruct(msg any) (Props, error) {
+func ParseStruct(msg any) (inertia.Props, error) {
 	val := reflect.ValueOf(msg)
 	if val.Kind() != reflect.Ptr {
 		return nil, errors.New("msg must be a pointer")
@@ -52,7 +55,7 @@ func ParseStruct(msg any) (Props, error) {
 
 	typ := val.Type()
 	numFields := typ.NumField()
-	props := make(Props, 0, numFields)
+	props := make(inertia.Props, 0, numFields)
 
 	for i := range numFields {
 		field := typ.Field(i)
@@ -74,6 +77,7 @@ func ParseStruct(msg any) (Props, error) {
 		fieldName := field.Name
 		fieldType := ""
 		mergeable := false
+		concurrent := false
 
 		// If tag is not empty, parse it
 		if inertiaTag != "" {
@@ -98,6 +102,10 @@ func ParseStruct(msg any) (Props, error) {
 				mergeable = true
 			}
 
+			if len(parts) > 3 && parts[3] == propConcurrent {
+				concurrent = true
+			}
+
 			// Skip empty fields if omitempty is presented.
 			if parts[len(parts)-1] == propOmitEmpty {
 				if fieldVal.IsZero() {
@@ -116,27 +124,28 @@ func ParseStruct(msg any) (Props, error) {
 			return nil, errors.New("inertiaframe: cannot use group tag on non-deferred field")
 		}
 
-		var prop *Prop
+		var prop *inertia.Prop
 
 		switch fieldType {
 		case propTypeOptional:
-			prop = NewOptional(fieldName, toLazy(fieldVal))
+			prop = inertia.NewOptional(fieldName, toLazy(fieldVal))
 		case propTypeDeferred:
-			prop = NewDeferred(
+			prop = inertia.NewDeferred(
 				fieldName,
 				toLazy(fieldVal),
-				&DeferredOptions{
-					Merge: mergeable,
-					Group: cmp.Or(inertiaGroup, DefaultDeferredGroup),
+				&inertia.DeferredOptions{
+					Merge:      mergeable,
+					Group:      cmp.Or(inertiaGroup, inertia.DefaultDeferredGroup),
+					Concurrent: concurrent,
 				},
 			)
 		case propTypeAlways:
-			prop = NewAlways(fieldName, fieldVal.Interface())
+			prop = inertia.NewAlways(fieldName, fieldVal.Interface())
 		case "":
-			prop = NewProp(
+			prop = inertia.NewProp(
 				fieldName,
 				fieldVal.Interface(),
-				&PropOptions{Merge: mergeable},
+				&inertia.PropOptions{Merge: mergeable},
 			)
 		default:
 			return nil, fmt.Errorf("inertiaframe: unknown field type %q", fieldType)
@@ -148,10 +157,10 @@ func ParseStruct(msg any) (Props, error) {
 	return props, nil
 }
 
-func toLazy(v reflect.Value) Lazy {
+func toLazy(v reflect.Value) inertia.Lazy {
 	val := v.Interface()
 	if v.Kind() == reflect.Interface && v.Type().Implements(lazyType) {
-		lazy, ok := val.(Lazy)
+		lazy, ok := val.(inertia.Lazy)
 		if !ok {
 			return nil
 		}
@@ -165,7 +174,7 @@ func toLazy(v reflect.Value) Lazy {
 			return nil
 		}
 
-		return LazyFunc(lazyFn)
+		return inertia.LazyFunc(lazyFn)
 	}
 
 	return nil

@@ -4,19 +4,33 @@
 package inertiaframe
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httperror"
 	"go.inout.gg/foundations/http/httprequest"
 
 	"go.inout.gg/inertia"
+	"go.inout.gg/inertia/inertiaprops"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
+
+var (
+	DefaultValidator = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
+
+	//nolint:gochecknoglobals
+	DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
+		func(w http.ResponseWriter, r *http.Request, err error) {
+			httperror.DefaultErrorHandler(w, r, err)
+		},
+	)
+)
 
 const (
 	contentTypeJSON      = "application/json"
@@ -31,12 +45,21 @@ type (
 	}
 
 	Response[M any] struct {
-		msg            M
+		msg            *M
+		header         http.Header
+		component      string
 		clearHistory   bool
 		encryptHistory bool
-		headers        http.Header
 	}
 )
+
+func (r *Response[_]) Header() http.Header {
+	if r.header == nil {
+		r.header = make(http.Header)
+	}
+
+	return r.header
+}
 
 type Option[M any] func(*Response[M])
 
@@ -50,32 +73,37 @@ func WithEncryptHistory() Option[any] {
 	return func(resp *Response[any]) { resp.encryptHistory = true }
 }
 
-// WithHeaders sets the HTTP headers of the response,
-// it copies the headers from the provided http.Header.
-func WithHeaders(headers http.Header) Option[any] {
-	return func(resp *Response[any]) {
-		if resp.headers == nil {
-			resp.headers = make(http.Header, len(headers))
-		}
-
-		for k, v := range headers {
-			resp.headers[k] = v
-		}
-	}
-}
-
-func NewResponse[M any](msg M, opts ...Option[M]) *Response[M] {
+func NewResponse[M any](component string, msg *M, opts ...Option[M]) *Response[M] {
 	resp := &Response[M]{
+		component:      component,
 		msg:            msg,
 		clearHistory:   false,
 		encryptHistory: false,
-		headers:        nil,
+		header:         nil,
 	}
 	for _, opt := range opts {
 		opt(resp)
 	}
 
 	return resp
+}
+
+// RawRequestExtractor allows to extract data from the raw http.Request.
+// If a request message implements RawRequestExtractor, the default
+// behavior is prevented and the extractor is used instead to
+// extract the request data.
+type RawRequestExtractor interface {
+	// Extract extracts data from the raw http.Request.
+	// It can be used to extract
+	Extract(*http.Request) error
+}
+
+// RawResponseWriter allows to write data to the http.ResponseWriter.
+// If a response message implements RawResponseWriter, the default
+// behavior is prevented and the writer is used instead to
+// write the response data.
+type RawResponseWriter interface {
+	Write(w http.ResponseWriter) error
 }
 
 // Meta is the metadata of an endpoint.
@@ -86,10 +114,8 @@ type Meta struct {
 	StatusCode   int
 }
 
-type Executor[R, W any] interface {
-	// Component is the name of the inertia component to render.
-	Component() string
-
+type Endpoint[R, W any] interface {
+	// Execute executes the endpoint.
 	Execute(context.Context, *Request[R]) (*Response[W], error)
 
 	// Meta is the metadata of the endpoint. It is used to configure
@@ -97,53 +123,74 @@ type Executor[R, W any] interface {
 	Meta() *Meta
 }
 
+type MountOpts struct {
+	// Validator is the validator used to validate the request data.
+	// If validator is nil, the default validator will be used.
+	Validator *validator.Validate
+
+	// ErrorHandler is the error handler used to handle errors.
+	// If errorHandler is nil, the default error handler will be used.
+	ErrorHandler httperror.ErrorHandler
+}
+
 // Mount mounts the executor on the given http.ServeMux.
 //
 // Executor must specify the HTTP method and path.
-func Mount(mux *http.ServeMux, e Executor[any, any]) {
+func Mount[Req, Resp any](mux *http.ServeMux, e Endpoint[Req, Resp], opts *MountOpts) {
+	if opts == nil {
+		opts = &MountOpts{
+			Validator:    DefaultValidator,
+			ErrorHandler: DefaultErrorHandler,
+		}
+	}
+
+	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
+	opts.Validator = cmp.Or(opts.Validator, DefaultValidator)
+
 	m := e.Meta()
 
 	debug.Assert(m.Method != "", "Executor must specify the HTTP method")
 	debug.Assert(m.Path != "", "Executor must specify the HTTP path")
+	debug.Assert(opts.ErrorHandler != nil, "Executor must specify the error handler")
+	debug.Assert(opts.Validator != nil, "Executor must specify the validator")
 
 	pattern := fmt.Sprintf("%s %s", m.Method, m.Path)
 
 	d("Mounting executor on pattern: %s", pattern)
 
-	mux.Handle(pattern, NewHandler(e, httperror.ErrorHandlerFunc(DefaultErrorHandler)))
+	mux.Handle(pattern, NewHandler(e, opts.ErrorHandler))
 }
 
-func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	httperror.DefaultErrorHandler(w, r, err)
-}
-
-func NewHandler[R, W any](e Executor[R, W], errorHandler httperror.ErrorHandler) http.Handler {
+func NewHandler[Req, Resp any](e Endpoint[Req, Resp], errorHandler httperror.ErrorHandler) http.Handler {
 	handleError := httperror.WithErrorHandler(errorHandler)
 
 	return handleError(httperror.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ctx := r.Context()
 		contentType := r.Header.Get("Content-Type")
 
-		var data *R
+		var data *Req
 
 		var err error
 
-		switch {
-		case strings.HasPrefix(contentType, contentTypeJSON):
-			data, err = httprequest.DecodeJSON[R](r)
-		case strings.HasPrefix(contentType, contentTypeForm),
-			strings.HasPrefix(contentType, contentTypeMultipart):
-			data, err = httprequest.DecodeForm[R](r)
+		if extract, ok := any(data).(RawRequestExtractor); ok {
+			if err := extract.Extract(r); err != nil {
+				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
+			}
+		} else {
+			switch {
+			case strings.HasPrefix(contentType, contentTypeJSON):
+				data, err = httprequest.DecodeJSON[Req](r)
+			case strings.HasPrefix(contentType, contentTypeForm),
+				strings.HasPrefix(contentType, contentTypeMultipart):
+				data, err = httprequest.DecodeForm[Req](r)
+			}
+
+			if err != nil {
+				return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
+			}
 		}
 
-		if err != nil {
-			return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
-		}
-
-		resp, err := e.Execute(ctx, &Request[R]{
-			Data: data,
-			Raw:  r,
-		})
+		resp, err := e.Execute(ctx, &Request[Req]{Raw: r, Data: data})
 		if err != nil {
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
@@ -169,7 +216,7 @@ func NewHandler[R, W any](e Executor[R, W], errorHandler httperror.ErrorHandler)
 			}
 		}
 
-		if err := inertia.Render(w, r, e.Component(), opts...); err != nil {
+		if err := inertia.Render(w, r, resp.component, opts...); err != nil {
 			return fmt.Errorf("inertiaframe: failed to render: %w", err)
 		}
 
@@ -189,7 +236,7 @@ func extractProps(msg any) (inertia.Props, error) {
 		return proper.Props(), nil
 	}
 
-	props, err := inertia.ParseStruct(msg)
+	props, err := inertiaprops.ParseStruct(msg)
 	if err != nil {
 		return nil, fmt.Errorf("inertiaframe: failed to parse props: %w", err)
 	}

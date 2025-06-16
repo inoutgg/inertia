@@ -18,14 +18,15 @@ const DefaultDeferredGroup = "default"
 //
 // Props can be attached to a rendering context using WithProps helper.
 type Prop struct {
-	val       any
-	valFn     Lazy // optional, deferred
-	key       string
-	group     string // deferred
-	mergeable bool
-	deferred  bool
-	lazy      bool // optional, deferred
-	ignorable bool // false if always prop
+	val        any
+	valFn      Lazy // optional, deferred
+	key        string
+	group      string // deferred
+	mergeable  bool
+	deferred   bool
+	lazy       bool // optional, deferred
+	ignorable  bool // false if always prop
+	concurrent bool // deferred
 }
 
 // DeferredOptions represents a.
@@ -40,6 +41,12 @@ type DeferredOptions struct {
 	//
 	// Default to false.
 	Merge bool
+
+	// Concurrent defines whether property resolution is concurrent.
+	//
+	// Properties marked as concurrent are grouped in a separate batch
+	// and resolved concurrently.
+	Concurrent bool
 }
 
 type (
@@ -63,17 +70,19 @@ func (fn LazyFunc) Value() any { return fn() }
 func NewDeferred(key string, fn Lazy, opts *DeferredOptions) *Prop {
 	//nolint:exhaustruct
 	prop := &Prop{
-		deferred:  true, // important
-		lazy:      true, // important
-		ignorable: true, // important
-		key:       key,
-		valFn:     fn,
-		group:     DefaultDeferredGroup,
+		deferred:   true, // important
+		lazy:       true, // important
+		ignorable:  true, // important
+		key:        key,
+		valFn:      fn,
+		group:      DefaultDeferredGroup,
+		concurrent: false,
 	}
 
 	if opts != nil {
 		prop.group = cmp.Or(opts.Group, DefaultDeferredGroup)
 		prop.mergeable = opts.Merge
+		prop.concurrent = opts.Concurrent
 	}
 
 	return prop
