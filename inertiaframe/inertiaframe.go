@@ -44,48 +44,72 @@ type (
 		Data *M
 	}
 
-	Response[M any] struct {
-		msg            *M
-		header         http.Header
+	Response struct {
+		msg            Message
 		component      string
 		clearHistory   bool
 		encryptHistory bool
 	}
 )
 
-func (r *Response[_]) Header() http.Header {
-	if r.header == nil {
-		r.header = make(http.Header)
-	}
-
-	return r.header
-}
-
-type Option[M any] func(*Response[M])
+type Option func(*Response)
 
 // WithClearHistory sets the history clear.
-func WithClearHistory() Option[any] {
-	return func(opt *Response[any]) { opt.clearHistory = true }
+func WithClearHistory() Option {
+	return func(opt *Response) { opt.clearHistory = true }
 }
 
 // WithEncryptHistory instructs the client to encrypt the history state.
-func WithEncryptHistory() Option[any] {
-	return func(resp *Response[any]) { resp.encryptHistory = true }
+func WithEncryptHistory() Option {
+	return func(resp *Response) { resp.encryptHistory = true }
 }
 
-func NewResponse[M any](component string, msg *M, opts ...Option[M]) *Response[M] {
-	resp := &Response[M]{
-		component:      component,
+func NewResponse(msg Message, opts ...Option) *Response {
+	resp := &Response{
+		component:      msg.Component(),
 		msg:            msg,
 		clearHistory:   false,
 		encryptHistory: false,
-		header:         nil,
 	}
 	for _, opt := range opts {
 		opt(resp)
 	}
 
 	return resp
+}
+
+type redirectMessage struct {
+	URL string
+}
+
+func (m *redirectMessage) Component() string { return "" }
+
+func (m *redirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
+	inertia.Location(w, r, m.URL)
+	return nil
+}
+
+// NewRedirectResponse creates a new response that redirects the client to the
+// specified URL.
+func NewRedirectResponse(url string) *Response {
+	return &Response{
+		msg:            &redirectMessage{URL: url},
+		component:      "",
+		clearHistory:   false,
+		encryptHistory: false,
+	}
+}
+
+type Message interface {
+	// Component returns the component name to be rendered.
+	//
+	// Executor panics if Component returns an empty string,
+	// unless the message implements RawResponseWriter.
+	//
+	// If the message is implementing RawResponseWriter, the default
+	// behavior is prevented and the writer is used instead to
+	// write the response data.
+	Component() string
 }
 
 // RawRequestExtractor allows to extract data from the raw http.Request.
@@ -103,7 +127,7 @@ type RawRequestExtractor interface {
 // behavior is prevented and the writer is used instead to
 // write the response data.
 type RawResponseWriter interface {
-	Write(w http.ResponseWriter) error
+	Write(http.ResponseWriter, *http.Request) error
 }
 
 // Meta is the metadata of an endpoint.
@@ -114,9 +138,9 @@ type Meta struct {
 	StatusCode   int
 }
 
-type Endpoint[R, W any] interface {
+type Endpoint[R any] interface {
 	// Execute executes the endpoint.
-	Execute(context.Context, *Request[R]) (*Response[W], error)
+	Execute(context.Context, *Request[R]) (*Response, error)
 
 	// Meta is the metadata of the endpoint. It is used to configure
 	// the endpoint's behavior when mounted on a given http.ServeMux.
@@ -136,7 +160,7 @@ type MountOpts struct {
 // Mount mounts the executor on the given http.ServeMux.
 //
 // Executor must specify the HTTP method and path.
-func Mount[Req, Resp any](mux *http.ServeMux, e Endpoint[Req, Resp], opts *MountOpts) {
+func Mount[Req any](mux *http.ServeMux, e Endpoint[Req], opts *MountOpts) {
 	if opts == nil {
 		opts = &MountOpts{
 			Validator:    DefaultValidator,
@@ -161,7 +185,7 @@ func Mount[Req, Resp any](mux *http.ServeMux, e Endpoint[Req, Resp], opts *Mount
 	mux.Handle(pattern, NewHandler(e, opts.ErrorHandler))
 }
 
-func NewHandler[Req, Resp any](e Endpoint[Req, Resp], errorHandler httperror.ErrorHandler) http.Handler {
+func NewHandler[Req any](e Endpoint[Req], errorHandler httperror.ErrorHandler) http.Handler {
 	handleError := httperror.WithErrorHandler(errorHandler)
 
 	return handleError(httperror.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -177,6 +201,7 @@ func NewHandler[Req, Resp any](e Endpoint[Req, Resp], errorHandler httperror.Err
 				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
 			}
 		} else {
+			// Inertia accepts only JSON, or multipart/form-data.
 			switch {
 			case strings.HasPrefix(contentType, contentTypeJSON):
 				data, err = httprequest.DecodeJSON[Req](r)
@@ -195,7 +220,7 @@ func NewHandler[Req, Resp any](e Endpoint[Req, Resp], errorHandler httperror.Err
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
 
-		opts := make([]inertia.Option, 0, 1)
+		opts := make([]inertia.Option, 0, 2)
 
 		if resp != nil {
 			if resp.clearHistory {

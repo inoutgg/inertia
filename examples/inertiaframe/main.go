@@ -7,11 +7,12 @@ import (
 	"os"
 	"os/signal"
 
+	"go.inout.gg/examples/inertiaframe/endpoint"
 	"go.inout.gg/foundations/must"
 
 	"go.inout.gg/inertia"
-	"go.inout.gg/inertia/contrib/inertiaframe"
 	"go.inout.gg/inertia/contrib/vite"
+	"go.inout.gg/inertia/inertiaframe"
 )
 
 //nolint:exhaustruct,gochecknoglobals
@@ -43,7 +44,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	inertiaframe.Mount(mux, &SignInEndpoint{}, nil)
+	inertiaframe.Mount(mux, &endpoint.SignInGetEndpoint{}, nil)
+	inertiaframe.Mount(mux, &endpoint.SignInPostEndpoint{}, nil)
 
 	go func() {
 		//nolint:gosec
