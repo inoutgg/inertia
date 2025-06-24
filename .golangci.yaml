@@ -141,3 +141,4 @@ linters:
         - wg # waitgroup
         - js # javascript
         - d # debug
+        - kv # key-value pair

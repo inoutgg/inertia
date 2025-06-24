@@ -1,6 +1,7 @@
 package inertiaprops
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -16,13 +17,13 @@ type A struct {
 
 type H struct{}
 
-func (h *H) Value() any {
-	return "value"
+func (h *H) Value(context.Context) (any, error) {
+	return "value", nil
 }
 
 func TestStructParser(t *testing.T) {
 	props, err := ParseStruct(&A{
-		Field3: inertia.LazyFunc(func() any { return "lazy" }),
+		Field3: inertia.LazyFunc(func(context.Context) (any, error) { return "lazy", nil }),
 		Field4: &H{},
 	})
 	if err != nil {

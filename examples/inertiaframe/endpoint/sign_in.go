@@ -15,7 +15,7 @@ import (
 var (
 	_ inertiaframe.Endpoint[SignInGetRequest]  = (*SignInGetEndpoint)(nil)
 	_ inertiaframe.Endpoint[SignInPostRequest] = (*SignInPostEndpoint)(nil)
-	// _ inertiaframe.RawResponseWriter           = (*SignInPostResponse)(nil)
+	_ inertiaframe.RawResponseWriter           = (*SignInPostResponse)(nil)
 )
 
 type (

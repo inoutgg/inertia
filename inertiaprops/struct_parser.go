@@ -2,6 +2,7 @@ package inertiaprops
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -102,9 +103,12 @@ func ParseStruct(msg any) (inertia.Props, error) {
 				mergeable = true
 			}
 
+			// Fourth part is concurrent flag
 			if len(parts) > 3 && parts[3] == propConcurrent {
 				concurrent = true
 			}
+
+			fmt.Println(fieldName, fieldType, mergeable, concurrent)
 
 			// Skip empty fields if omitempty is presented.
 			if parts[len(parts)-1] == propOmitEmpty {
@@ -128,11 +132,21 @@ func ParseStruct(msg any) (inertia.Props, error) {
 
 		switch fieldType {
 		case propTypeOptional:
-			prop = inertia.NewOptional(fieldName, toLazy(fieldVal))
+			fn, err := toLazy(fieldVal)
+			if err != nil {
+				return nil, err
+			}
+
+			prop = inertia.NewOptional(fieldName, fn)
 		case propTypeDeferred:
+			fn, err := toLazy(fieldVal)
+			if err != nil {
+				return nil, err
+			}
+
 			prop = inertia.NewDeferred(
 				fieldName,
-				toLazy(fieldVal),
+				fn,
 				&inertia.DeferredOptions{
 					Merge:      mergeable,
 					Group:      cmp.Or(inertiaGroup, inertia.DefaultDeferredGroup),
@@ -157,25 +171,25 @@ func ParseStruct(msg any) (inertia.Props, error) {
 	return props, nil
 }
 
-func toLazy(v reflect.Value) inertia.Lazy {
+func toLazy(v reflect.Value) (inertia.Lazy, error) {
 	val := v.Interface()
-	if v.Kind() == reflect.Interface && v.Type().Implements(lazyType) {
+	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Func) && v.Type().Implements(lazyType) {
 		lazy, ok := val.(inertia.Lazy)
 		if !ok {
-			return nil
+			return nil, errors.New("inertiaframe: invalid lazy value")
 		}
 
-		return lazy
+		return lazy, nil
 	}
 
 	if v.Kind() == reflect.Func {
-		lazyFn, ok := val.(func() any)
+		lazyFn, ok := val.(func(context.Context) (any, error))
 		if !ok {
-			return nil
+			return nil, errors.New("inertiaframe: invalid lazy function")
 		}
 
-		return inertia.LazyFunc(lazyFn)
+		return inertia.LazyFunc(lazyFn), nil
 	}
 
-	return nil
+	return nil, errors.New("inertiaframe: invalid lazy value")
 }

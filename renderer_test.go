@@ -1,6 +1,7 @@
 package inertia
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -480,7 +481,9 @@ func TestRenderer_Render(t *testing.T) {
 					NewProp("visible", "Visible Content", nil),
 					NewDeferred(
 						"lazy",
-						LazyFunc(func() any { return "Lazy Content" }),
+						LazyFunc(
+							func(context.Context) (any, error) { return "Lazy Content", nil },
+						),
 						&DeferredOptions{
 							Group: "group1",
 						},

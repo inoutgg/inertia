@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/alitto/pond/v2 v2.4.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/go-playground/form/v4 v4.2.1 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect

@@ -2,6 +2,7 @@ package inertia
 
 import (
 	"cmp"
+	"context"
 )
 
 var (
@@ -51,17 +52,24 @@ type DeferredOptions struct {
 
 type (
 	// Lazy represents prop's value that is resolved only when it's requested.
-	Lazy interface{ Value() any }
+	Lazy interface {
+		// Value returns prop's value.
+		//
+		// The returned value must be JSON serializable.
+		Value(context.Context) (any, error)
+	}
 
 	// The LazyFunc type is an adapter to allow the use of ordinary functions
 	// where Lazy is expected.
 	// If f is a function with the appropriate signature, LazyFunc(f) is a
 	// [Lazy] that calls f.
-	LazyFunc func() any
+	//
+	// The returned value must be JSON serializable.
+	LazyFunc func(context.Context) (any, error)
 )
 
 // Value calls `fn()`.
-func (fn LazyFunc) Value() any { return fn() }
+func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 
 // NewDeferred creates a new deferred prop that is resolved only when
 // it's requested.
@@ -135,13 +143,18 @@ func NewProp(key string, val any, opts *PropOptions) *Prop {
 }
 
 // value returns the prop value.
-func (p *Prop) value() any {
+func (p *Prop) value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
-		p.val = p.valFn.Value()
+		v, err := p.valFn.Value(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck
+		}
+
+		p.val = v
 		p.valFn = nil
 	}
 
-	return p.val
+	return p.val, nil
 }
 
 func (p *Prop) Props() []*Prop { return []*Prop{p} }

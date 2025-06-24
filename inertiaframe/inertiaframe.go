@@ -20,6 +20,7 @@ import (
 	ven "github.com/go-playground/validator/v10/translations/en"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httperror"
+	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
 
 	"go.inout.gg/inertia"
@@ -90,6 +91,7 @@ type (
 		msg            Message
 		clearHistory   bool
 		encryptHistory bool
+		concurrency    int
 	}
 )
 
@@ -105,11 +107,17 @@ func WithEncryptHistory() Option {
 	return func(resp *Response) { resp.encryptHistory = true }
 }
 
+// WithConcurrency sets the concurrency level for response props resolution.
+func WithConcurrency(concurrency int) Option {
+	return func(resp *Response) { resp.concurrency = concurrency }
+}
+
 func NewResponse(msg Message, opts ...Option) *Response {
 	resp := &Response{
 		msg:            msg,
 		clearHistory:   false,
 		encryptHistory: false,
+		concurrency:    inertia.DefaultConcurrency,
 	}
 	for _, opt := range opts {
 		opt(resp)
@@ -136,6 +144,7 @@ func NewRedirectResponse(url string) *Response {
 		msg:            &redirectMessage{URL: url},
 		clearHistory:   false,
 		encryptHistory: false,
+		concurrency:    inertia.DefaultConcurrency,
 	}
 }
 
@@ -177,9 +186,6 @@ type Meta struct {
 	// HTTP path of the endpoint. It supports the same path pattern as
 	// the http.ServeMux.
 	Path string
-
-	// H
-	StatusCode int
 }
 
 type Endpoint[R any] interface {
@@ -195,6 +201,10 @@ type Endpoint[R any] interface {
 }
 
 type MountOpts struct {
+	// Middleware is the middleware used to handle requests.
+	// If middleware is nil, no middleware will be used.
+	Middleware httpmiddleware.Middleware
+
 	// Validator is the validator used to validate the request data.
 	// If validator is nil, the default validator will be used.
 	Validator *validator.Validate
@@ -225,12 +235,8 @@ type MountOpts struct {
 // according to Inertia protocol.
 func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 	if opts == nil {
-		opts = &MountOpts{
-			Validator:    DefaultValidator,
-			FormDecoder:  DefaultFormDecoder,
-			ErrorHandler: DefaultErrorHandler,
-			Translator:   DefaultTranslator,
-		}
+		//nolint:exhaustruct
+		opts = &MountOpts{}
 	}
 
 	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
@@ -252,7 +258,12 @@ func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 
 	d("Mounting executor on pattern: %s", pattern)
 
-	mux.Handle(pattern, newHandler(e, opts.ErrorHandler, opts.Validator, opts.Translator, opts.FormDecoder))
+	h := newHandler(e, opts.ErrorHandler, opts.Validator, opts.Translator, opts.FormDecoder)
+	if opts.Middleware != nil {
+		h = opts.Middleware.Middleware(h)
+	}
+
+	mux.Handle(pattern, h)
 }
 
 // newHandler creates a new http.Handler for the given endpoint.
@@ -282,15 +293,14 @@ func newHandler[M any](
 			}
 
 			// Inertia accepts only JSON, or multipart/form-data.
-			switch {
-			case strings.HasPrefix(mediaType, mediaTypeJSON):
+			switch mediaType {
+			case mediaTypeJSON:
 				{
 					if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 						return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
 					}
 				}
-			case strings.HasPrefix(mediaType, mediaTypeForm),
-				strings.HasPrefix(mediaType, mediaTypeMultipart):
+			case mediaTypeForm, mediaTypeMultipart:
 				{
 					if err := r.ParseForm(); err != nil {
 						return fmt.Errorf("inertiaframe: failed to parse form data: %w", err)

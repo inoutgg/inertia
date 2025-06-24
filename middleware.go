@@ -97,6 +97,7 @@ type RenderContext struct {
 	validationErrorer []ValidationErrorer
 	encryptHistory    bool
 	clearHistory      bool
+	concurrency       int
 }
 
 // Option configures rendering context.
@@ -143,6 +144,18 @@ func WithValidationErrors(errorers ValidationErrorer) Option {
 		}
 
 		renderCtx.validationErrorer = append(renderCtx.validationErrorer, errorers)
+	}
+}
+
+// WithConcurrency sets the concurrency level for a given page props resolution.
+//
+// Calling this function multiple times will override the previous value.
+//
+// If the concurrency level is set to 0, the default concurrency level will be used.
+// Otherwise, if the concurrency level is negative, it will be set to unlimited.
+func WithConcurrency(concurrency int) Option {
+	return func(renderCtx *RenderContext) {
+		renderCtx.concurrency = concurrency
 	}
 }
 

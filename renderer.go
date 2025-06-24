@@ -11,9 +11,11 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"runtime"
 	"slices"
 	"strings"
 
+	"github.com/alitto/pond/v2"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 
@@ -25,7 +27,15 @@ const (
 	contentTypeJSON = "application/json"
 )
 
-const DefaultRootViewID = "app"
+const (
+	// DefaultRootViewID is the default root HTML element ID to which
+	// the Inertia.js app is mounted.
+	DefaultRootViewID = "app"
+)
+
+// DefaultConcurrency is the default concurrency level for props resolution
+// marked as concurrently resolvable.
+var DefaultConcurrency = runtime.GOMAXPROCS(0) //nolint:gochecknoglobals
 
 // Page represents an Inertia.js page that is sent to the client.
 type Page struct {
@@ -44,12 +54,25 @@ type Config struct {
 	SsrClient     SsrClient
 	RootViewAttrs map[string]string
 	Version       string
-	RootViewID    string
+
+	// RootViewID is the ID of the root HTML element to which
+	// the Inertia.js app will be mounted.
+	//
+	// It defaults to "app".
+	RootViewID string
+
+	// Concurrency controls the number of concurrent props resolution.
+	//
+	// Only those props marked as concurrent are resolved concurrently.
+	//
+	// It defaults to the number of CPUs available.
+	Concurrency int
 }
 
 // defaults sets the default values for the configuration.
 func (c *Config) defaults() {
 	c.RootViewID = cmp.Or(c.RootViewID, DefaultRootViewID)
+	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
 }
 
 // New creates a new Renderer instance.
@@ -69,6 +92,7 @@ func New(t *template.Template, config *Config) *Renderer {
 		version:       config.Version,
 		rootViewID:    config.RootViewID,
 		rootViewAttrs: config.RootViewAttrs,
+		concurrency:   config.Concurrency,
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -110,14 +134,19 @@ type Renderer struct {
 	rootViewID    string
 	rootViewAttrs map[string]string
 	version       string
+	concurrency   int
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
+func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) (*Page, error) {
 	rawProps := make([]*Prop, 0, len(rCtx.props)+1)
 	rawProps = append(rawProps, rCtx.props...)
 	rawProps = append(rawProps, r.makeValidationErrors(req, rCtx.validationErrorer))
 
-	props := r.makeProps(req, componentName, rawProps)
+	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
+	if err != nil {
+		return nil, err
+	}
+
 	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
 		rawProps,
@@ -133,7 +162,7 @@ func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Render
 		Version:        r.version,
 		ClearHistory:   rCtx.clearHistory,
 		EncryptHistory: rCtx.encryptHistory,
-	}
+	}, nil
 }
 
 // Version returns a version of the inertia build.
@@ -143,7 +172,15 @@ func (r *Renderer) Version() string { return r.version }
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx *RenderContext) error {
-	page := r.newPage(req, name, renderCtx)
+	renderCtx.concurrency = cmp.Or(renderCtx.concurrency, r.concurrency)
+	if renderCtx.concurrency < 0 {
+		renderCtx.concurrency = 0
+	}
+
+	page, err := r.newPage(req, name, renderCtx)
+	if err != nil {
+		return err
+	}
 
 	if isInertiaRequest(req) {
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
@@ -224,7 +261,13 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	return template.HTML(w.String()), nil
 }
 
-func (r *Renderer) makeProps(req *http.Request, componentName string, props []*Prop) map[string]any {
+func (r *Renderer) makeProps(
+	req *http.Request,
+	componentName string,
+	props []*Prop,
+	concurrency int,
+) (map[string]any, error) {
+	ctx := req.Context()
 	m := make(map[string]any, len(props))
 
 	// If the request is a partial, we need to filter the props.
@@ -233,6 +276,8 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 			inertiaheader.HeaderXInertiaPartialData))
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
+
+		var concurrentProps []*Prop
 
 		for _, prop := range props {
 			key := prop.key
@@ -244,7 +289,50 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 				}
 			}
 
-			m[key] = prop.value()
+			if prop.concurrent {
+				concurrentProps = append(concurrentProps, prop)
+			} else {
+				val, err := prop.value(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
+				}
+
+				m[key] = val
+			}
+		}
+
+		if len(concurrentProps) > 0 {
+			pool := pond.NewResultPool[pair[any]](concurrency)
+			group := pool.NewGroupContext(ctx)
+
+			for _, prop := range concurrentProps {
+				group.SubmitErr(func() (pair[any], error) {
+					var kv pair[any]
+
+					val, err := prop.value(ctx)
+					if err != nil {
+						return kv, fmt.Errorf(
+							"inertia: failed to resolve prop %s: %w",
+							prop.key,
+							err,
+						)
+					}
+
+					kv.key = prop.key
+					kv.value = val
+
+					return kv, nil
+				})
+			}
+
+			result, err := group.Wait()
+			if err != nil {
+				return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
+			}
+
+			for i, prop := range concurrentProps {
+				m[prop.key] = result[i].value
+			}
 		}
 	} else {
 		for _, prop := range props {
@@ -253,11 +341,16 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 				continue
 			}
 
-			m[prop.key] = prop.value()
+			val, err := prop.value(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
+			}
+
+			m[prop.key] = val
 		}
 	}
 
-	return m
+	return m, nil
 }
 
 // makeDefferedProps creates a map of deferred props that should be resolved
@@ -376,4 +469,10 @@ func extractHeaderValueList(h string) []string {
 	}
 
 	return fields
+}
+
+// pair is a key-value pair.
+type pair[T any] struct {
+	value T
+	key   string
 }

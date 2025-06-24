@@ -1,6 +1,6 @@
 import { Field } from "@base-ui-components/react/field";
 import { Form } from "@base-ui-components/react/form";
-import { useForm } from "@inertiajs/react";
+import { useForm, usePage } from "@inertiajs/react";
 
 export default function ExampleField() {
   const form = useForm({
