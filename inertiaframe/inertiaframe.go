@@ -6,23 +6,32 @@ package inertiaframe
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
+	"reflect"
 	"strings"
 
+	"github.com/go-playground/form/v4"
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	ven "github.com/go-playground/validator/v10/translations/en"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httperror"
-	"go.inout.gg/foundations/http/httprequest"
+	"go.inout.gg/foundations/must"
 
 	"go.inout.gg/inertia"
+	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
 	"go.inout.gg/inertia/inertiaprops"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
 
 var (
-	DefaultValidator = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
+	DefaultValidator   = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
+	DefaultFormDecoder = form.NewDecoder()                                    //nolint:gochecknoglobals
 
 	//nolint:gochecknoglobals
 	DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
@@ -33,20 +42,52 @@ var (
 )
 
 const (
-	contentTypeJSON      = "application/json"
-	contentTypeForm      = "application/x-www-form-urlencoded"
-	contentTypeMultipart = "multipart/form-data"
+	mediaTypeJSON      = "application/json"
+	mediaTypeForm      = "application/x-www-form-urlencoded"
+	mediaTypeMultipart = "multipart/form-data"
+	contentTypeHeader  = "Content-Type"
 )
+
+var (
+	defaultLocale     = en.New()              //nolint:gochecknoglobals
+	defaultTranslator = ut.New(defaultLocale) //nolint:gochecknoglobals
+)
+
+//nolint:gochecknoinits
+func init() {
+	t, _ := defaultTranslator.GetTranslator(defaultLocale.Locale())
+	must.Must1(ven.RegisterDefaultTranslations(DefaultValidator, t))
+
+	DefaultValidator.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" || name == "" {
+			return ""
+		}
+
+		return name
+	})
+}
+
+// Translator is a function that returns a translator for a given context.
+//
+// The passed context is the incoming request context. It can be used
+// to retrieve the user's locale or any other information from the request.
+type Translator = func(context.Context) ut.Translator
+
+// DefaultTranslator returns the default translator that always uses
+// the default locale - English (en).
+func DefaultTranslator(_ context.Context) ut.Translator {
+	t, _ := defaultTranslator.GetTranslator(defaultLocale.Locale())
+	return t
+}
 
 type (
 	Request[M any] struct {
-		Raw  *http.Request
-		Data *M
+		Message *M
 	}
 
 	Response struct {
 		msg            Message
-		component      string
 		clearHistory   bool
 		encryptHistory bool
 	}
@@ -66,7 +107,6 @@ func WithEncryptHistory() Option {
 
 func NewResponse(msg Message, opts ...Option) *Response {
 	resp := &Response{
-		component:      msg.Component(),
 		msg:            msg,
 		clearHistory:   false,
 		encryptHistory: false,
@@ -94,7 +134,6 @@ func (m *redirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
 func NewRedirectResponse(url string) *Response {
 	return &Response{
 		msg:            &redirectMessage{URL: url},
-		component:      "",
 		clearHistory:   false,
 		encryptHistory: false,
 	}
@@ -132,14 +171,22 @@ type RawResponseWriter interface {
 
 // Meta is the metadata of an endpoint.
 type Meta struct {
-	ErrorHandler httperror.ErrorHandler
-	Method       string
-	Path         string
-	StatusCode   int
+	// HTTP method of the endpoint.
+	Method string
+
+	// HTTP path of the endpoint. It supports the same path pattern as
+	// the http.ServeMux.
+	Path string
+
+	// H
+	StatusCode int
 }
 
 type Endpoint[R any] interface {
-	// Execute executes the endpoint.
+	// Execute executes the endpoint for the given request.
+	//
+	// If the returned error can automatically be converted to an Inertia
+	// error, it will converted and passed down to the client.
 	Execute(context.Context, *Request[R]) (*Response, error)
 
 	// Meta is the metadata of the endpoint. It is used to configure
@@ -152,6 +199,16 @@ type MountOpts struct {
 	// If validator is nil, the default validator will be used.
 	Validator *validator.Validate
 
+	// FormDecoder is the decoded used to parse incoming request data
+	// when the request type is application/x-www-form-urlencoded or
+	// multipart/form-data.
+	FormDecoder *form.Decoder
+
+	// Translator is the translator used to translate error messages
+	// thrown by the validator.
+	// If translator is nil, the default translator will be used.
+	Translator func(context.Context) ut.Translator
+
 	// ErrorHandler is the error handler used to handle errors.
 	// If errorHandler is nil, the default error handler will be used.
 	ErrorHandler httperror.ErrorHandler
@@ -159,17 +216,30 @@ type MountOpts struct {
 
 // Mount mounts the executor on the given http.ServeMux.
 //
-// Executor must specify the HTTP method and path.
-func Mount[Req any](mux *http.ServeMux, e Endpoint[Req], opts *MountOpts) {
+// Endpoint must specify the HTTP method and path via Endpoint.Meta().
+// The mounted endpoint is automatically handles requests with JSON and form
+// data.
+//
+// The message M is validated using the validator specified in the MountOpts.
+// Validation errors are automatically handled and passed to the client
+// according to Inertia protocol.
+func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 	if opts == nil {
 		opts = &MountOpts{
 			Validator:    DefaultValidator,
+			FormDecoder:  DefaultFormDecoder,
 			ErrorHandler: DefaultErrorHandler,
+			Translator:   DefaultTranslator,
 		}
 	}
 
 	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
 	opts.Validator = cmp.Or(opts.Validator, DefaultValidator)
+	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
+
+	if opts.Translator == nil {
+		opts.Translator = DefaultTranslator
+	}
 
 	m := e.Meta()
 
@@ -182,47 +252,80 @@ func Mount[Req any](mux *http.ServeMux, e Endpoint[Req], opts *MountOpts) {
 
 	d("Mounting executor on pattern: %s", pattern)
 
-	mux.Handle(pattern, NewHandler(e, opts.ErrorHandler))
+	mux.Handle(pattern, newHandler(e, opts.ErrorHandler, opts.Validator, opts.Translator, opts.FormDecoder))
 }
 
-func NewHandler[Req any](e Endpoint[Req], errorHandler httperror.ErrorHandler) http.Handler {
+// newHandler creates a new http.Handler for the given endpoint.
+func newHandler[M any](
+	endpoint Endpoint[M],
+	errorHandler httperror.ErrorHandler,
+	validate *validator.Validate,
+	translator Translator,
+	formDecoder *form.Decoder,
+) http.Handler {
 	handleError := httperror.WithErrorHandler(errorHandler)
 
 	return handleError(httperror.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var msg M
+
 		ctx := r.Context()
-		contentType := r.Header.Get("Content-Type")
+		opts := make([]inertia.Option, 0, 2)
 
-		var data *Req
-
-		var err error
-
-		if extract, ok := any(data).(RawRequestExtractor); ok {
+		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
 				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
 			}
-		} else {
-			// Inertia accepts only JSON, or multipart/form-data.
-			switch {
-			case strings.HasPrefix(contentType, contentTypeJSON):
-				data, err = httprequest.DecodeJSON[Req](r)
-			case strings.HasPrefix(contentType, contentTypeForm),
-				strings.HasPrefix(contentType, contentTypeMultipart):
-				data, err = httprequest.DecodeForm[Req](r)
+		} else if r.Method != http.MethodGet {
+			mediaType, _, err := mime.ParseMediaType(r.Header.Get(contentTypeHeader))
+			if err != nil {
+				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
 			}
 
-			if err != nil {
-				return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
+			// Inertia accepts only JSON, or multipart/form-data.
+			switch {
+			case strings.HasPrefix(mediaType, mediaTypeJSON):
+				{
+					if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+						return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
+					}
+				}
+			case strings.HasPrefix(mediaType, mediaTypeForm),
+				strings.HasPrefix(mediaType, mediaTypeMultipart):
+				{
+					if err := r.ParseForm(); err != nil {
+						return fmt.Errorf("inertiaframe: failed to parse form data: %w", err)
+					}
+
+					if err := formDecoder.Decode(&msg, r.Form); err != nil {
+						return fmt.Errorf("inertiaframe: failed to decode form data: %w", err)
+					}
+				}
 			}
 		}
 
-		resp, err := e.Execute(ctx, &Request[Req]{Raw: r, Data: data})
+		if err := validate.StructCtx(ctx, &msg); err != nil {
+			errors, ok := inertiavalidationerrors.FromValidationErrors(err, translator(ctx))
+			if ok {
+				opts = append(opts, inertia.WithValidationErrors(errors))
+			} else {
+				return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
+			}
+		}
+
+		req := &Request[M]{Message: &msg}
+
+		resp, err := endpoint.Execute(ctx, req)
 		if err != nil {
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
 
-		opts := make([]inertia.Option, 0, 2)
-
 		if resp != nil {
+			if writer, ok := resp.msg.(RawResponseWriter); ok {
+				if err := writer.Write(w, r); err != nil {
+					return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+				}
+			}
+
 			if resp.clearHistory {
 				opts = append(opts, inertia.WithClearHistory())
 			}
@@ -241,7 +344,10 @@ func NewHandler[Req any](e Endpoint[Req], errorHandler httperror.ErrorHandler) h
 			}
 		}
 
-		if err := inertia.Render(w, r, resp.component, opts...); err != nil {
+		componentName := resp.msg.Component()
+		debug.Assert(componentName != "", "component must not be empty, when using non RawResponseWriter")
+
+		if err := inertia.Render(w, r, componentName, opts...); err != nil {
 			return fmt.Errorf("inertiaframe: failed to render: %w", err)
 		}
 

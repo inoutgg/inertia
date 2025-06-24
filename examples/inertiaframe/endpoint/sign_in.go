@@ -15,7 +15,7 @@ import (
 var (
 	_ inertiaframe.Endpoint[SignInGetRequest]  = (*SignInGetEndpoint)(nil)
 	_ inertiaframe.Endpoint[SignInPostRequest] = (*SignInPostEndpoint)(nil)
-	_ inertiaframe.RawResponseWriter           = (*SignInPostResponse)(nil)
+	// _ inertiaframe.RawResponseWriter           = (*SignInPostResponse)(nil)
 )
 
 type (
@@ -39,8 +39,8 @@ func (s *SignInGetEndpoint) Execute(ctx context.Context, req *inertiaframe.Reque
 }
 
 type SignInPostRequest struct {
-	Email    string
-	Password string
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type SignInPostResponse struct {
@@ -48,7 +48,7 @@ type SignInPostResponse struct {
 	authenticator shieldstrategy.Authenticator[user.Data]
 }
 
-func (r *SignInPostResponse) Component() string { return "" }
+func (r *SignInPostResponse) Component() string { return "SignIn" }
 
 type SignInPostEndpoint struct {
 	handler       *shieldpassword.Handler[user.Data]
@@ -74,7 +74,7 @@ func (s *SignInPostEndpoint) Meta() *inertiaframe.Meta {
 }
 
 func (s *SignInPostEndpoint) Execute(ctx context.Context, req *inertiaframe.Request[SignInPostRequest]) (*inertiaframe.Response, error) {
-	user, err := s.handler.HandleUserLogin(ctx, req.Data.Email, req.Data.Password)
+	user, err := s.handler.HandleUserLogin(ctx, req.Message.Email, req.Message.Password)
 	if err != nil {
 		return nil, err
 	}

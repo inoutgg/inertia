@@ -28,6 +28,9 @@ export default function ExampleField() {
             onChange={(e) => form.setData("email", e.target.value)}
           />
           <Field.Error match="valueMissing">Please enter your name</Field.Error>
+          <Field.Error match={!!form.errors.email}>
+            {form.errors.email}
+          </Field.Error>
         </Field.Root>
         <Field.Root>
           <Field.Label>Password</Field.Label>
@@ -41,6 +44,9 @@ export default function ExampleField() {
           />
           <Field.Error match="valueMissing">
             Please enter your password
+          </Field.Error>
+          <Field.Error match={!!form.errors.password}>
+            {form.errors.password}
           </Field.Error>
         </Field.Root>
 

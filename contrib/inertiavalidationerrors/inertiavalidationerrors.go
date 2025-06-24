@@ -26,12 +26,10 @@ func (m Map) ValidationErrors() []inertia.ValidationError {
 
 func (m Map) Len() int { return len(m) }
 
-func (m Map) ErrorBag() string { return "" }
-
 // FromValidationErrors creates a Map from a validator error.
 //
-// FromValidationErrors supports nested errors implemented via the Unwrap() error
-// method. Unwrap() []error interface is not supported.
+// FromValidationErrors supports nested errors implemented via the `Unwrap() error`
+// method. Unwrap method returning multiple errors `Unwrap() []error` is not supported.
 func FromValidationErrors(err error, t ut.Translator) (Map, bool) {
 	var verr validator.ValidationErrors
 	if errors.As(err, &verr) {
