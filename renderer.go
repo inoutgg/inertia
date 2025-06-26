@@ -5,6 +5,7 @@
 package inertia
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -86,12 +87,17 @@ func New(t *template.Template, config *Config) *Renderer {
 
 	config.defaults()
 
+	attrs := make([]pair[[]byte, []byte], 0, len(config.RootViewAttrs))
+	for key, value := range config.RootViewAttrs {
+		attrs = append(attrs, pair[[]byte, []byte]{[]byte(key), []byte(value)})
+	}
+
 	r := &Renderer{
 		t:             t,
 		ssrClient:     config.SsrClient,
 		version:       config.Version,
 		rootViewID:    config.RootViewID,
-		rootViewAttrs: config.RootViewAttrs,
+		rootViewAttrs: attrs,
 		concurrency:   config.Concurrency,
 	}
 
@@ -132,7 +138,7 @@ type Renderer struct {
 
 	ssrClient     SsrClient
 	rootViewID    string
-	rootViewAttrs map[string]string
+	rootViewAttrs []pair[[]byte, []byte]
 	version       string
 	concurrency   int
 }
@@ -140,7 +146,7 @@ type Renderer struct {
 func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) (*Page, error) {
 	rawProps := make([]*Prop, 0, len(rCtx.props)+1)
 	rawProps = append(rawProps, rCtx.props...)
-	rawProps = append(rawProps, r.makeValidationErrors(req, rCtx.validationErrorer))
+	rawProps = append(rawProps, r.makeValidationErrors(rCtx.validationErrorer, rCtx.errorBag))
 
 	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
 	if err != nil {
@@ -183,6 +189,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	if isInertiaRequest(req) {
+		d("Inertia")
+		
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
 		w.WriteHeader(http.StatusOK)
@@ -229,7 +237,8 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 
 	_ = must.Must(w.WriteString(`<div id="`))
 	_ = must.Must(w.WriteString(r.rootViewID))
-	_ = must.Must(w.WriteString(`" `))
+	_ = must.Must(w.WriteRune('"'))
+	_ = must.Must(w.WriteRune(' '))
 
 	_ = must.Must(w.WriteString(`data-page="`))
 
@@ -239,19 +248,22 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	}
 
 	template.HTMLEscape(&w, pageBytes)
-	_ = must.Must(w.WriteString(`" `))
+	_ = must.Must(w.WriteRune('"'))
+	_ = must.Must(w.WriteRune(' '))
 
 	if r.rootViewAttrs != nil {
-		for k, v := range r.rootViewAttrs {
+		for _, kv := range r.rootViewAttrs {
 			// Skip the data-page attribute as it's already set.
-			if k == "data-page" {
+			if bytes.Equal(kv.key, []byte("data-page")) {
 				continue
 			}
 
-			_ = must.Must(w.WriteString(k))
-			_ = must.Must(w.WriteString(`="`))
-			template.HTMLEscape(&w, []byte(v))
-			_ = must.Must(w.WriteString(`" `))
+			_ = must.Must(w.Write(kv.key))
+			_ = must.Must(w.WriteRune('='))
+			_ = must.Must(w.WriteRune('"'))
+			template.HTMLEscape(&w, kv.value)
+			_ = must.Must(w.WriteRune('"'))
+			_ = must.Must(w.WriteRune(' '))
 		}
 	}
 
@@ -302,12 +314,12 @@ func (r *Renderer) makeProps(
 		}
 
 		if len(concurrentProps) > 0 {
-			pool := pond.NewResultPool[pair[any]](concurrency)
+			pool := pond.NewResultPool[pair[string, any]](concurrency)
 			group := pool.NewGroupContext(ctx)
 
 			for _, prop := range concurrentProps {
-				group.SubmitErr(func() (pair[any], error) {
-					var kv pair[any]
+				group.SubmitErr(func() (pair[string, any], error) {
+					var kv pair[string, any]
 
 					val, err := prop.value(ctx)
 					if err != nil {
@@ -396,8 +408,7 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	return mergeProps
 }
 
-func (r *Renderer) makeValidationErrors(req *http.Request, errorers []ValidationErrorer) *Prop {
-	errorBag := extractErrorBag(req)
+func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) *Prop {
 	m := make(map[string]string)
 
 	for _, errorer := range errorers {
@@ -437,6 +448,17 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+// ErrorBagFromRequest extracts the Inertia.js error bag from the request,
+// if present. Otherwise, it returns the default error bag.
+func ErrorBagFromRequest(r *http.Request) string {
+	errorBag := r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
+	if errorBag == "" {
+		return DefaultErrorBag
+	}
+
+	return errorBag
+}
+
 // isInertiaRequest checks if the request is made by Inertia.js.
 func isInertiaRequest(req *http.Request) bool {
 	return req.Header.Get(inertiaheader.HeaderXInertia) == "true"
@@ -446,15 +468,6 @@ func isInertiaRequest(req *http.Request) bool {
 // matching the given componentName.
 func isPartialComponentRequest(req *http.Request, componentName string) bool {
 	return req.Header.Get(inertiaheader.HeaderXInertiaPartialComponent) == componentName
-}
-
-func extractErrorBag(req *http.Request) string {
-	errorBag := req.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
-	if errorBag == "" {
-		return DefaultErrorBag
-	}
-
-	return errorBag
 }
 
 // extractHeaderValueList extracts a list of values from a comma-separated inertiaheader.Header value.
@@ -472,7 +485,7 @@ func extractHeaderValueList(h string) []string {
 }
 
 // pair is a key-value pair.
-type pair[T any] struct {
-	value T
-	key   string
+type pair[K any, V any] struct {
+	key   K
+	value V
 }

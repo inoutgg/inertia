@@ -18,6 +18,7 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	ven "github.com/go-playground/validator/v10/translations/en"
+	"github.com/gorilla/sessions"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httperror"
 	"go.inout.gg/foundations/http/httpmiddleware"
@@ -26,38 +27,53 @@ import (
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
 	"go.inout.gg/inertia/inertiaprops"
+	"go.inout.gg/inertia/internal/inertiaheader"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
 
+var store = sessions.NewCookieStore([]byte("secret"))
+
 var (
 	DefaultValidator   = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
 	DefaultFormDecoder = form.NewDecoder()                                    //nolint:gochecknoglobals
+)
 
-	//nolint:gochecknoglobals
-	DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
-		func(w http.ResponseWriter, r *http.Request, err error) {
-			httperror.DefaultErrorHandler(w, r, err)
-		},
-	)
+//nolint:gochecknoglobals
+var DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
+	func(w http.ResponseWriter, r *http.Request, err error) {
+		errorer, ok := inertiavalidationerrors.FromValidationErrors(err, defaultTranslator)
+		if ok {
+			// errorBag := inertia.ErrorBagFromRequest(r)
+			session, _ := store.Get(r, "inertia")
+			session.AddFlash(errorer)
+			store.Save(r, w, session)
+
+			// TODO: track users path in the session
+			http.Redirect(w, r, "/sign-in", http.StatusFound)
+
+			return
+		}
+
+		httperror.DefaultErrorHandler(w, r, err)
+	},
 )
 
 const (
 	mediaTypeJSON      = "application/json"
 	mediaTypeForm      = "application/x-www-form-urlencoded"
 	mediaTypeMultipart = "multipart/form-data"
-	contentTypeHeader  = "Content-Type"
 )
 
 var (
-	defaultLocale     = en.New()              //nolint:gochecknoglobals
-	defaultTranslator = ut.New(defaultLocale) //nolint:gochecknoglobals
+	defaultLocale            = en.New()                                                       //nolint:gochecknoglobals
+	defaultTranslationBundle = ut.New(defaultLocale)                                          //nolint:gochecknoglobals
+	defaultTranslator, _     = defaultTranslationBundle.GetTranslator(defaultLocale.Locale()) //nolint:gochecknoglobals
 )
 
 //nolint:gochecknoinits
 func init() {
-	t, _ := defaultTranslator.GetTranslator(defaultLocale.Locale())
-	must.Must1(ven.RegisterDefaultTranslations(DefaultValidator, t))
+	must.Must1(ven.RegisterDefaultTranslations(DefaultValidator, defaultTranslator))
 
 	DefaultValidator.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
@@ -69,16 +85,10 @@ func init() {
 	})
 }
 
-// Translator is a function that returns a translator for a given context.
-//
-// The passed context is the incoming request context. It can be used
-// to retrieve the user's locale or any other information from the request.
-type Translator = func(context.Context) ut.Translator
-
 // DefaultTranslator returns the default translator that always uses
 // the default locale - English (en).
 func DefaultTranslator(_ context.Context) ut.Translator {
-	t, _ := defaultTranslator.GetTranslator(defaultLocale.Locale())
+	t, _ := defaultTranslationBundle.GetTranslator(defaultLocale.Locale())
 	return t
 }
 
@@ -214,11 +224,6 @@ type MountOpts struct {
 	// multipart/form-data.
 	FormDecoder *form.Decoder
 
-	// Translator is the translator used to translate error messages
-	// thrown by the validator.
-	// If translator is nil, the default translator will be used.
-	Translator func(context.Context) ut.Translator
-
 	// ErrorHandler is the error handler used to handle errors.
 	// If errorHandler is nil, the default error handler will be used.
 	ErrorHandler httperror.ErrorHandler
@@ -243,10 +248,6 @@ func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 	opts.Validator = cmp.Or(opts.Validator, DefaultValidator)
 	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
 
-	if opts.Translator == nil {
-		opts.Translator = DefaultTranslator
-	}
-
 	m := e.Meta()
 
 	debug.Assert(m.Method != "", "Executor must specify the HTTP method")
@@ -258,7 +259,7 @@ func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 
 	d("Mounting executor on pattern: %s", pattern)
 
-	h := newHandler(e, opts.ErrorHandler, opts.Validator, opts.Translator, opts.FormDecoder)
+	h := newHandler(e, opts.ErrorHandler, opts.Validator, opts.FormDecoder)
 	if opts.Middleware != nil {
 		h = opts.Middleware.Middleware(h)
 	}
@@ -271,7 +272,6 @@ func newHandler[M any](
 	endpoint Endpoint[M],
 	errorHandler httperror.ErrorHandler,
 	validate *validator.Validate,
-	translator Translator,
 	formDecoder *form.Decoder,
 ) http.Handler {
 	handleError := httperror.WithErrorHandler(errorHandler)
@@ -287,7 +287,8 @@ func newHandler[M any](
 				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
 			}
 		} else if r.Method != http.MethodGet {
-			mediaType, _, err := mime.ParseMediaType(r.Header.Get(contentTypeHeader))
+			mediaType, _, err := mime.ParseMediaType(
+				r.Header.Get(inertiaheader.HeaderContentType))
 			if err != nil {
 				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
 			}
@@ -314,12 +315,7 @@ func newHandler[M any](
 		}
 
 		if err := validate.StructCtx(ctx, &msg); err != nil {
-			errors, ok := inertiavalidationerrors.FromValidationErrors(err, translator(ctx))
-			if ok {
-				opts = append(opts, inertia.WithValidationErrors(errors))
-			} else {
-				return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
-			}
+			return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
 		}
 
 		req := &Request[M]{Message: &msg}
@@ -352,6 +348,11 @@ func newHandler[M any](
 			if props.Len() > 0 {
 				opts = append(opts, inertia.WithProps(props))
 			}
+		}
+
+		session, _ := store.Get(r, "inertia")
+		for _, flash := range session.Flashes() {
+			opts = append(opts, inertia.WithValidationErrors(flash.(inertia.ValidationErrorer)))
 		}
 
 		componentName := resp.msg.Component()

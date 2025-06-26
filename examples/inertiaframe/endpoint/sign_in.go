@@ -8,6 +8,7 @@ import (
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield"
+	"go.inout.gg/shield/shieldcsrf"
 	"go.inout.gg/shield/shieldpassword"
 	"go.inout.gg/shield/shieldstrategy"
 )
@@ -20,7 +21,9 @@ var (
 
 type (
 	SignInGetRequest  struct{}
-	SignInGetResponse struct{}
+	SignInGetResponse struct {
+		Token string `json:"csrf_token" inertia:"csrf_token"`
+	}
 )
 
 func (*SignInGetResponse) Component() string { return "SignIn" }
@@ -35,7 +38,14 @@ func (s *SignInGetEndpoint) Meta() *inertiaframe.Meta {
 }
 
 func (s *SignInGetEndpoint) Execute(ctx context.Context, req *inertiaframe.Request[SignInGetRequest]) (*inertiaframe.Response, error) {
-	return inertiaframe.NewResponse(&SignInGetResponse{}), nil
+	tok, err := shieldcsrf.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return inertiaframe.NewResponse(&SignInGetResponse{
+		Token: tok.String(),
+	}), nil
 }
 
 type SignInPostRequest struct {

@@ -108,8 +108,6 @@ func ParseStruct(msg any) (inertia.Props, error) {
 				concurrent = true
 			}
 
-			fmt.Println(fieldName, fieldType, mergeable, concurrent)
-
 			// Skip empty fields if omitempty is presented.
 			if parts[len(parts)-1] == propOmitEmpty {
 				if fieldVal.IsZero() {

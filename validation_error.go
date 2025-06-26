@@ -1,5 +1,7 @@
 package inertia
 
+import "encoding/gob"
+
 var (
 	_ ValidationError   = (*validationError)(nil)
 	_ ValidationErrorer = (*validationError)(nil)
@@ -7,8 +9,14 @@ var (
 )
 
 const (
-	DefaultErrorBag = "default"
+	DefaultErrorBag = ""
 )
+
+//nolint:gochecknoinits
+func init() {
+	gob.Register(&validationError{})
+	gob.Register(&ValidationErrors{})
+}
 
 // ValidationError represents a validation error.
 type ValidationError interface {

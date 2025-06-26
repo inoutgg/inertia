@@ -8,7 +8,9 @@ import (
 	"os/signal"
 
 	"go.inout.gg/examples/inertiaframe/endpoint"
+	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
+	"go.inout.gg/shield/shieldcsrf"
 
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/vite"
@@ -43,9 +45,20 @@ func main() {
 	middleware := inertia.Middleware(renderer)
 
 	mux := http.NewServeMux()
+	csrf := must.Must(shieldcsrf.Middleware("secret"))
 
-	inertiaframe.Mount(mux, &endpoint.SignInGetEndpoint{}, nil)
-	inertiaframe.Mount(mux, &endpoint.SignInPostEndpoint{}, nil)
+	inertiaframe.Mount(mux, &endpoint.SignInGetEndpoint{}, &inertiaframe.MountOpts{
+		Middleware: httpmiddleware.NewChain(csrf, httpmiddleware.MiddlewareFunc(func(h http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tok := must.Must(shieldcsrf.FromRequest(r))
+				shieldcsrf.SetToken(w, tok)
+				h.ServeHTTP(w, r)
+			})
+		})),
+	})
+	inertiaframe.Mount(mux, &endpoint.SignInPostEndpoint{}, &inertiaframe.MountOpts{
+		Middleware: httpmiddleware.NewChain(csrf),
+	})
 
 	go func() {
 		//nolint:gosec

@@ -94,6 +94,7 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 type RenderContext struct {
 	T                 any // T is an optional custom data that can be passed to the template.
 	props             []*Prop
+	errorBag          string
 	validationErrorer []ValidationErrorer
 	encryptHistory    bool
 	clearHistory      bool
@@ -111,6 +112,11 @@ func WithClearHistory() Option {
 // WithEncryptHistory instructs the client to encrypt the history state.
 func WithEncryptHistory() Option {
 	return func(opt *RenderContext) { opt.encryptHistory = true }
+}
+
+// WithErrorBag sets the error bag for the page.
+func WithErrorBag(errorBag string) Option {
+	return func(opt *RenderContext) { opt.errorBag = errorBag }
 }
 
 // WithProps sets the props for the page.
@@ -163,7 +169,10 @@ func WithConcurrency(concurrency int) Option {
 // of components that interact seamlessly with the Inertia.js client.
 func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
 	//nolint:exhaustruct
-	rCtx := RenderContext{}
+	rCtx := RenderContext{
+		concurrency: DefaultConcurrency,
+		errorBag:    DefaultErrorBag,
+	}
 	for _, opt := range opts {
 		opt(&rCtx)
 	}

@@ -3,6 +3,7 @@ import { Form } from "@base-ui-components/react/form";
 import { useForm, usePage } from "@inertiajs/react";
 
 export default function ExampleField() {
+  const props = usePage<{ csrf_token: string }>().props;
   const form = useForm({
     email: "",
     password: "",
@@ -14,7 +15,11 @@ export default function ExampleField() {
         aria-disabled={form.processing}
         onSubmit={async (event) => {
           event.preventDefault();
-          form.post("/sign-in");
+          form.post("/sign-in", {
+            headers: {
+              "X-Csrf-Token": props.csrf_token,
+            },
+          });
         }}
       >
         <Field.Root>
@@ -35,7 +40,7 @@ export default function ExampleField() {
         <Field.Root>
           <Field.Label>Password</Field.Label>
           <Field.Control
-            required
+            // required
             type="password"
             name="password"
             placeholder="my very secure password"
@@ -49,7 +54,6 @@ export default function ExampleField() {
             {form.errors.password}
           </Field.Error>
         </Field.Root>
-
         <button disabled={form.processing}>Submit</button>
       </Form>
     </main>
