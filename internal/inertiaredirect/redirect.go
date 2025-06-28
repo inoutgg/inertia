@@ -6,6 +6,7 @@ import (
 	"go.inout.gg/foundations/debug"
 )
 
+//nolint:gochecknoglobals
 var d = debug.Debuglog("inertia/redirect")
 
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {

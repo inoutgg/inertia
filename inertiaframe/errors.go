@@ -16,5 +16,6 @@ func (e *InertiaError) Error() string {
 	if e.Cause == nil {
 		return "inertiaframe: unknown error"
 	}
+
 	return fmt.Sprintf("inertiaframe: %v", e.Cause)
 }

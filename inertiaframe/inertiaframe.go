@@ -25,7 +25,7 @@ import (
 
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
-	"go.inout.gg/inertia/inertiaframe/internal/session"
+	"go.inout.gg/inertia/inertiaframe/session"
 	"go.inout.gg/inertia/inertiaprops"
 	"go.inout.gg/inertia/internal/inertiaheader"
 	"go.inout.gg/inertia/internal/inertiaredirect"
@@ -61,15 +61,15 @@ var DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
 		errorer, ok := inertiavalidationerrors.FromValidationErrors(err, defaultTranslator)
 		if ok {
 			errorBag := inertia.ErrorBagFromRequest(r)
-			sess := &session.Session{
-				ErrorBag:         errorBag,
-				ValidationErrors: errorer.ValidationErrors(),
-			}
+			sess := session.New(
+				"",
+				errorer.ValidationErrors(),
+				errorBag,
+			)
 
-			sess.Save(w)
+			must.Must1(sess.Save(w))
 
-			// TODO: track users path in the session
-			http.Redirect(w, r, "/sign-in", http.StatusFound)
+			RedirectBack(w, r)
 
 			return
 		}
@@ -85,9 +85,13 @@ const (
 )
 
 var (
-	defaultLocale            = en.New()                                                       //nolint:gochecknoglobals
-	defaultTranslationBundle = ut.New(defaultLocale)                                          //nolint:gochecknoglobals
-	defaultTranslator, _     = defaultTranslationBundle.GetTranslator(defaultLocale.Locale()) //nolint:gochecknoglobals
+	defaultLocale            = en.New()              //nolint:gochecknoglobals
+	defaultTranslationBundle = ut.New(defaultLocale) //nolint:gochecknoglobals
+
+	//nolint:gochecknoglobals
+	defaultTranslator, _ = defaultTranslationBundle.GetTranslator(
+		defaultLocale.Locale(),
+	)
 )
 
 //nolint:gochecknoinits
@@ -418,10 +422,10 @@ func newHandler[M any](
 			}
 		}
 
-		sess, _ := session.Load(r)
-		if sess.ValidationErrors != nil {
+		sess, _ := session.FromRequest(r)
+		if sess.ValidationErrors() != nil {
 			opts = append(opts, inertia.WithValidationErrors(
-				inertia.ValidationErrors(sess.ValidationErrors), sess.ErrorBag))
+				inertia.ValidationErrors(sess.ValidationErrors()), sess.ErrorBag()))
 		}
 
 		componentName := resp.msg.Component()

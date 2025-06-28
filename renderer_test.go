@@ -356,14 +356,13 @@ func TestRenderer_Render(t *testing.T) {
 				RootViewID: "app",
 			}),
 			reqConfig: &inertiatest.RequestConfig{
-				Inertia:  true,
-				ErrorBag: "custom_errors",
+				Inertia: true,
 			},
 			componentName: "TestComponent",
 			options: []Option{
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
-				}, DefaultErrorBag),
+				}, "custom_errors"),
 			},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,

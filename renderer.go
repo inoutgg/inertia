@@ -135,12 +135,11 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 //
 // To create a new Renderer, use the New or FromFS functions.
 type Renderer struct {
-	t *template.Template
-
 	ssrClient     SsrClient
+	t             *template.Template
 	rootViewID    string
-	rootViewAttrs []pair[[]byte, []byte]
 	version       string
+	rootViewAttrs []pair[[]byte, []byte]
 	concurrency   int
 }
 
