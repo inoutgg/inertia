@@ -18,7 +18,6 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	ven "github.com/go-playground/validator/v10/translations/en"
-	"github.com/gorilla/sessions"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httperror"
 	"go.inout.gg/foundations/http/httpmiddleware"
@@ -26,28 +25,48 @@ import (
 
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
+	"go.inout.gg/inertia/inertiaframe/internal/session"
 	"go.inout.gg/inertia/inertiaprops"
 	"go.inout.gg/inertia/internal/inertiaheader"
+	"go.inout.gg/inertia/internal/inertiaredirect"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
-
-var store = sessions.NewCookieStore([]byte("secret"))
 
 var (
 	DefaultValidator   = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
 	DefaultFormDecoder = form.NewDecoder()                                    //nolint:gochecknoglobals
 )
 
+var (
+	_ RawResponseWriter = (*redirectMessage)(nil)
+	_ RawResponseWriter = (*redirectBackMessage)(nil)
+	_ RawResponseWriter = (*externalRedirectMessage)(nil)
+)
+
+func RedirectBack(w http.ResponseWriter, r *http.Request) {
+	referer := r.Header.Get(inertiaheader.HeaderReferer)
+	if referer == "" {
+		referer = "/"
+	}
+
+	d("Redirecting back to %s", referer)
+
+	inertiaredirect.Redirect(w, r, referer)
+}
+
 //nolint:gochecknoglobals
 var DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
 	func(w http.ResponseWriter, r *http.Request, err error) {
 		errorer, ok := inertiavalidationerrors.FromValidationErrors(err, defaultTranslator)
 		if ok {
-			// errorBag := inertia.ErrorBagFromRequest(r)
-			session, _ := store.Get(r, "inertia")
-			session.AddFlash(errorer)
-			store.Save(r, w, session)
+			errorBag := inertia.ErrorBagFromRequest(r)
+			sess := &session.Session{
+				ErrorBag:         errorBag,
+				ValidationErrors: errorer.ValidationErrors(),
+			}
+
+			sess.Save(w)
 
 			// TODO: track users path in the session
 			http.Redirect(w, r, "/sign-in", http.StatusFound)
@@ -136,14 +155,54 @@ func NewResponse(msg Message, opts ...Option) *Response {
 	return resp
 }
 
-type redirectMessage struct {
-	URL string
+type externalRedirectMessage struct{ url string }
+
+func (m *externalRedirectMessage) Component() string { return "" }
+
+func (m *externalRedirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
+	inertia.Location(w, r, m.url)
+	return nil
 }
+
+// NewExternalRedirectResponse creates a new response that redirects the client to the
+// external URL.
+//
+// External URL is any URL that is not powered by Inertia.js.
+func NewExternalRedirectResponse(url string) *Response {
+	return &Response{
+		msg:            &externalRedirectMessage{url: url},
+		clearHistory:   false,
+		encryptHistory: false,
+		concurrency:    inertia.DefaultConcurrency,
+	}
+}
+
+type redirectBackMessage struct{}
+
+func (m *redirectBackMessage) Component() string { return "" }
+
+func (m *redirectBackMessage) Write(w http.ResponseWriter, r *http.Request) error {
+	RedirectBack(w, r)
+	return nil
+}
+
+// NewRedirectBackResponse creates a new response that redirects the client to the
+// back to the previous page.
+func NewRedirectBackResponse() *Response {
+	return &Response{
+		msg:            &redirectBackMessage{},
+		clearHistory:   false,
+		encryptHistory: false,
+		concurrency:    inertia.DefaultConcurrency,
+	}
+}
+
+type redirectMessage struct{ url string }
 
 func (m *redirectMessage) Component() string { return "" }
 
 func (m *redirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
-	inertia.Location(w, r, m.URL)
+	RedirectBack(w, r)
 	return nil
 }
 
@@ -151,13 +210,22 @@ func (m *redirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
 // specified URL.
 func NewRedirectResponse(url string) *Response {
 	return &Response{
-		msg:            &redirectMessage{URL: url},
+		msg:            &redirectMessage{url: url},
 		clearHistory:   false,
 		encryptHistory: false,
 		concurrency:    inertia.DefaultConcurrency,
 	}
 }
 
+// Message is used to send a message to the client, it can be
+// used to guide the client to render a component, or redirect to a
+// specific URL.
+//
+// If the Message implements a RawResponseWriter, the default
+// behavior is prevented and the writer is used instead to
+// write the response data.
+//
+// The Component() method must return a non-empty string.
 type Message interface {
 	// Component returns the component name to be rendered.
 	//
@@ -350,9 +418,10 @@ func newHandler[M any](
 			}
 		}
 
-		session, _ := store.Get(r, "inertia")
-		for _, flash := range session.Flashes() {
-			opts = append(opts, inertia.WithValidationErrors(flash.(inertia.ValidationErrorer)))
+		sess, _ := session.Load(r)
+		if sess.ValidationErrors != nil {
+			opts = append(opts, inertia.WithValidationErrors(
+				inertia.ValidationErrors(sess.ValidationErrors), sess.ErrorBag))
 		}
 
 		componentName := resp.msg.Component()

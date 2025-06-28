@@ -327,7 +327,7 @@ func TestRenderer_Render(t *testing.T) {
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
 					NewValidationError("email", "Invalid email"),
-				}),
+				}, DefaultErrorBag),
 			},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
@@ -363,7 +363,7 @@ func TestRenderer_Render(t *testing.T) {
 			options: []Option{
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
-				}),
+				}, DefaultErrorBag),
 			},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,

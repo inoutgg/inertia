@@ -21,6 +21,7 @@ import (
 	"go.inout.gg/foundations/must"
 
 	"go.inout.gg/inertia/internal/inertiaheader"
+	"go.inout.gg/inertia/internal/inertiaredirect"
 )
 
 const (
@@ -189,8 +190,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	if isInertiaRequest(req) {
-		d("Inertia")
-		
+		d("Received inertia request, sending JSON response")
+
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
 		w.WriteHeader(http.StatusOK)
@@ -445,7 +446,7 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 		return
 	}
 
-	http.Redirect(w, r, url, http.StatusFound)
+	inertiaredirect.Redirect(w, r, url)
 }
 
 // ErrorBagFromRequest extracts the Inertia.js error bag from the request,

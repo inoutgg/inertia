@@ -12,4 +12,5 @@ const (
 
 	HeaderVary        = "Vary"
 	HeaderContentType = "Content-Type"
+	HeaderReferer     = "Referer"
 )

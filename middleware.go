@@ -114,11 +114,6 @@ func WithEncryptHistory() Option {
 	return func(opt *RenderContext) { opt.encryptHistory = true }
 }
 
-// WithErrorBag sets the error bag for the page.
-func WithErrorBag(errorBag string) Option {
-	return func(opt *RenderContext) { opt.errorBag = errorBag }
-}
-
 // WithProps sets the props for the page.
 //
 // Calling this function multiple times will append the props.
@@ -139,7 +134,7 @@ func WithProps(props Proper) Option {
 // WithValidationErrors sets the validation errors for the page.
 //
 // Calling this function multiple times will append the errors.
-func WithValidationErrors(errorers ValidationErrorer) Option {
+func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
 	return func(renderCtx *RenderContext) {
 		if errorers == nil {
 			return
@@ -150,6 +145,7 @@ func WithValidationErrors(errorers ValidationErrorer) Option {
 		}
 
 		renderCtx.validationErrorer = append(renderCtx.validationErrorer, errorers)
+		renderCtx.errorBag = errorBag
 	}
 }
 
