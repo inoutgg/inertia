@@ -93,12 +93,32 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 // RenderContext represents an Inertia.js page context.
 type RenderContext struct {
 	T                 any // T is an optional custom data that can be passed to the template.
-	props             []*Prop
-	errorBag          string
-	validationErrorer []ValidationErrorer
-	encryptHistory    bool
-	clearHistory      bool
-	concurrency       int
+	Props             []*Prop
+	ErrorBag          string
+	ValidationErrorer []ValidationErrorer
+	EncryptHistory    bool
+	ClearHistory      bool
+	Concurrency       int
+}
+
+// AddValidationErrorer adds a validation error to the context.
+func (ctx *RenderContext) AddValidationErrorer(err ValidationErrorer) {
+	if ctx.ValidationErrorer == nil {
+		ctx.ValidationErrorer = make([]ValidationErrorer, 0, 1)
+	}
+	ctx.ValidationErrorer = append(ctx.ValidationErrorer, err)
+}
+
+// NewRenderContext creates a new RenderContext with the provided options.
+//
+// It returns a copy of the render context.
+func NewRenderContext(opts ...Option) RenderContext {
+	ctx := RenderContext{}
+	for _, opt := range opts {
+		opt(&ctx)
+	}
+
+	return ctx
 }
 
 // Option configures rendering context.
@@ -106,12 +126,12 @@ type Option func(*RenderContext)
 
 // WithClearHistory sets the history clear.
 func WithClearHistory() Option {
-	return func(opt *RenderContext) { opt.clearHistory = true }
+	return func(opt *RenderContext) { opt.ClearHistory = true }
 }
 
 // WithEncryptHistory instructs the client to encrypt the history state.
 func WithEncryptHistory() Option {
-	return func(opt *RenderContext) { opt.encryptHistory = true }
+	return func(opt *RenderContext) { opt.EncryptHistory = true }
 }
 
 // WithProps sets the props for the page.
@@ -123,11 +143,11 @@ func WithProps(props Proper) Option {
 			return
 		}
 
-		if renderCtx.props == nil {
-			renderCtx.props = make([]*Prop, 0, props.Len())
+		if renderCtx.Props == nil {
+			renderCtx.Props = make([]*Prop, 0, props.Len())
 		}
 
-		renderCtx.props = append(renderCtx.props, props.Props()...)
+		renderCtx.Props = append(renderCtx.Props, props.Props()...)
 	}
 }
 
@@ -140,12 +160,8 @@ func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
 			return
 		}
 
-		if renderCtx.validationErrorer == nil {
-			renderCtx.validationErrorer = make([]ValidationErrorer, 0)
-		}
-
-		renderCtx.validationErrorer = append(renderCtx.validationErrorer, errorers)
-		renderCtx.errorBag = errorBag
+		renderCtx.AddValidationErrorer(errorers)
+		renderCtx.ErrorBag = errorBag
 	}
 }
 
@@ -157,22 +173,13 @@ func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
 // Otherwise, if the concurrency level is negative, it will be set to unlimited.
 func WithConcurrency(concurrency int) Option {
 	return func(renderCtx *RenderContext) {
-		renderCtx.concurrency = concurrency
+		renderCtx.Concurrency = concurrency
 	}
 }
 
 // Render sends a page component using Inertia.js protocol, allowing server-side rendering
 // of components that interact seamlessly with the Inertia.js client.
-func Render(w http.ResponseWriter, r *http.Request, componentName string, opts ...Option) error {
-	//nolint:exhaustruct
-	rCtx := RenderContext{
-		concurrency: DefaultConcurrency,
-		errorBag:    DefaultErrorBag,
-	}
-	for _, opt := range opts {
-		opt(&rCtx)
-	}
-
+func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx RenderContext) error {
 	render, ok := r.Context().Value(kCtxKey).(*Renderer)
 	if !ok {
 		return errors.New(
@@ -180,7 +187,7 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, opts .
 		)
 	}
 
-	if err := render.Render(w, r, componentName, &rCtx); err != nil {
+	if err := render.Render(w, r, componentName, rCtx); err != nil {
 		return err
 	}
 
@@ -188,6 +195,6 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, opts .
 }
 
 // MustRender is like Render, but panics if an error occurs.
-func MustRender(w http.ResponseWriter, req *http.Request, name string, opts ...Option) {
-	must.Must1(Render(w, req, name, opts...))
+func MustRender(w http.ResponseWriter, req *http.Request, name string, r RenderContext) {
+	must.Must1(Render(w, req, name, r))
 }

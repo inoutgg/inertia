@@ -14,7 +14,7 @@ const DefaultDeferredGroup = "default"
 
 // Prop represents a single page property.
 //
-// Use convinient intstanciation functions to create a new property
+// Use convenient intstanciation functions to create a new property
 // such as NewProp, NewDeferred, NewAlways and NewOptional.
 //
 // Props can be attached to a rendering context using WithProps helper.

@@ -1,8 +1,8 @@
 import { Field } from "@base-ui-components/react/field";
 import { Form } from "@base-ui-components/react/form";
-import { useForm, usePage } from "@inertiajs/react";
+import { Link, useForm, usePage } from "@inertiajs/react";
 
-export default function ExampleField() {
+export default function SignIn() {
   const props = usePage<{ csrf_token: string }>().props;
   const form = useForm({
     email: "",
@@ -11,6 +11,7 @@ export default function ExampleField() {
 
   return (
     <main>
+      <h1>Sign In</h1>
       <Form
         aria-disabled={form.processing}
         onSubmit={async (event) => {
@@ -56,6 +57,7 @@ export default function ExampleField() {
         </Field.Root>
         <button disabled={form.processing}>Submit</button>
       </Form>
+      <Link href="/sign-up">Sign Up</Link>
     </main>
   );
 }

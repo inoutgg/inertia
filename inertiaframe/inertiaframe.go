@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
-	"go.inout.gg/inertia/inertiaframe/session"
 	"go.inout.gg/inertia/inertiaprops"
 	"go.inout.gg/inertia/internal/inertiaheader"
 	"go.inout.gg/inertia/internal/inertiaredirect"
@@ -47,30 +47,50 @@ var (
 func RedirectBack(w http.ResponseWriter, r *http.Request) {
 	referer := r.Header.Get(inertiaheader.HeaderReferer)
 	if referer == "" {
-		referer = "/"
+		sess, err := sessionFromRequest(r)
+		if err != nil {
+			d("failed to get session from request, using default '/'")
+
+			referer = "/"
+		} else {
+			referer = sess.Referer()
+		}
 	}
 
-	d("Redirecting back to %s", referer)
+	d("redirecting back to %s", referer)
 
 	inertiaredirect.Redirect(w, r, referer)
+}
+
+// DefaultValidationErrorHandler is a default error handler for validation errors.
+//
+// It saves flash messages and redirects back to the previous page.
+func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, errorer inertia.ValidationErrorer) {
+	errorBag := inertia.ErrorBagFromRequest(r)
+	sess := must.Must(sessionFromRequest(r))
+
+	sess.ErrorBag_ = errorBag
+	sess.ValidationErrors_ = errorer.ValidationErrors()
+
+	must.Must1(sess.Save(w))
+
+	RedirectBack(w, r)
+
+	return
 }
 
 //nolint:gochecknoglobals
 var DefaultErrorHandler httperror.ErrorHandler = httperror.ErrorHandlerFunc(
 	func(w http.ResponseWriter, r *http.Request, err error) {
+		var errorer inertia.ValidationErrorer
+		if errors.As(err, &errorer) {
+			DefaultValidationErrorHandler(w, r, errorer)
+			return
+		}
+
 		errorer, ok := inertiavalidationerrors.FromValidationErrors(err, defaultTranslator)
 		if ok {
-			errorBag := inertia.ErrorBagFromRequest(r)
-			sess := session.New(
-				"",
-				errorer.ValidationErrors(),
-				errorBag,
-			)
-
-			must.Must1(sess.Save(w))
-
-			RedirectBack(w, r)
-
+			DefaultValidationErrorHandler(w, r, errorer)
 			return
 		}
 
@@ -352,7 +372,7 @@ func newHandler[M any](
 		var msg M
 
 		ctx := r.Context()
-		opts := make([]inertia.Option, 0, 2)
+		var renderCtx inertia.RenderContext
 
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
@@ -402,14 +422,16 @@ func newHandler[M any](
 				if err := writer.Write(w, r); err != nil {
 					return fmt.Errorf("inertiaframe: failed to write response: %w", err)
 				}
+
+				return nil
 			}
 
 			if resp.clearHistory {
-				opts = append(opts, inertia.WithClearHistory())
+				renderCtx.ClearHistory = true
 			}
 
 			if resp.encryptHistory {
-				opts = append(opts, inertia.WithEncryptHistory())
+				renderCtx.EncryptHistory = true
 			}
 
 			props, err := extractProps(resp.msg)
@@ -418,20 +440,21 @@ func newHandler[M any](
 			}
 
 			if props.Len() > 0 {
-				opts = append(opts, inertia.WithProps(props))
+				renderCtx.Props = props
 			}
 		}
 
-		sess, _ := session.FromRequest(r)
-		if sess.ValidationErrors() != nil {
-			opts = append(opts, inertia.WithValidationErrors(
-				inertia.ValidationErrors(sess.ValidationErrors()), sess.ErrorBag()))
+		sess, _ := sessionFromRequest(r)
+		errors := sess.ValidationErrors()
+		if errors != nil {
+			renderCtx.ErrorBag = sess.ErrorBag()
+			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errors))
 		}
 
 		componentName := resp.msg.Component()
 		debug.Assert(componentName != "", "component must not be empty, when using non RawResponseWriter")
 
-		if err := inertia.Render(w, r, componentName, opts...); err != nil {
+		if err := inertia.Render(w, r, componentName, renderCtx); err != nil {
 			return fmt.Errorf("inertiaframe: failed to render: %w", err)
 		}
 

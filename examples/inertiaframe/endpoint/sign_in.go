@@ -2,6 +2,8 @@ package endpoint
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"go.inout.gg/examples/inertiaframe/user"
@@ -61,8 +63,8 @@ type SignInPostResponse struct {
 func (r *SignInPostResponse) Component() string { return "SignIn" }
 
 type SignInPostEndpoint struct {
-	handler       *shieldpassword.Handler[user.Data]
-	authenticator shieldstrategy.Authenticator[user.Data]
+	Handler       *shieldpassword.Handler[user.Data]
+	Authenticator shieldstrategy.Authenticator[user.Data]
 }
 
 func (r *SignInPostResponse) Write(w http.ResponseWriter, req *http.Request) error {
@@ -71,7 +73,8 @@ func (r *SignInPostResponse) Write(w http.ResponseWriter, req *http.Request) err
 		return err
 	}
 
-	inertia.Location(w, req, "/")
+	fmt.Println("redirecting here")
+	inertia.Redirect(w, req, "/")
 
 	return nil
 }
@@ -84,13 +87,18 @@ func (s *SignInPostEndpoint) Meta() *inertiaframe.Meta {
 }
 
 func (s *SignInPostEndpoint) Execute(ctx context.Context, req *inertiaframe.Request[SignInPostRequest]) (*inertiaframe.Response, error) {
-	user, err := s.handler.HandleUserLogin(ctx, req.Message.Email, req.Message.Password)
+	user, err := s.Handler.HandleUserLogin(ctx, req.Message.Email, req.Message.Password)
 	if err != nil {
+		if errors.Is(err, shield.ErrUserNotFound) {
+			return nil, inertia.NewValidationError("email",
+				"Either email or password is incorrect")
+		}
+
 		return nil, err
 	}
 
 	return inertiaframe.NewResponse(&SignInPostResponse{
 		user,
-		s.authenticator,
+		s.Authenticator,
 	}), nil
 }

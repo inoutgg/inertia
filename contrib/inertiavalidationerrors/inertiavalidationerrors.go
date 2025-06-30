@@ -10,7 +10,10 @@ import (
 	"go.inout.gg/inertia"
 )
 
-var _ inertia.ValidationErrorer = (*Map)(nil)
+var (
+	_ error                     = (*Map)(nil)
+	_ inertia.ValidationErrorer = (*Map)(nil)
+)
 
 //nolint:gochecknoinits
 func init() {
@@ -30,6 +33,7 @@ func (m Map) ValidationErrors() []inertia.ValidationError {
 	return errors
 }
 
+func (m Map) Error() string    { return "validation errors" }
 func (m Map) Len() int         { return len(m) }
 func (m Map) ErrorBag() string { return inertia.DefaultErrorBag }
 

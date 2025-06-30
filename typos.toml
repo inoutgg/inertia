@@ -1,0 +1,4 @@
+[default]
+locale = "en"
+
+extend-ignore-re = ['typ']

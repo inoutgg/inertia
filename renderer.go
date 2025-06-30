@@ -143,17 +143,17 @@ type Renderer struct {
 	concurrency   int
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) (*Page, error) {
-	rawProps := make([]*Prop, 0, len(rCtx.props)+1)
-	rawProps = append(rawProps, rCtx.props...)
-	rawProps = append(rawProps, r.makeValidationErrors(rCtx.validationErrorer, rCtx.errorBag))
+func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
+	rawProps := make([]*Prop, 0, len(renderCtx.Props)+1)
+	rawProps = append(rawProps, renderCtx.Props...)
+	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
 	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
 	if err != nil {
 		return nil, err
 	}
 
-	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
+	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
 		rawProps,
 		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
@@ -166,8 +166,8 @@ func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Render
 		MergeProps:     mergeProps,
 		URL:            req.RequestURI,
 		Version:        r.version,
-		ClearHistory:   rCtx.clearHistory,
-		EncryptHistory: rCtx.encryptHistory,
+		ClearHistory:   renderCtx.ClearHistory,
+		EncryptHistory: renderCtx.EncryptHistory,
 	}, nil
 }
 
@@ -177,10 +177,10 @@ func (r *Renderer) Version() string { return r.version }
 // Render sends a page component using Inertia.js protocol.
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx *RenderContext) error {
-	renderCtx.concurrency = cmp.Or(renderCtx.concurrency, r.concurrency)
-	if renderCtx.concurrency < 0 {
-		renderCtx.concurrency = 0
+func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx RenderContext) error {
+	renderCtx.Concurrency = cmp.Or(renderCtx.Concurrency, r.concurrency)
+	if renderCtx.Concurrency < 0 {
+		renderCtx.Concurrency = 0
 	}
 
 	page, err := r.newPage(req, name, renderCtx)
@@ -189,7 +189,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	if isInertiaRequest(req) {
-		d("Received inertia request, sending JSON response")
+		d("Received inertia request, sending JSON response: %s",
+			req.Header.Get(inertiaheader.HeaderReferer))
 
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
@@ -365,9 +366,9 @@ func (r *Renderer) makeProps(
 	return m, nil
 }
 
-// makeDefferedProps creates a map of deferred props that should be resolved
+// makeDeferredProps creates a map of deferred props that should be resolved
 // on the client side.
-func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, props []*Prop) map[string][]string {
+func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, props []*Prop) map[string][]string {
 	// If the request is partial, then the client already got information
 	// about the deferred props in the initial request so we don't need to
 	// send them again.
@@ -432,7 +433,10 @@ type TemplateData struct {
 	InertiaBody template.HTML
 }
 
-// Location sends a redirect response to the client.
+// Location sends a redirect response to the client to guide to the
+// external URL.
+//
+// External URL is any URL that is not powered by Inertia.js.
 func Location(w http.ResponseWriter, r *http.Request, url string) {
 	if isInertiaRequest(r) {
 		h := w.Header()
@@ -445,6 +449,11 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 		return
 	}
 
+	inertiaredirect.Redirect(w, r, url)
+}
+
+// Redirect sends a redirect response to the client.
+func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 	inertiaredirect.Redirect(w, r, url)
 }
 

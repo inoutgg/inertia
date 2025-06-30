@@ -1,8 +1,13 @@
 package inertia
 
-import "encoding/gob"
+import (
+	"encoding/gob"
+)
 
 var (
+	_ error = (*validationError)(nil)
+	_ error = (*ValidationErrors)(nil)
+
 	_ ValidationError   = (*validationError)(nil)
 	_ ValidationErrorer = (*validationError)(nil)
 	_ ValidationErrorer = (*ValidationErrors)(nil)
@@ -28,6 +33,7 @@ type ValidationError interface {
 }
 
 type ValidationErrorer interface {
+	error
 	ValidationErrors() []ValidationError
 	Len() int
 }
@@ -56,5 +62,6 @@ func (err *validationError) Len() int                            { return 1 }
 
 type ValidationErrors []ValidationError
 
+func (errs ValidationErrors) Error() string                       { return "validation errors" }
 func (errs ValidationErrors) ValidationErrors() []ValidationError { return errs }
 func (errs ValidationErrors) Len() int                            { return len(errs) }

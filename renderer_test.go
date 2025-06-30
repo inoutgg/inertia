@@ -648,9 +648,9 @@ func TestRenderer_Render(t *testing.T) {
 			req, w := inertiatest.NewRequest(http.MethodGet, "/", tt.reqConfig)
 
 			// Create a RenderContext from the options
-			rCtx := &RenderContext{}
+			rCtx := RenderContext{}
 			for _, opt := range tt.options {
-				opt(rCtx)
+				opt(&rCtx)
 			}
 
 			// Call the Render function

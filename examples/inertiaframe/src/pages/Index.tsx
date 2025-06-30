@@ -1,3 +1,7 @@
+import { usePage } from "@inertiajs/react";
+
 export default function IndexPage() {
-  return <div>Index</div>;
+  const props = usePage<{ user_id: string }>().props;
+
+  return <div>User ID: {props.user_id}</div>;
 }
