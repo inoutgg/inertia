@@ -3,6 +3,8 @@ module go.inout.gg/inertia
 go 1.24
 
 require (
+	github.com/alitto/pond/v2 v2.4.0
+	github.com/go-playground/form/v4 v4.2.1
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.26.0

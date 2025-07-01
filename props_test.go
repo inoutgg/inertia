@@ -1,9 +1,12 @@
+//nolint:goconst
 package inertia
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProps(t *testing.T) {
@@ -15,10 +18,16 @@ func TestProps(t *testing.T) {
 		t.Run("Without options", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "val123" }, nil)
+			prop := NewDeferred(
+				"key",
+				LazyFunc(func(context.Context) (any, error) { return "val123", nil }),
+				nil,
+			)
 
 			assert.Equal(t, "key", prop.key)
-			assert.Equal(t, "val123", prop.value())
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val123", val)
 			assert.Equal(t, "default", prop.group)
 
 			assert.True(t, prop.lazy)
@@ -30,12 +39,16 @@ func TestProps(t *testing.T) {
 		t.Run("Custom group", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "deferred-val" }, &DeferredOptions{
+			prop := NewDeferred("key", LazyFunc(func(context.Context) (any, error) {
+				return "deferred-val", nil
+			}), &DeferredOptions{
 				Group: "custom",
 			})
 
 			assert.Equal(t, "key", prop.key)
-			assert.Equal(t, "deferred-val", prop.value())
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "deferred-val", val)
 			assert.Equal(t, "custom", prop.group)
 
 			assert.True(t, prop.lazy)
@@ -47,18 +60,48 @@ func TestProps(t *testing.T) {
 		t.Run("Mergeable", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewDeferred("key", func() any { return "val" }, &DeferredOptions{
-				Merge: true,
-			})
+			prop := NewDeferred(
+				"key",
+				LazyFunc(func(context.Context) (any, error) { return "val", nil }),
+				&DeferredOptions{
+					Merge: true,
+				},
+			)
 
 			assert.Equal(t, "key", prop.key)
-			assert.Equal(t, "val", prop.value())
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
 			assert.Equal(t, "default", prop.group)
 
 			assert.True(t, prop.lazy)
 			assert.True(t, prop.ignorable)
 			assert.True(t, prop.deferred)
 			assert.True(t, prop.mergeable)
+		})
+
+		t.Run("Concurrent", func(t *testing.T) {
+			t.Parallel()
+
+			prop := NewDeferred(
+				"key",
+				LazyFunc(func(context.Context) (any, error) { return "val", nil }),
+				&DeferredOptions{
+					Concurrent: true,
+				},
+			)
+
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
+			assert.Equal(t, "default", prop.group)
+
+			assert.True(t, prop.lazy)
+			assert.True(t, prop.ignorable)
+			assert.True(t, prop.deferred)
+			assert.False(t, prop.mergeable)
+			assert.True(t, prop.concurrent)
 		})
 	})
 
@@ -68,7 +111,9 @@ func TestProps(t *testing.T) {
 		prop := NewAlways("key", "val")
 
 		assert.Equal(t, "key", prop.key)
-		assert.Equal(t, "val", prop.value())
+		val, err := prop.value(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "val", val)
 
 		assert.False(t, prop.lazy)
 		assert.False(t, prop.ignorable)
@@ -79,15 +124,18 @@ func TestProps(t *testing.T) {
 	t.Run("NewOptional", func(t *testing.T) {
 		t.Parallel()
 
-		prop := NewOptional("key", func() any { return "val" })
+		prop := NewOptional("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }))
 
 		assert.Equal(t, "key", prop.key)
-		assert.Equal(t, "val", prop.value())
+		val, err := prop.value(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "val", val)
 
 		assert.True(t, prop.lazy)
 		assert.True(t, prop.ignorable)
 		assert.False(t, prop.deferred)
 		assert.False(t, prop.mergeable)
+		assert.False(t, prop.concurrent)
 	})
 
 	t.Run("NewProp", func(t *testing.T) {
@@ -99,7 +147,9 @@ func TestProps(t *testing.T) {
 			prop := NewProp("key", "val", nil)
 
 			assert.Equal(t, "key", prop.key)
-			assert.Equal(t, "val", prop.value())
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
 
 			assert.False(t, prop.lazy)
 			assert.True(t, prop.ignorable)
@@ -113,12 +163,15 @@ func TestProps(t *testing.T) {
 			prop := NewProp("key", "val", &PropOptions{Merge: true})
 
 			assert.Equal(t, "key", prop.key)
-			assert.Equal(t, "val", prop.value())
+			val, err := prop.value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
 
 			assert.False(t, prop.lazy)
 			assert.True(t, prop.ignorable)
 			assert.False(t, prop.deferred)
 			assert.True(t, prop.mergeable)
+			assert.False(t, prop.concurrent)
 		})
 	})
 }
@@ -137,8 +190,13 @@ func TestPropsCollections(t *testing.T) {
 		assert.Equal(t, 2, props.Len())
 		assert.Len(t, props.Props(), 2)
 		assert.Equal(t, "key1", props.Props()[0].key)
-		assert.Equal(t, "val1", props.Props()[0].value())
+
+		val, err := props.Props()[0].value(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "val1", val)
 		assert.Equal(t, "key2", props.Props()[1].key)
-		assert.Equal(t, "val2", props.Props()[1].value())
+		val, err = props.Props()[1].value(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "val2", val)
 	})
 }

@@ -29,12 +29,15 @@
           buildInputs =
             with pkgs;
             [
-              golangci-lint
-              gofumpt
               go
-              mockgen
               gotools
+              golangci-lint
+              mockgen
+              typos
+
+              # Examples
               nodejs
+              air
             ]
             ++ [ ciTestCommand ];
         };

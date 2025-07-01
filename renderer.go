@@ -5,19 +5,23 @@
 package inertia
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"runtime"
 	"slices"
 	"strings"
 
+	"github.com/alitto/pond/v2"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 
 	"go.inout.gg/inertia/internal/inertiaheader"
+	"go.inout.gg/inertia/internal/inertiaredirect"
 )
 
 const (
@@ -25,7 +29,15 @@ const (
 	contentTypeJSON = "application/json"
 )
 
-const DefaultRootViewID = "app"
+const (
+	// DefaultRootViewID is the default root HTML element ID to which
+	// the Inertia.js app is mounted.
+	DefaultRootViewID = "app"
+)
+
+// DefaultConcurrency is the default concurrency level for props resolution
+// marked as concurrently resolvable.
+var DefaultConcurrency = runtime.GOMAXPROCS(0) //nolint:gochecknoglobals
 
 // Page represents an Inertia.js page that is sent to the client.
 type Page struct {
@@ -44,12 +56,25 @@ type Config struct {
 	SsrClient     SsrClient
 	RootViewAttrs map[string]string
 	Version       string
-	RootViewID    string
+
+	// RootViewID is the ID of the root HTML element to which
+	// the Inertia.js app will be mounted.
+	//
+	// It defaults to "app".
+	RootViewID string
+
+	// Concurrency controls the number of concurrent props resolution.
+	//
+	// Only those props marked as concurrent are resolved concurrently.
+	//
+	// It defaults to the number of CPUs available.
+	Concurrency int
 }
 
 // defaults sets the default values for the configuration.
 func (c *Config) defaults() {
 	c.RootViewID = cmp.Or(c.RootViewID, DefaultRootViewID)
+	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
 }
 
 // New creates a new Renderer instance.
@@ -63,12 +88,18 @@ func New(t *template.Template, config *Config) *Renderer {
 
 	config.defaults()
 
+	attrs := make([]pair[[]byte, []byte], 0, len(config.RootViewAttrs))
+	for key, value := range config.RootViewAttrs {
+		attrs = append(attrs, pair[[]byte, []byte]{[]byte(key), []byte(value)})
+	}
+
 	r := &Renderer{
 		t:             t,
 		ssrClient:     config.SsrClient,
 		version:       config.Version,
 		rootViewID:    config.RootViewID,
-		rootViewAttrs: config.RootViewAttrs,
+		rootViewAttrs: attrs,
+		concurrency:   config.Concurrency,
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -104,21 +135,25 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 //
 // To create a new Renderer, use the New or FromFS functions.
 type Renderer struct {
-	t *template.Template
-
 	ssrClient     SsrClient
+	t             *template.Template
 	rootViewID    string
-	rootViewAttrs map[string]string
 	version       string
+	rootViewAttrs []pair[[]byte, []byte]
+	concurrency   int
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *RenderContext) *Page {
-	rawProps := make([]*Prop, 0, len(rCtx.props)+1)
-	rawProps = append(rawProps, rCtx.props...)
-	rawProps = append(rawProps, r.makeValidationErrors(req, rCtx.validationErrorer))
+func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
+	rawProps := make([]*Prop, 0, len(renderCtx.Props)+1)
+	rawProps = append(rawProps, renderCtx.Props...)
+	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
-	props := r.makeProps(req, componentName, rawProps)
-	deferredProps := r.makeDefferedProps(req, componentName, rawProps)
+	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
 	mergeProps := r.makeMergeProps(
 		rawProps,
 		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
@@ -131,9 +166,9 @@ func (r *Renderer) newPage(req *http.Request, componentName string, rCtx *Render
 		MergeProps:     mergeProps,
 		URL:            req.RequestURI,
 		Version:        r.version,
-		ClearHistory:   rCtx.clearHistory,
-		EncryptHistory: rCtx.encryptHistory,
-	}
+		ClearHistory:   renderCtx.ClearHistory,
+		EncryptHistory: renderCtx.EncryptHistory,
+	}, nil
 }
 
 // Version returns a version of the inertia build.
@@ -142,10 +177,21 @@ func (r *Renderer) Version() string { return r.version }
 // Render sends a page component using Inertia.js protocol.
 // If the request is an Inertia.js request, the response will be JSON,
 // otherwise, it will be an HTML response.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx *RenderContext) error {
-	page := r.newPage(req, name, renderCtx)
+func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx RenderContext) error {
+	renderCtx.Concurrency = cmp.Or(renderCtx.Concurrency, r.concurrency)
+	if renderCtx.Concurrency < 0 {
+		renderCtx.Concurrency = 0
+	}
+
+	page, err := r.newPage(req, name, renderCtx)
+	if err != nil {
+		return err
+	}
 
 	if isInertiaRequest(req) {
+		d("Received inertia request, sending JSON response: %s",
+			req.Header.Get(inertiaheader.HeaderReferer))
+
 		w.Header().Set(inertiaheader.HeaderXInertia, "true")
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
 		w.WriteHeader(http.StatusOK)
@@ -192,7 +238,8 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 
 	_ = must.Must(w.WriteString(`<div id="`))
 	_ = must.Must(w.WriteString(r.rootViewID))
-	_ = must.Must(w.WriteString(`" `))
+	_ = must.Must(w.WriteRune('"'))
+	_ = must.Must(w.WriteRune(' '))
 
 	_ = must.Must(w.WriteString(`data-page="`))
 
@@ -202,19 +249,22 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	}
 
 	template.HTMLEscape(&w, pageBytes)
-	_ = must.Must(w.WriteString(`" `))
+	_ = must.Must(w.WriteRune('"'))
+	_ = must.Must(w.WriteRune(' '))
 
 	if r.rootViewAttrs != nil {
-		for k, v := range r.rootViewAttrs {
+		for _, kv := range r.rootViewAttrs {
 			// Skip the data-page attribute as it's already set.
-			if k == "data-page" {
+			if bytes.Equal(kv.key, []byte("data-page")) {
 				continue
 			}
 
-			_ = must.Must(w.WriteString(k))
-			_ = must.Must(w.WriteString(`="`))
-			template.HTMLEscape(&w, []byte(v))
-			_ = must.Must(w.WriteString(`" `))
+			_ = must.Must(w.Write(kv.key))
+			_ = must.Must(w.WriteRune('='))
+			_ = must.Must(w.WriteRune('"'))
+			template.HTMLEscape(&w, kv.value)
+			_ = must.Must(w.WriteRune('"'))
+			_ = must.Must(w.WriteRune(' '))
 		}
 	}
 
@@ -224,7 +274,13 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	return template.HTML(w.String()), nil
 }
 
-func (r *Renderer) makeProps(req *http.Request, componentName string, props []*Prop) map[string]any {
+func (r *Renderer) makeProps(
+	req *http.Request,
+	componentName string,
+	props []*Prop,
+	concurrency int,
+) (map[string]any, error) {
+	ctx := req.Context()
 	m := make(map[string]any, len(props))
 
 	// If the request is a partial, we need to filter the props.
@@ -233,6 +289,8 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 			inertiaheader.HeaderXInertiaPartialData))
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
+
+		var concurrentProps []*Prop
 
 		for _, prop := range props {
 			key := prop.key
@@ -244,7 +302,50 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 				}
 			}
 
-			m[key] = prop.value()
+			if prop.concurrent {
+				concurrentProps = append(concurrentProps, prop)
+			} else {
+				val, err := prop.value(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
+				}
+
+				m[key] = val
+			}
+		}
+
+		if len(concurrentProps) > 0 {
+			pool := pond.NewResultPool[pair[string, any]](concurrency)
+			group := pool.NewGroupContext(ctx)
+
+			for _, prop := range concurrentProps {
+				group.SubmitErr(func() (pair[string, any], error) {
+					var kv pair[string, any]
+
+					val, err := prop.value(ctx)
+					if err != nil {
+						return kv, fmt.Errorf(
+							"inertia: failed to resolve prop %s: %w",
+							prop.key,
+							err,
+						)
+					}
+
+					kv.key = prop.key
+					kv.value = val
+
+					return kv, nil
+				})
+			}
+
+			result, err := group.Wait()
+			if err != nil {
+				return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
+			}
+
+			for i, prop := range concurrentProps {
+				m[prop.key] = result[i].value
+			}
 		}
 	} else {
 		for _, prop := range props {
@@ -253,16 +354,21 @@ func (r *Renderer) makeProps(req *http.Request, componentName string, props []*P
 				continue
 			}
 
-			m[prop.key] = prop.value()
+			val, err := prop.value(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
+			}
+
+			m[prop.key] = val
 		}
 	}
 
-	return m
+	return m, nil
 }
 
-// makeDefferedProps creates a map of deferred props that should be resolved
+// makeDeferredProps creates a map of deferred props that should be resolved
 // on the client side.
-func (r *Renderer) makeDefferedProps(req *http.Request, componentName string, props []*Prop) map[string][]string {
+func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, props []*Prop) map[string][]string {
 	// If the request is partial, then the client already got information
 	// about the deferred props in the initial request so we don't need to
 	// send them again.
@@ -303,8 +409,7 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	return mergeProps
 }
 
-func (r *Renderer) makeValidationErrors(req *http.Request, errorers []ValidationErrorer) *Prop {
-	errorBag := extractErrorBag(req)
+func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) *Prop {
 	m := make(map[string]string)
 
 	for _, errorer := range errorers {
@@ -328,7 +433,10 @@ type TemplateData struct {
 	InertiaBody template.HTML
 }
 
-// Location sends a redirect response to the client.
+// Location sends a redirect response to the client to guide to the
+// external URL.
+//
+// External URL is any URL that is not powered by Inertia.js.
 func Location(w http.ResponseWriter, r *http.Request, url string) {
 	if isInertiaRequest(r) {
 		h := w.Header()
@@ -341,7 +449,23 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 		return
 	}
 
-	http.Redirect(w, r, url, http.StatusFound)
+	inertiaredirect.Redirect(w, r, url)
+}
+
+// Redirect sends a redirect response to the client.
+func Redirect(w http.ResponseWriter, r *http.Request, url string) {
+	inertiaredirect.Redirect(w, r, url)
+}
+
+// ErrorBagFromRequest extracts the Inertia.js error bag from the request,
+// if present. Otherwise, it returns the default error bag.
+func ErrorBagFromRequest(r *http.Request) string {
+	errorBag := r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
+	if errorBag == "" {
+		return DefaultErrorBag
+	}
+
+	return errorBag
 }
 
 // isInertiaRequest checks if the request is made by Inertia.js.
@@ -353,15 +477,6 @@ func isInertiaRequest(req *http.Request) bool {
 // matching the given componentName.
 func isPartialComponentRequest(req *http.Request, componentName string) bool {
 	return req.Header.Get(inertiaheader.HeaderXInertiaPartialComponent) == componentName
-}
-
-func extractErrorBag(req *http.Request) string {
-	errorBag := req.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
-	if errorBag == "" {
-		return DefaultErrorBag
-	}
-
-	return errorBag
 }
 
 // extractHeaderValueList extracts a list of values from a comma-separated inertiaheader.Header value.
@@ -376,4 +491,10 @@ func extractHeaderValueList(h string) []string {
 	}
 
 	return fields
+}
+
+// pair is a key-value pair.
+type pair[K any, V any] struct {
+	key   K
+	value V
 }

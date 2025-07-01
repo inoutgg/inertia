@@ -10,9 +10,9 @@ import (
 func TestNewValidationError(t *testing.T) {
 	err := NewValidationError("email", "Email is invalid")
 
-	assert.Equal(t, "email", err.field, "Field should match")
-	assert.Equal(t, "Email is invalid", err.message, "Message should match")
-	assert.Empty(t, err.errorBag, "ErrorBag should be empty")
+	assert.Equal(t, "email", err.Field_, "Field should match")
+	assert.Equal(t, "Email is invalid", err.Message_, "Message should match")
+	assert.Empty(t, err.ErrorBag_, "ErrorBag should be empty")
 }
 
 func TestValidationError_Error(t *testing.T) {

@@ -1,6 +1,7 @@
 package inertia
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -326,7 +327,7 @@ func TestRenderer_Render(t *testing.T) {
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
 					NewValidationError("email", "Invalid email"),
-				}),
+				}, DefaultErrorBag),
 			},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
@@ -355,14 +356,13 @@ func TestRenderer_Render(t *testing.T) {
 				RootViewID: "app",
 			}),
 			reqConfig: &inertiatest.RequestConfig{
-				Inertia:  true,
-				ErrorBag: "custom_errors",
+				Inertia: true,
 			},
 			componentName: "TestComponent",
 			options: []Option{
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
-				}),
+				}, "custom_errors"),
 			},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
@@ -478,9 +478,15 @@ func TestRenderer_Render(t *testing.T) {
 			options: []Option{
 				WithProps(Props{
 					NewProp("visible", "Visible Content", nil),
-					NewDeferred("lazy", func() any { return "Lazy Content" }, &DeferredOptions{
-						Group: "group1",
-					}),
+					NewDeferred(
+						"lazy",
+						LazyFunc(
+							func(context.Context) (any, error) { return "Lazy Content", nil },
+						),
+						&DeferredOptions{
+							Group: "group1",
+						},
+					),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -642,9 +648,9 @@ func TestRenderer_Render(t *testing.T) {
 			req, w := inertiatest.NewRequest(http.MethodGet, "/", tt.reqConfig)
 
 			// Create a RenderContext from the options
-			rCtx := &RenderContext{}
+			rCtx := RenderContext{}
 			for _, opt := range tt.options {
-				opt(rCtx)
+				opt(&rCtx)
 			}
 
 			// Call the Render function

@@ -1,14 +1,27 @@
 package inertia
 
+import (
+	"encoding/gob"
+)
+
 var (
+	_ error = (*validationError)(nil)
+	_ error = (*ValidationErrors)(nil)
+
 	_ ValidationError   = (*validationError)(nil)
 	_ ValidationErrorer = (*validationError)(nil)
 	_ ValidationErrorer = (*ValidationErrors)(nil)
 )
 
 const (
-	DefaultErrorBag = "default"
+	DefaultErrorBag = ""
 )
+
+//nolint:gochecknoinits
+func init() {
+	gob.Register(&validationError{}) //nolint:exhaustruct
+	gob.Register(&ValidationErrors{})
+}
 
 // ValidationError represents a validation error.
 type ValidationError interface {
@@ -20,35 +33,35 @@ type ValidationError interface {
 }
 
 type ValidationErrorer interface {
+	error
 	ValidationErrors() []ValidationError
 	Len() int
 }
 
 type validationError struct {
-	field    string
-	message  string
-	errorBag string // optional
+	Field_    string //nolint:revive
+	Message_  string //nolint:revive
+	ErrorBag_ string //nolint:revive
 }
 
 // NewValidationError creates a new validation error.
 //
 // opts can be nil.
-//
-//nolint:revive
-func NewValidationError(field string, message string) *validationError {
+func NewValidationError(field string, message string) *validationError { //nolint:revive
 	return &validationError{
-		field:    field,
-		message:  message,
-		errorBag: "",
+		Field_:    field,
+		Message_:  message,
+		ErrorBag_: DefaultErrorBag,
 	}
 }
 
-func (err *validationError) Error() string                       { return err.message }
-func (err *validationError) Field() string                       { return err.field }
+func (err *validationError) Error() string                       { return err.Message_ }
+func (err *validationError) Field() string                       { return err.Field_ }
 func (err *validationError) ValidationErrors() []ValidationError { return []ValidationError{err} }
 func (err *validationError) Len() int                            { return 1 }
 
 type ValidationErrors []ValidationError
 
+func (errs ValidationErrors) Error() string                       { return "validation errors" }
 func (errs ValidationErrors) ValidationErrors() []ValidationError { return errs }
 func (errs ValidationErrors) Len() int                            { return len(errs) }

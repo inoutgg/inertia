@@ -2,6 +2,7 @@ package inertia
 
 import (
 	"cmp"
+	"context"
 )
 
 var (
@@ -13,19 +14,20 @@ const DefaultDeferredGroup = "default"
 
 // Prop represents a single page property.
 //
-// Use convinient intstanciation functions to create a new property
+// Use convenient intstanciation functions to create a new property
 // such as NewProp, NewDeferred, NewAlways and NewOptional.
 //
 // Props can be attached to a rendering context using WithProps helper.
 type Prop struct {
-	val       any
-	valFn     func() any // optional, deferred
-	key       string
-	group     string // deferred
-	mergeable bool
-	deferred  bool
-	lazy      bool // optional, deferred
-	ignorable bool // false if always prop
+	val        any
+	valFn      Lazy // optional, deferred
+	key        string
+	group      string // deferred
+	mergeable  bool
+	deferred   bool
+	lazy       bool // optional, deferred
+	ignorable  bool // false if always prop
+	concurrent bool // deferred
 }
 
 // DeferredOptions represents a.
@@ -40,26 +42,55 @@ type DeferredOptions struct {
 	//
 	// Default to false.
 	Merge bool
+
+	// Concurrent defines whether property resolution is concurrent.
+	//
+	// Properties marked as concurrent are grouped in a separate batch
+	// and resolved concurrently.
+	Concurrent bool
 }
+
+type (
+	// Lazy represents prop's value that is resolved only when it's requested.
+	Lazy interface {
+		// Value returns prop's value.
+		//
+		// The returned value must be JSON serializable.
+		Value(context.Context) (any, error)
+	}
+
+	// The LazyFunc type is an adapter to allow the use of ordinary functions
+	// where Lazy is expected.
+	// If f is a function with the appropriate signature, LazyFunc(f) is a
+	// [Lazy] that calls f.
+	//
+	// The returned value must be JSON serializable.
+	LazyFunc func(context.Context) (any, error)
+)
+
+// Value calls `fn()`.
+func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 
 // NewDeferred creates a new deferred prop that is resolved only when
 // it's requested.
 //
 // If opts is nil, default options is used.
-func NewDeferred(key string, fn func() any, opts *DeferredOptions) *Prop {
+func NewDeferred(key string, fn Lazy, opts *DeferredOptions) *Prop {
 	//nolint:exhaustruct
 	prop := &Prop{
-		deferred:  true, // important
-		lazy:      true, // important
-		ignorable: true, // important
-		key:       key,
-		valFn:     fn,
-		group:     DefaultDeferredGroup,
+		deferred:   true, // important
+		lazy:       true, // important
+		ignorable:  true, // important
+		key:        key,
+		valFn:      fn,
+		group:      DefaultDeferredGroup,
+		concurrent: false,
 	}
 
 	if opts != nil {
 		prop.group = cmp.Or(opts.Group, DefaultDeferredGroup)
 		prop.mergeable = opts.Merge
+		prop.concurrent = opts.Concurrent
 	}
 
 	return prop
@@ -78,7 +109,7 @@ func NewAlways(key string, value any) *Prop {
 
 // NewOptional creates a new prop that is included in the response only if
 // it's requested.
-func NewOptional(key string, fn func() any) *Prop {
+func NewOptional(key string, fn Lazy) *Prop {
 	//nolint:exhaustruct
 	return &Prop{
 		ignorable: true, // important
@@ -112,13 +143,18 @@ func NewProp(key string, val any, opts *PropOptions) *Prop {
 }
 
 // value returns the prop value.
-func (p *Prop) value() any {
+func (p *Prop) value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
-		p.val = p.valFn()
+		v, err := p.valFn.Value(ctx)
+		if err != nil {
+			return nil, err //nolint:wrapcheck
+		}
+
+		p.val = v
 		p.valFn = nil
 	}
 
-	return p.val
+	return p.val, nil
 }
 
 func (p *Prop) Props() []*Prop { return []*Prop{p} }

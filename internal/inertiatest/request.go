@@ -13,7 +13,6 @@ import (
 type RequestConfig struct {
 	Version          string
 	PartialComponent string
-	ErrorBag         string
 	Whitelist        []string
 	Blacklist        []string
 	ResetProps       []string
@@ -53,10 +52,6 @@ func NewRequest(
 
 	if config.PartialComponent != "" {
 		r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, config.PartialComponent)
-	}
-
-	if config.ErrorBag != "" {
-		r.Header.Set(inertiaheader.HeaderXInertiaErrorBag, config.ErrorBag)
 	}
 
 	return r, httptest.NewRecorder()
