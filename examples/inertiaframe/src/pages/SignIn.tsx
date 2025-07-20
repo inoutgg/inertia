@@ -1,9 +1,11 @@
 import { Field } from "@base-ui-components/react/field";
 import { Form } from "@base-ui-components/react/form";
 import { Link, useForm, usePage } from "@inertiajs/react";
+import { ComponentPropsWithRef } from "react";
+
+type T = ComponentPropsWithRef<typeof Form>;
 
 export default function SignIn() {
-  const props = usePage<{ csrf_token: string }>().props;
   const form = useForm({
     email: "",
     password: "",
@@ -16,11 +18,7 @@ export default function SignIn() {
         aria-disabled={form.processing}
         onSubmit={async (event) => {
           event.preventDefault();
-          form.post("/sign-in", {
-            headers: {
-              "X-Csrf-Token": props.csrf_token,
-            },
-          });
+          form.post("/sign-in", {});
         }}
       >
         <Field.Root>

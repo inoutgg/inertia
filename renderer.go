@@ -77,6 +77,20 @@ func (c *Config) defaults() {
 	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
 }
 
+// Renderer is a renderer that sends Inertia.js responses.
+// It uses html/template to render HTML responses.
+// Optionally, it supports server-side rendering using a SsrClient.
+//
+// To create a new Renderer, use the New or FromFS functions.
+type Renderer struct {
+	ssrClient     SsrClient
+	t             *template.Template
+	rootViewID    string
+	version       string
+	rootViewAttrs []pair[[]byte, []byte]
+	concurrency   int
+}
+
 // New creates a new Renderer instance.
 //
 // If config is nil, the default configuration is used.
@@ -129,48 +143,6 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 	return must.Must(FromFS(fsys, path, config))
 }
 
-// Renderer is a renderer that sends Inertia.js responses.
-// It uses html/template to render HTML responses.
-// Optionally, it supports server-side rendering using a SsrClient.
-//
-// To create a new Renderer, use the New or FromFS functions.
-type Renderer struct {
-	ssrClient     SsrClient
-	t             *template.Template
-	rootViewID    string
-	version       string
-	rootViewAttrs []pair[[]byte, []byte]
-	concurrency   int
-}
-
-func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
-	rawProps := make([]*Prop, 0, len(renderCtx.Props)+1)
-	rawProps = append(rawProps, renderCtx.Props...)
-	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
-
-	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
-	if err != nil {
-		return nil, err
-	}
-
-	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
-	mergeProps := r.makeMergeProps(
-		rawProps,
-		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
-	)
-
-	return &Page{
-		Component:      componentName,
-		Props:          props,
-		DeferredProps:  deferredProps,
-		MergeProps:     mergeProps,
-		URL:            req.RequestURI,
-		Version:        r.version,
-		ClearHistory:   renderCtx.ClearHistory,
-		EncryptHistory: renderCtx.EncryptHistory,
-	}, nil
-}
-
 // Version returns a version of the inertia build.
 func (r *Renderer) Version() string { return r.version }
 
@@ -196,7 +168,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		w.Header().Set(inertiaheader.HeaderContentType, contentTypeJSON)
 		w.WriteHeader(http.StatusOK)
 
-		if err := json.NewEncoder(w).Encode(page); err != nil {
+		err := json.NewEncoder(w).Encode(page)
+		if err != nil {
 			return fmt.Errorf("inertia: failed to encode JSON response: %w", err)
 		}
 
@@ -230,6 +203,34 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	}
 
 	return nil
+}
+
+func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
+	rawProps := make([]*Prop, 0, len(renderCtx.Props)+1)
+	rawProps = append(rawProps, renderCtx.Props...)
+	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
+
+	props, err := r.makeProps(req, componentName, rawProps, r.concurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
+	mergeProps := r.makeMergeProps(
+		rawProps,
+		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
+	)
+
+	return &Page{
+		Component:      componentName,
+		Props:          props,
+		DeferredProps:  deferredProps,
+		MergeProps:     mergeProps,
+		URL:            req.RequestURI,
+		Version:        r.version,
+		ClearHistory:   renderCtx.ClearHistory,
+		EncryptHistory: renderCtx.EncryptHistory,
+	}, nil
 }
 
 // makeRootView creates a root view element with the given page data.

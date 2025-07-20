@@ -1,5 +1,5 @@
 package user
 
-type Data struct {
+type Info struct {
 	// TODO: some fields
 }

@@ -1,29 +1,33 @@
 import { Field } from "@base-ui-components/react/field";
+import { Input } from "@base-ui-components/react";
 import { Form } from "@base-ui-components/react/form";
-import { Link, useForm } from "@inertiajs/react";
+import { useForm } from "@inertiajs/react";
 
-export default function SignUp() {
+export function UserProfile() {}
+
+export function UserProfilePage() {
   const form = useForm({
     email: "",
     password: "",
   });
 
   return (
-    <main>
-      <h1>Sign Up</h1>
+    <div>
+      <h3>Switch password</h3>
+
       <Form
         aria-disabled={form.processing}
         onSubmit={async (event) => {
           event.preventDefault();
-          form.post("/sign-up", {});
+          form.post("/sign-in", {});
         }}
       >
         <Field.Root>
           <Field.Label>Email</Field.Label>
-          <Field.Control
+          <Input
             required
-            type="email"
-            name="email"
+            type="password"
+            name="old_password"
             placeholder="you@email.com"
             value={form.data.email}
             onChange={(e) => form.setData("email", e.target.value)}
@@ -35,10 +39,9 @@ export default function SignUp() {
         </Field.Root>
         <Field.Root>
           <Field.Label>Password</Field.Label>
-          <Field.Control
-            // required
+          <Input
             type="password"
-            name="password"
+            name="new_password"
             placeholder="my very secure password"
             value={form.data.password}
             onChange={(e) => form.setData("password", e.target.value)}
@@ -52,7 +55,7 @@ export default function SignUp() {
         </Field.Root>
         <button disabled={form.processing}>Submit</button>
       </Form>
-      <Link href="/sign-in">Sign In</Link>
-    </main>
+      <button>Setup MFA</button>
+    </div>
   );
 }

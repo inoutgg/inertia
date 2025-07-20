@@ -31,6 +31,7 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 // response writing until the flush method is called.
 type responseWriter struct {
 	http.ResponseWriter
+
 	buf        *bytes.Buffer
 	statusCode int
 	size       int

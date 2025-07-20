@@ -142,6 +142,9 @@ func NewProp(key string, val any, opts *PropOptions) *Prop {
 	return prop
 }
 
+func (p *Prop) Props() []*Prop { return []*Prop{p} }
+func (p *Prop) Len() int       { return 1 }
+
 // value returns the prop value.
 func (p *Prop) value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
@@ -156,9 +159,6 @@ func (p *Prop) value(ctx context.Context) (any, error) {
 
 	return p.val, nil
 }
-
-func (p *Prop) Props() []*Prop { return []*Prop{p} }
-func (p *Prop) Len() int       { return 1 }
 
 // Proper is an interface that represents a collection of props.
 // It is used to attach props to the rendering context.

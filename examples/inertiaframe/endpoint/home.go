@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"go.inout.gg/examples/inertiaframe/user"
+	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield/shielduser"
 )
@@ -15,7 +15,8 @@ var _ inertiaframe.Endpoint[HomeRequest] = (*HomeEndpoint)(nil)
 type (
 	HomeRequest  struct{}
 	HomeResponse struct {
-		ID uuid.UUID `inertia:"user_id"`
+		UserID    uuid.UUID `inertia:"user_id"`
+		SessionID uuid.UUID `inertia:"session_id"`
 	}
 )
 
@@ -26,14 +27,18 @@ type HomeEndpoint struct{}
 func (s *HomeEndpoint) Meta() *inertiaframe.Meta {
 	return &inertiaframe.Meta{
 		Method: http.MethodGet,
-		Path:   "/",
+		Path:   "/dashboard",
 	}
 }
 
-func (s *HomeEndpoint) Execute(ctx context.Context, req *inertiaframe.Request[HomeRequest]) (*inertiaframe.Response, error) {
-	sess := shielduser.FromContext[user.Data](ctx)
+func (s *HomeEndpoint) Execute(
+	ctx context.Context,
+	req *inertiaframe.Request[HomeRequest],
+) (*inertiaframe.Response, error) {
+	sess := must.Must(shielduser.FromContext[any](ctx))
 
 	return inertiaframe.NewResponse(&HomeResponse{
-		ID: sess.ID,
+		UserID:    sess.UserID,
+		SessionID: sess.ID,
 	}), nil
 }

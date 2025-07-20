@@ -2,27 +2,25 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/examples/inertiaframe/endpoint"
-	"go.inout.gg/examples/inertiaframe/user"
-	"go.inout.gg/foundations/http/httperror"
-	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
-	"go.inout.gg/shield/shieldcsrf"
+	"go.inout.gg/inertia"
+	"go.inout.gg/inertia/contrib/vite"
+	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield/shieldmigrate"
 	"go.inout.gg/shield/shieldpassword"
 	"go.inout.gg/shield/shieldstrategy/session"
 	"go.inout.gg/shield/shielduser"
 
-	"go.inout.gg/inertia"
-	"go.inout.gg/inertia/contrib/vite"
-	"go.inout.gg/inertia/inertiaframe"
+	"go.inout.gg/examples/inertiaframe/endpoint"
+	"go.inout.gg/examples/inertiaframe/sender"
+	"go.inout.gg/examples/inertiaframe/user"
 )
 
 //nolint:exhaustruct,gochecknoglobals
@@ -58,8 +56,6 @@ func setupPool(ctx context.Context, logger *slog.Logger, url string) *pgxpool.Po
 }
 
 func main() {
-	fmt.Println("running")
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
@@ -74,47 +70,55 @@ func main() {
 	)
 	middleware := inertia.Middleware(renderer)
 
-	mux := http.NewServeMux()
-	csrf := must.Must(shieldcsrf.Middleware("secret"))
-	passwordHandler := shieldpassword.NewHandler[user.Data](pool, nil)
-	authenticator := session.New[user.Data](pool)
+	authenticator := session.New[user.Info, any](pool, nil)
+	passwordHandler := shieldpassword.NewHandler[user.Info](pool, authenticator, sender.New(), nil)
 
-	inertiaframe.Mount(mux, &endpoint.SignInGetEndpoint{}, &inertiaframe.MountOpts{
-		Middleware: httpmiddleware.NewChain(csrf, httpmiddleware.MiddlewareFunc(func(h http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tok := must.Must(shieldcsrf.FromRequest(r))
-				shieldcsrf.SetToken(w, tok)
-				h.ServeHTTP(w, r)
-			})
-		})),
-	})
-	inertiaframe.Mount(mux, &endpoint.SignInPostEndpoint{
+	unprotectedMux := chi.NewRouter().With(
+		shielduser.Middleware(
+			authenticator,
+			inertiaframe.DefaultErrorHandler,
+			shielduser.NewConfig(shielduser.WithPassthrough()),
+		),
+		shielduser.RedirectAuthenticatedUserMiddleware("/-/dashboard"),
+	)
+
+	protectedMux := chi.NewRouter().With(
+		shielduser.Middleware(authenticator, inertiaframe.DefaultErrorHandler, nil),
+	)
+
+	logoutHandler := session.NewLogoutHandler[user.Info, any](pool, nil)
+
+	// Sign up
+	inertiaframe.Mount(unprotectedMux, &endpoint.SignUpGetEndpoint{}, nil)
+	inertiaframe.Mount(unprotectedMux, &endpoint.SignUpPostEndpoint{
 		Handler:       passwordHandler,
 		Authenticator: authenticator,
-	}, &inertiaframe.MountOpts{
-		Middleware: httpmiddleware.NewChain(csrf),
-	})
+	}, nil)
 
-	inertiaframe.Mount(mux, &endpoint.SignUpGetEndpoint{}, &inertiaframe.MountOpts{
-		Middleware: httpmiddleware.NewChain(csrf, httpmiddleware.MiddlewareFunc(func(h http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tok := must.Must(shieldcsrf.FromRequest(r))
-				shieldcsrf.SetToken(w, tok)
-				h.ServeHTTP(w, r)
-			})
-		})),
-	})
-	inertiaframe.Mount(mux, &endpoint.SignUpPostEndpoint{
+	// Sign in
+	inertiaframe.Mount(unprotectedMux, &endpoint.SignInGetEndpoint{}, nil)
+	inertiaframe.Mount(unprotectedMux, &endpoint.SignInPostEndpoint{
 		Handler:       passwordHandler,
 		Authenticator: authenticator,
-	}, &inertiaframe.MountOpts{
-		Middleware: httpmiddleware.NewChain(csrf),
+	}, nil)
+
+	// Sign out
+	protectedMux.Get("/logout", func(w http.ResponseWriter, r *http.Request) {
+		err := logoutHandler.Logout(w, r)
+		if err != nil {
+			inertiaframe.DefaultErrorHandler.ServeHTTP(w, r, err)
+		}
+
+		http.Redirect(w, r, "/", http.StatusFound)
 	})
 
-	inertiaframe.Mount(mux, &endpoint.HomeEndpoint{}, &inertiaframe.MountOpts{
-		Middleware: httpmiddleware.MiddlewareFunc(
-			shielduser.Middleware[user.Data](authenticator, httperror.DefaultErrorHandler, nil)),
-	})
+	// Home
+	inertiaframe.Mount(protectedMux, &endpoint.HomeEndpoint{}, nil)
+
+	mux := chi.NewMux()
+
+	mux.Mount("/", unprotectedMux)
+	mux.Mount("/-/", protectedMux)
 
 	go func() {
 		//nolint:gosec

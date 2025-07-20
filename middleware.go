@@ -101,24 +101,25 @@ type RenderContext struct {
 	Concurrency       int
 }
 
-// AddValidationErrorer adds a validation error to the context.
-func (ctx *RenderContext) AddValidationErrorer(err ValidationErrorer) {
-	if ctx.ValidationErrorer == nil {
-		ctx.ValidationErrorer = make([]ValidationErrorer, 0, 1)
-	}
-	ctx.ValidationErrorer = append(ctx.ValidationErrorer, err)
-}
-
 // NewRenderContext creates a new RenderContext with the provided options.
 //
 // It returns a copy of the render context.
 func NewRenderContext(opts ...Option) RenderContext {
-	ctx := RenderContext{}
+	var ctx RenderContext
 	for _, opt := range opts {
 		opt(&ctx)
 	}
 
 	return ctx
+}
+
+// AddValidationErrorer adds a validation error to the context.
+func (ctx *RenderContext) AddValidationErrorer(err ValidationErrorer) {
+	if ctx.ValidationErrorer == nil {
+		ctx.ValidationErrorer = make([]ValidationErrorer, 0, 1)
+	}
+
+	ctx.ValidationErrorer = append(ctx.ValidationErrorer, err)
 }
 
 // Option configures rendering context.

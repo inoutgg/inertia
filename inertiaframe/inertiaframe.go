@@ -75,8 +75,6 @@ func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, error
 	must.Must1(sess.Save(w))
 
 	RedirectBack(w, r)
-
-	return
 }
 
 //nolint:gochecknoglobals
@@ -372,6 +370,7 @@ func newHandler[M any](
 		var msg M
 
 		ctx := r.Context()
+
 		var renderCtx inertia.RenderContext
 
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
@@ -445,7 +444,9 @@ func newHandler[M any](
 		}
 
 		sess, _ := sessionFromRequest(r)
+
 		errors := sess.ValidationErrors()
+
 		if errors != nil {
 			renderCtx.ErrorBag = sess.ErrorBag()
 			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errors))

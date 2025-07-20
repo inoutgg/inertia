@@ -34,6 +34,7 @@
               golangci-lint
               mockgen
               typos
+              just
 
               # Examples
               nodejs

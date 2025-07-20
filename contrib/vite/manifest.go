@@ -38,6 +38,7 @@ func (m *Manifest) HTML(name string) ([]template.HTML, []template.HTML, error) {
 	var js []template.HTML
 
 	var walk func(*ManifestEntry)
+
 	walk = func(e *ManifestEntry) {
 		if seen[e.Name] {
 			return
@@ -72,7 +73,9 @@ func (m *Manifest) HTML(name string) ([]template.HTML, []template.HTML, error) {
 // manifest entries.
 func ParseManifest(b []byte) (*Manifest, error) {
 	var raw rawManifest
-	if err := json.Unmarshal(b, &raw); err != nil {
+
+	err := json.Unmarshal(b, &raw)
+	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to unmarshal manifest: %w", err)
 	}
 

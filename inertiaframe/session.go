@@ -66,7 +66,7 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 	}
 
 	// Save session for future requests.
-	r = r.WithContext(context.WithValue(r.Context(), kSessCtx, sess))
+	*r = *r.WithContext(context.WithValue(r.Context(), kSessCtx, sess))
 
 	return sess, nil
 }
@@ -105,12 +105,14 @@ func (s *session) Clear(w http.ResponseWriter, r *http.Request) {
 // Save saves the session to the client, typically via a cookie.
 func (s *session) Save(w http.ResponseWriter, opts ...func(*httpcookie.Option)) error {
 	buf := bufPool.Get().(*bytes.Buffer) //nolint:forcetypeassert
+
 	defer func() {
 		bufPool.Put(buf)
 		buf.Reset()
 	}()
 
-	if err := gob.NewEncoder(buf).Encode(s); err != nil {
+	err := gob.NewEncoder(buf).Encode(s)
+	if err != nil {
 		return fmt.Errorf("inertiaframe: failed to encode session: %w", err)
 	}
 

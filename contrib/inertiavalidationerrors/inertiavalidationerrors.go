@@ -11,20 +11,20 @@ import (
 )
 
 var (
-	_ error                     = (*Map)(nil)
-	_ inertia.ValidationErrorer = (*Map)(nil)
+	_ error                     = (*MapError)(nil)
+	_ inertia.ValidationErrorer = (*MapError)(nil)
 )
 
 //nolint:gochecknoinits
 func init() {
-	gob.Register(&Map{})
+	gob.Register(&MapError{})
 }
 
-// Map is a map of key-value pairs that can be used as validation errors.
+// MapError is a map of key-value pairs that can be used as validation errors.
 // Key is the field name and value is the error message.
-type Map map[string]string
+type MapError map[string]string
 
-func (m Map) ValidationErrors() []inertia.ValidationError {
+func (m MapError) ValidationErrors() []inertia.ValidationError {
 	errors := make([]inertia.ValidationError, 0, len(m))
 	for k, v := range m {
 		errors = append(errors, inertia.NewValidationError(k, v))
@@ -33,18 +33,18 @@ func (m Map) ValidationErrors() []inertia.ValidationError {
 	return errors
 }
 
-func (m Map) Error() string    { return "validation errors" }
-func (m Map) Len() int         { return len(m) }
-func (m Map) ErrorBag() string { return inertia.DefaultErrorBag }
+func (m MapError) Error() string    { return "validation errors" }
+func (m MapError) Len() int         { return len(m) }
+func (m MapError) ErrorBag() string { return inertia.DefaultErrorBag }
 
 // FromValidationErrors creates a Map from a validator error.
 //
 // FromValidationErrors supports nested errors implemented via the `Unwrap() error`
 // method. Unwrap method returning multiple errors `Unwrap() []error` is not supported.
-func FromValidationErrors(err error, t ut.Translator) (Map, bool) {
+func FromValidationErrors(err error, t ut.Translator) (MapError, bool) {
 	var verr validator.ValidationErrors
 	if errors.As(err, &verr) {
-		m := make(Map)
+		m := make(MapError)
 
 		for _, e := range verr {
 			f := e.Field()
