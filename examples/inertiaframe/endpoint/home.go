@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia/inertiaframe"
-	"go.inout.gg/shield/shielduser"
+	"go.inout.gg/shield/shieldsession"
 )
 
 var _ inertiaframe.Endpoint[HomeRequest] = (*HomeEndpoint)(nil)
@@ -35,7 +35,7 @@ func (s *HomeEndpoint) Execute(
 	ctx context.Context,
 	req *inertiaframe.Request[HomeRequest],
 ) (*inertiaframe.Response, error) {
-	sess := must.Must(shielduser.FromContext[any](ctx))
+	sess := must.Must(shieldsession.FromContext[any](ctx))
 
 	return inertiaframe.NewResponse(&HomeResponse{
 		UserID:    sess.UserID,

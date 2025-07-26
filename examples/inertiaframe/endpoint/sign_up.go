@@ -9,7 +9,7 @@ import (
 	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield"
 	"go.inout.gg/shield/shieldpassword"
-	"go.inout.gg/shield/shieldstrategy"
+	"go.inout.gg/shield/shieldsession"
 
 	"go.inout.gg/examples/inertiaframe/user"
 )
@@ -49,7 +49,7 @@ type SignUpPostRequest struct {
 }
 
 type SignUpPostResponse struct {
-	authenticator shieldstrategy.Authenticator[user.Info, any]
+	authenticator shieldsession.Authenticator[user.Info, any]
 	user          shield.User[user.Info]
 }
 
@@ -57,7 +57,7 @@ func (r *SignUpPostResponse) Component() string { return "SignUp" }
 
 type SignUpPostEndpoint struct {
 	Handler       *shieldpassword.Handler[user.Info, any]
-	Authenticator shieldstrategy.Authenticator[user.Info, any]
+	Authenticator shieldsession.Authenticator[user.Info, any]
 }
 
 func (r *SignUpPostResponse) Write(w http.ResponseWriter, req *http.Request) error {

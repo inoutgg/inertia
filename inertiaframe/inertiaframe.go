@@ -135,6 +135,7 @@ func DefaultTranslator(_ context.Context) ut.Translator {
 
 type (
 	Request[M any] struct {
+		// Message is a message a JSON-like object that is sent by the client.
 		Message *M
 	}
 
@@ -302,24 +303,34 @@ type Endpoint[R any] interface {
 
 type MountOpts struct {
 	// Middleware is the middleware used to handle requests.
-	// If middleware is nil, no middleware will be used.
+	// If Middleware is nil, no middleware will be used.
 	Middleware httpmiddleware.Middleware
 
 	// Validator is the validator used to validate the request data.
-	// If validator is nil, the default validator will be used.
+	// If Validator is nil, the default validator will be used.
 	Validator *validator.Validate
 
 	// FormDecoder is the decoded used to parse incoming request data
 	// when the request type is application/x-www-form-urlencoded or
 	// multipart/form-data.
+	// If FormDecoder is nil, the default form decoder will be used.
 	FormDecoder *form.Decoder
 
 	// ErrorHandler is the error handler used to handle errors.
-	// If errorHandler is nil, the default error handler will be used.
+	// If ErrorHandler is nil, the default error handler will be used.
 	ErrorHandler httperror.ErrorHandler
 }
 
-// Mount mounts the executor on the given http.ServeMux.
+// Mux is a universal interface for routing HTTP requests.
+type Mux interface {
+	// Handle handles the given HTTP request at the specified path.
+	//
+	// The pattern is the a string following the http.ServeMux format:
+	// "<http-method> <path>".
+	Handle(pattern string, h http.Handler)
+}
+
+// Mount mounts the executor on the given mux.
 //
 // Endpoint must specify the HTTP method and path via Endpoint.Meta().
 // The mounted endpoint is automatically handles requests with JSON and form
@@ -328,7 +339,7 @@ type MountOpts struct {
 // The message M is validated using the validator specified in the MountOpts.
 // Validation errors are automatically handled and passed to the client
 // according to Inertia protocol.
-func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
+func Mount[M any](mux Mux, e Endpoint[M], opts *MountOpts) {
 	if opts == nil {
 		//nolint:exhaustruct
 		opts = &MountOpts{}
@@ -338,12 +349,14 @@ func Mount[M any](mux *http.ServeMux, e Endpoint[M], opts *MountOpts) {
 	opts.Validator = cmp.Or(opts.Validator, DefaultValidator)
 	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
 
+	debug.Assert(e != nil, "Executor must not be nil")
+	debug.Assert(opts.ErrorHandler != nil, "Executor must specify the error handler")
+	debug.Assert(opts.Validator != nil, "Executor must specify the validator")
+
 	m := e.Meta()
 
 	debug.Assert(m.Method != "", "Executor must specify the HTTP method")
 	debug.Assert(m.Path != "", "Executor must specify the HTTP path")
-	debug.Assert(opts.ErrorHandler != nil, "Executor must specify the error handler")
-	debug.Assert(opts.Validator != nil, "Executor must specify the validator")
 
 	pattern := fmt.Sprintf("%s %s", m.Method, m.Path)
 
@@ -388,12 +401,16 @@ func newHandler[M any](
 			switch mediaType {
 			case mediaTypeJSON:
 				{
+					d("received JSON request")
+
 					if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 						return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
 					}
 				}
 			case mediaTypeForm, mediaTypeMultipart:
 				{
+					d("received form request")
+
 					if err := r.ParseForm(); err != nil {
 						return fmt.Errorf("inertiaframe: failed to parse form data: %w", err)
 					}
@@ -406,6 +423,8 @@ func newHandler[M any](
 		}
 
 		if err := validate.StructCtx(ctx, &msg); err != nil {
+			d("failed to validate request")
+
 			return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
 		}
 
@@ -425,13 +444,8 @@ func newHandler[M any](
 				return nil
 			}
 
-			if resp.clearHistory {
-				renderCtx.ClearHistory = true
-			}
-
-			if resp.encryptHistory {
-				renderCtx.EncryptHistory = true
-			}
+			renderCtx.ClearHistory = resp.clearHistory
+			renderCtx.EncryptHistory = resp.encryptHistory
 
 			props, err := extractProps(resp.msg)
 			if err != nil {

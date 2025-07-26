@@ -15,8 +15,8 @@ import (
 	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield/shieldmigrate"
 	"go.inout.gg/shield/shieldpassword"
-	"go.inout.gg/shield/shieldstrategy/session"
-	"go.inout.gg/shield/shielduser"
+	"go.inout.gg/shield/shieldsession"
+	"go.inout.gg/shield/shieldsession/serversession"
 
 	"go.inout.gg/examples/inertiaframe/endpoint"
 	"go.inout.gg/examples/inertiaframe/sender"
@@ -70,23 +70,23 @@ func main() {
 	)
 	middleware := inertia.Middleware(renderer)
 
-	authenticator := session.New[user.Info, any](pool, nil)
-	passwordHandler := shieldpassword.NewHandler[user.Info](pool, authenticator, sender.New(), nil)
+	authenticator := serversession.New[user.Info, any](pool, nil)
+	passwordHandler := shieldpassword.NewHandler(pool, authenticator, sender.New(), nil)
 
 	unprotectedMux := chi.NewRouter().With(
-		shielduser.Middleware(
+		shieldsession.Middleware(
 			authenticator,
 			inertiaframe.DefaultErrorHandler,
-			shielduser.NewConfig(shielduser.WithPassthrough()),
+			shieldsession.NewConfig(shieldsession.WithPassthrough()),
 		),
-		shielduser.RedirectAuthenticatedUserMiddleware("/-/dashboard"),
+		shieldsession.RedirectAuthenticatedUserMiddleware("/-/dashboard"),
 	)
 
 	protectedMux := chi.NewRouter().With(
-		shielduser.Middleware(authenticator, inertiaframe.DefaultErrorHandler, nil),
+		shieldsession.Middleware(authenticator, inertiaframe.DefaultErrorHandler, nil),
 	)
 
-	logoutHandler := session.NewLogoutHandler[user.Info, any](pool, nil)
+	logoutHandler := serversession.NewLogoutHandler[user.Info, any](pool, nil)
 
 	// Sign up
 	inertiaframe.Mount(unprotectedMux, &endpoint.SignUpGetEndpoint{}, nil)
