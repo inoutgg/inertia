@@ -19,7 +19,10 @@ type sessCtx struct{}
 
 var kSessCtx = sessCtx{} //nolint:gochecknoglobals
 
-const SessionCookieName = "_inertiaframe"
+const (
+	SessionCookieName = "_inertiaframe"
+	SessionPath       = "/"
+)
 
 //nolint:gochecknoglobals
 var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
@@ -103,7 +106,7 @@ func (s *session) Clear(w http.ResponseWriter, r *http.Request) {
 }
 
 // Save saves the session to the client, typically via a cookie.
-func (s *session) Save(w http.ResponseWriter, opts ...func(*httpcookie.Option)) error {
+func (s *session) Save(w http.ResponseWriter) error {
 	buf := bufPool.Get().(*bytes.Buffer) //nolint:forcetypeassert
 
 	defer func() {
@@ -116,9 +119,17 @@ func (s *session) Save(w http.ResponseWriter, opts ...func(*httpcookie.Option)) 
 		return fmt.Errorf("inertiaframe: failed to encode session: %w", err)
 	}
 
-	opts = append(opts, httpcookie.WithExpiresIn(time.Second*1))
 	val := base64.RawURLEncoding.EncodeToString(buf.Bytes())
-	httpcookie.Set(w, SessionCookieName, val, opts...)
+	cookie := &http.Cookie{
+		Name:     SessionCookieName,
+		Value:    val,
+		Path:     SessionPath,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now(),
+	}
+
+	http.SetCookie(w, cookie)
 
 	return nil
 }

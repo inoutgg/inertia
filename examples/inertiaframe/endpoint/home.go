@@ -40,5 +40,5 @@ func (s *HomeEndpoint) Execute(
 	return inertiaframe.NewResponse(&HomeResponse{
 		UserID:    sess.UserID,
 		SessionID: sess.ID,
-	}), nil
+	}, nil), nil
 }

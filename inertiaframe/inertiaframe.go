@@ -44,6 +44,10 @@ var (
 	_ RawResponseWriter = (*externalRedirectMessage)(nil)
 )
 
+// RedirectBack redirects the user back to the previous page.
+//
+// The previous page is determined from the Referer header and
+// falls back to the session if the header is not present.
 func RedirectBack(w http.ResponseWriter, r *http.Request) {
 	referer := r.Header.Get(inertiaheader.HeaderReferer)
 	if referer == "" {
@@ -133,46 +137,60 @@ func DefaultTranslator(_ context.Context) ut.Translator {
 	return t
 }
 
-type (
-	Request[M any] struct {
-		// Message is a message a JSON-like object that is sent by the client.
-		Message *M
+// Request is a request sent by a client.
+type Request[M any] struct {
+	// Message is a decoded message sent by a client.
+	//
+	// Message can implement RawRequestExtractor to intercept request data extraction.
+	Message *M
+}
+
+// Response is a response sent by a server to a client.
+//
+// Use NewResponse to create a new response.
+type Response struct {
+	m              Message
+	clearHistory   bool
+	encryptHistory bool
+	concurrency    int
+}
+
+// ResponseConfig is a configuration for inertia response.
+type ResponseConfig struct {
+	// ClearHistory determines whether the history should be cleared by
+	// the client.
+	ClearHistory bool
+	// EncryptHistory determines whether the history should be encrypted by
+	// the client.
+	EncryptHistory bool
+
+	// Concurrency determines the maximum number of concurrent resolutions of lazy
+	// props that can be made during response resolution.
+	Concurrency int
+}
+
+// NewResponse creates a new inertia response.
+//
+// The msg can be a struct with props tagged with `inertia:"key"`,
+// a set of props, or a struct implementing RawResponseWriter for
+// custom response handling.
+//
+// An optional config can be passed to customize the response behavior.
+// If config is nil, default values will be used.
+func NewResponse(msg Message, config *ResponseConfig) *Response {
+	if config == nil {
+		config = &ResponseConfig{
+			ClearHistory:   false,
+			EncryptHistory: false,
+			Concurrency:    inertia.DefaultConcurrency,
+		}
 	}
 
-	Response struct {
-		msg            Message
-		clearHistory   bool
-		encryptHistory bool
-		concurrency    int
-	}
-)
-
-type Option func(*Response)
-
-// WithClearHistory sets the history clear.
-func WithClearHistory() Option {
-	return func(opt *Response) { opt.clearHistory = true }
-}
-
-// WithEncryptHistory instructs the client to encrypt the history state.
-func WithEncryptHistory() Option {
-	return func(resp *Response) { resp.encryptHistory = true }
-}
-
-// WithConcurrency sets the concurrency level for response props resolution.
-func WithConcurrency(concurrency int) Option {
-	return func(resp *Response) { resp.concurrency = concurrency }
-}
-
-func NewResponse(msg Message, opts ...Option) *Response {
 	resp := &Response{
-		msg:            msg,
-		clearHistory:   false,
-		encryptHistory: false,
-		concurrency:    inertia.DefaultConcurrency,
-	}
-	for _, opt := range opts {
-		opt(resp)
+		m:              msg,
+		clearHistory:   config.ClearHistory,
+		encryptHistory: config.EncryptHistory,
+		concurrency:    config.Concurrency,
 	}
 
 	return resp
@@ -193,7 +211,7 @@ func (m *externalRedirectMessage) Write(w http.ResponseWriter, r *http.Request) 
 // External URL is any URL that is not powered by Inertia.js.
 func NewExternalRedirectResponse(url string) *Response {
 	return &Response{
-		msg:            &externalRedirectMessage{url: url},
+		m:              &externalRedirectMessage{url: url},
 		clearHistory:   false,
 		encryptHistory: false,
 		concurrency:    inertia.DefaultConcurrency,
@@ -213,7 +231,7 @@ func (m *redirectBackMessage) Write(w http.ResponseWriter, r *http.Request) erro
 // back to the previous page.
 func NewRedirectBackResponse() *Response {
 	return &Response{
-		msg:            &redirectBackMessage{},
+		m:              &redirectBackMessage{},
 		clearHistory:   false,
 		encryptHistory: false,
 		concurrency:    inertia.DefaultConcurrency,
@@ -233,7 +251,7 @@ func (m *redirectMessage) Write(w http.ResponseWriter, r *http.Request) error {
 // specified URL.
 func NewRedirectResponse(url string) *Response {
 	return &Response{
-		msg:            &redirectMessage{url: url},
+		m:              &redirectMessage{url: url},
 		clearHistory:   false,
 		encryptHistory: false,
 		concurrency:    inertia.DefaultConcurrency,
@@ -381,10 +399,9 @@ func newHandler[M any](
 
 	return handleError(httperror.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		var msg M
+		var renderCtx inertia.RenderContext
 
 		ctx := r.Context()
-
-		var renderCtx inertia.RenderContext
 
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
@@ -436,7 +453,7 @@ func newHandler[M any](
 		}
 
 		if resp != nil {
-			if writer, ok := resp.msg.(RawResponseWriter); ok {
+			if writer, ok := resp.m.(RawResponseWriter); ok {
 				if err := writer.Write(w, r); err != nil {
 					return fmt.Errorf("inertiaframe: failed to write response: %w", err)
 				}
@@ -447,7 +464,7 @@ func newHandler[M any](
 			renderCtx.ClearHistory = resp.clearHistory
 			renderCtx.EncryptHistory = resp.encryptHistory
 
-			props, err := extractProps(resp.msg)
+			props, err := extractProps(resp.m)
 			if err != nil {
 				return fmt.Errorf("inertiaframe: failed to extract props: %w", err)
 			}
@@ -466,7 +483,7 @@ func newHandler[M any](
 			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errors))
 		}
 
-		componentName := resp.msg.Component()
+		componentName := resp.m.Component()
 		debug.Assert(componentName != "", "component must not be empty, when using non RawResponseWriter")
 
 		if err := inertia.Render(w, r, componentName, renderCtx); err != nil {

@@ -40,7 +40,7 @@ func (s *SignInGetEndpoint) Execute(
 	ctx context.Context,
 	req *inertiaframe.Request[SignInGetRequest],
 ) (*inertiaframe.Response, error) {
-	return inertiaframe.NewResponse(&SignInGetResponse{}), nil
+	return inertiaframe.NewResponse(&SignInGetResponse{}, nil), nil
 }
 
 type SignInPostRequest struct {
@@ -96,5 +96,5 @@ func (s *SignInPostEndpoint) Execute(
 	return inertiaframe.NewResponse(&SignInPostResponse{
 		user:          user,
 		authenticator: s.Authenticator,
-	}), nil
+	}, nil), nil
 }

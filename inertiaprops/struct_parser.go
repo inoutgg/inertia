@@ -68,7 +68,7 @@ func ParseStruct(msg any) (inertia.Props, error) {
 		}
 
 		inertiaTag := field.Tag.Get(TagInertia)
-		if inertiaTag == "-" {
+		if inertiaTag == "" {
 			continue
 		}
 
@@ -169,6 +169,8 @@ func ParseStruct(msg any) (inertia.Props, error) {
 	return props, nil
 }
 
+// toLazy converts a reflect.Value to an inertia.Lazy
+// if the value is inertia.Lazy convertible.
 func toLazy(v reflect.Value) (inertia.Lazy, error) {
 	val := v.Interface()
 	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Func) && v.Type().Implements(lazyType) {
