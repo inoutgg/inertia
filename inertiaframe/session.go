@@ -33,10 +33,10 @@ func init() {
 	gob.Register([]inertia.ValidationError(nil))
 }
 
-// Session is a users local session for storing informational data for the
+// Session is a user's local session for storing informational data for
 // inertiaframe to work correctly.
 //
-// It is primarily used to store information about validation errors,
+// It is primarily used to store information about validation errors
 // and the last visited path.
 type session struct {
 	ErrorBag_         string                    //nolint:revive
@@ -44,7 +44,7 @@ type session struct {
 	ValidationErrors_ []inertia.ValidationError //nolint:revive
 }
 
-// sessionFromRequest retrieves a session from the request, if the session
+// sessionFromRequest retrieves a session from the request. If the session
 // does not exist, a new session is created.
 func sessionFromRequest(r *http.Request) (*session, error) {
 	sess, ok := r.Context().Value(kSessCtx).(*session)
@@ -77,7 +77,7 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 // ValidationErrors returns a list of validation errors that occurred
 // during the processing of the request.
 //
-// Once the error is accessed, it is cleared from the session.
+// Once the errors are accessed, they are cleared from the session.
 func (s *session) ValidationErrors() []inertia.ValidationError {
 	ret := s.ValidationErrors_
 	s.ValidationErrors_ = nil
@@ -85,8 +85,8 @@ func (s *session) ValidationErrors() []inertia.ValidationError {
 	return ret
 }
 
-// ErrorBag returns a bag associated with the processed request
-// for which the validation errors occurred.
+// ErrorBag returns the error bag associated with the request
+// that produced validation errors.
 func (s *session) ErrorBag() string {
 	ret := s.ErrorBag_
 	s.ErrorBag_ = ""
@@ -94,9 +94,9 @@ func (s *session) ErrorBag() string {
 	return ret
 }
 
-// Referer returns the last visited path by the user.
+// Referer returns the last path visited by the user.
 //
-// It is used to redirect the user to the last visited page
+// It is used to redirect the user back to the previously visited page
 // when calling inertiaframe.RedirectBack.
 func (s *session) Referer() string { return s.Path_ }
 

@@ -1,6 +1,6 @@
 // inertiaframe implements an opinionated framework around Go's HTTP and Inertia
-// library, abstracting out protocol level details and providing a simple
-// message based API.
+// library, abstracting out protocol-level details and providing a simple
+// message-based API.
 package inertiaframe
 
 import (
@@ -42,6 +42,24 @@ var (
 	_ RawResponseWriter = (*redirectBackMessage)(nil)
 	_ RawResponseWriter = (*externalRedirectMessage)(nil)
 )
+
+type kCtx struct{}
+
+var kCtxKey = kCtx{} //nolint:gochecknoglobals
+
+// WithProps sets the props on the request context and returns
+// the updated request.
+//
+// WithProps can be used to gather props in multiple places, e.g., in middleware.
+//
+// Any overlapping props between the shared context and the response props
+// will be replaced with the response props.
+//
+// Prefer to use the response props directly instead of using this function,
+// and opt in only when necessary.
+func WithProps(r *http.Request, props inertia.Proper) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), kCtxKey, props))
+}
 
 // RedirectBack redirects the user back to the previous page.
 //
@@ -204,7 +222,7 @@ func (m *externalRedirectMessage) Write(w http.ResponseWriter, r *http.Request) 
 	return nil
 }
 
-// NewExternalRedirectResponse creates a new response that redirects the client to the
+// NewExternalRedirectResponse creates a new response that redirects the client to an
 // external URL.
 //
 // External URL is any URL that is not powered by Inertia.js.
@@ -226,7 +244,7 @@ func (m *redirectBackMessage) Write(w http.ResponseWriter, r *http.Request) erro
 	return nil
 }
 
-// NewRedirectBackResponse creates a new response that redirects the client to the
+// NewRedirectBackResponse creates a new response that redirects the client
 // back to the previous page.
 func NewRedirectBackResponse() *Response {
 	return &Response{
@@ -257,8 +275,8 @@ func NewRedirectResponse(url string) *Response {
 	}
 }
 
-// Message is used to send a message to the client, it can be
-// used to guide the client to render a component, or redirect to a
+// Message is used to send a message to the client. It can be
+// used to guide the client to render a component or redirect to a
 // specific URL.
 //
 // If the Message implements a RawResponseWriter, the default
@@ -284,7 +302,6 @@ type Message interface {
 // extract the request data.
 type RawRequestExtractor interface {
 	// Extract extracts data from the raw http.Request.
-	// It can be used to extract
 	Extract(*http.Request) error
 }
 
@@ -310,10 +327,10 @@ type Endpoint[R any] interface {
 	// Execute executes the endpoint for the given request.
 	//
 	// If the returned error can automatically be converted to an Inertia
-	// error, it will converted and passed down to the client.
+	// error, it will be converted and passed down to the client.
 	Execute(context.Context, *Request[R]) (*Response, error)
 
-	// Meta is the metadata of the endpoint. It is used to configure
+	// Meta returns the metadata of the endpoint. It is used to configure
 	// the endpoint's behavior when mounted on a given http.ServeMux.
 	Meta() *Meta
 }
@@ -327,7 +344,7 @@ type MountOpts struct {
 	// If Validator is nil, the default validator will be used.
 	Validator *validator.Validate
 
-	// FormDecoder is the decoded used to parse incoming request data
+	// FormDecoder is the decoder used to parse incoming request data
 	// when the request type is application/x-www-form-urlencoded or
 	// multipart/form-data.
 	// If FormDecoder is nil, the default form decoder will be used.
@@ -342,7 +359,7 @@ type MountOpts struct {
 type Mux interface {
 	// Handle handles the given HTTP request at the specified path.
 	//
-	// The pattern is the a string following the http.ServeMux format:
+	// The pattern is a string following the http.ServeMux format:
 	// "<http-method> <path>".
 	Handle(pattern string, h http.Handler)
 }
@@ -350,7 +367,7 @@ type Mux interface {
 // Mount mounts the executor on the given mux.
 //
 // Endpoint must specify the HTTP method and path via Endpoint.Meta().
-// The mounted endpoint is automatically handles requests with JSON and form
+// The mounted endpoint automatically handles requests with JSON and form
 // data.
 //
 // The message M is validated using the validator specified in the MountOpts.
@@ -413,7 +430,7 @@ func newHandler[M any](
 				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
 			}
 
-			// Inertia accepts only JSON, or multipart/form-data.
+			// Inertia accepts only JSON or multipart/form-data.
 			switch mediaType {
 			case mediaTypeJSON:
 				{
@@ -451,27 +468,40 @@ func newHandler[M any](
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
 
-		if resp != nil {
-			if writer, ok := resp.m.(RawResponseWriter); ok {
-				if err := writer.Write(w, r); err != nil {
-					return fmt.Errorf("inertiaframe: failed to write response: %w", err)
-				}
+		if resp == nil {
+			d("received empty response")
 
-				return nil
-			}
-
-			renderCtx.ClearHistory = resp.clearHistory
-			renderCtx.EncryptHistory = resp.encryptHistory
-
-			props, err := extractProps(resp.m)
-			if err != nil {
-				return fmt.Errorf("inertiaframe: failed to extract props: %w", err)
-			}
-
-			if props.Len() > 0 {
-				renderCtx.Props = props
-			}
+			return fmt.Errorf("inertiaframe: empty response")
 		}
+
+		if writer, ok := resp.m.(RawResponseWriter); ok {
+			if err := writer.Write(w, r); err != nil {
+				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+			}
+
+			return nil
+		}
+
+		renderCtx.ClearHistory = resp.clearHistory
+		renderCtx.EncryptHistory = resp.encryptHistory
+
+		var props []inertia.Prop
+		if proper, ok := r.Context().Value(kCtxKey).(inertia.Proper); ok {
+			d("has shared props")
+			props = proper.Props()
+		}
+
+		extractedProps, err := extractProps(resp.m)
+		if err != nil {
+			return fmt.Errorf("inertiaframe: failed to extract props: %w", err)
+		}
+
+		if extractedProps.Len() > 0 {
+			d("has response props")
+			props = append(props, extractedProps...)
+		}
+
+		renderCtx.Props = props
 
 		sess, _ := sessionFromRequest(r)
 		errors := sess.ValidationErrors()
