@@ -26,7 +26,6 @@ import (
 
 	"go.inout.gg/inertia"
 	"go.inout.gg/inertia/contrib/inertiavalidationerrors"
-	"go.inout.gg/inertia/inertiaprops"
 	"go.inout.gg/inertia/internal/inertiaheader"
 	"go.inout.gg/inertia/internal/inertiaredirect"
 )
@@ -475,7 +474,6 @@ func newHandler[M any](
 		}
 
 		sess, _ := sessionFromRequest(r)
-
 		errors := sess.ValidationErrors()
 
 		if errors != nil {
@@ -506,7 +504,7 @@ func extractProps(msg any) (inertia.Props, error) {
 		return proper.Props(), nil
 	}
 
-	props, err := inertiaprops.ParseStruct(msg)
+	props, err := inertia.ParseStruct(msg)
 	if err != nil {
 		return nil, fmt.Errorf("inertiaframe: failed to parse props: %w", err)
 	}

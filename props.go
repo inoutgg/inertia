@@ -75,9 +75,9 @@ func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 // it's requested.
 //
 // If opts is nil, default options is used.
-func NewDeferred(key string, fn Lazy, opts *DeferredOptions) *Prop {
+func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 	//nolint:exhaustruct
-	prop := &Prop{
+	prop := Prop{
 		deferred:   true, // important
 		lazy:       true, // important
 		ignorable:  true, // important
@@ -98,9 +98,9 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) *Prop {
 
 // NewAlways create a new props that is always included in the response.
 // It ignores the X-Inertia-Partial-Data and X-Inertia-Partial-Except headers.
-func NewAlways(key string, value any) *Prop {
+func NewAlways(key string, value any) Prop {
 	//nolint:exhaustruct
-	return &Prop{
+	return Prop{
 		ignorable: false, // important
 		key:       key,
 		val:       value,
@@ -109,9 +109,9 @@ func NewAlways(key string, value any) *Prop {
 
 // NewOptional creates a new prop that is included in the response only if
 // it's requested.
-func NewOptional(key string, fn Lazy) *Prop {
+func NewOptional(key string, fn Lazy) Prop {
 	//nolint:exhaustruct
-	return &Prop{
+	return Prop{
 		ignorable: true, // important
 		lazy:      true, // important
 		key:       key,
@@ -127,9 +127,9 @@ type PropOptions struct {
 
 // NewProp creates a new regular prop.
 // opts can be nil.
-func NewProp(key string, val any, opts *PropOptions) *Prop {
+func NewProp(key string, val any, opts *PropOptions) Prop {
 	//nolint:exhaustruct
-	prop := &Prop{
+	prop := Prop{
 		ignorable: true, // important
 		key:       key,
 		val:       val,
@@ -142,11 +142,11 @@ func NewProp(key string, val any, opts *PropOptions) *Prop {
 	return prop
 }
 
-func (p *Prop) Props() []*Prop { return []*Prop{p} }
-func (p *Prop) Len() int       { return 1 }
+func (p Prop) Props() []Prop { return []Prop{p} }
+func (p Prop) Len() int       { return 1 }
 
 // value returns the prop value.
-func (p *Prop) value(ctx context.Context) (any, error) {
+func (p Prop) value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
 		v, err := p.valFn.Value(ctx)
 		if err != nil {
@@ -164,14 +164,14 @@ func (p *Prop) value(ctx context.Context) (any, error) {
 // It is used to attach props to the rendering context.
 type Proper interface {
 	// Props returns the list of props.
-	Props() []*Prop
+	Props() []Prop
 
 	// Len returns the number of props.
 	Len() int
 }
 
 // Props is a collection of props.
-type Props []*Prop
+type Props []Prop
 
 func (p Props) Len() int       { return len(p) }
-func (p Props) Props() []*Prop { return p }
+func (p Props) Props() []Prop { return p }

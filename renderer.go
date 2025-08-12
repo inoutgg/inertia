@@ -206,7 +206,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 }
 
 func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
-	rawProps := make([]*Prop, 0, len(renderCtx.Props)+1)
+	rawProps := make([]Prop, 0, len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.Props...)
 	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
@@ -278,7 +278,7 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 func (r *Renderer) makeProps(
 	req *http.Request,
 	componentName string,
-	props []*Prop,
+	props []Prop,
 	concurrency int,
 ) (map[string]any, error) {
 	ctx := req.Context()
@@ -291,7 +291,7 @@ func (r *Renderer) makeProps(
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
 
-		var concurrentProps []*Prop
+		var concurrentProps []Prop
 
 		for _, prop := range props {
 			key := prop.key
@@ -369,7 +369,7 @@ func (r *Renderer) makeProps(
 
 // makeDeferredProps creates a map of deferred props that should be resolved
 // on the client side.
-func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, props []*Prop) map[string][]string {
+func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, props []Prop) map[string][]string {
 	// If the request is partial, then the client already got information
 	// about the deferred props in the initial request so we don't need to
 	// send them again.
@@ -396,7 +396,7 @@ func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, pr
 
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
+func (r *Renderer) makeMergeProps(props []Prop, blacklist []string) []string {
 	mergeProps := make([]string, 0, len(props))
 
 	for _, p := range props {
@@ -410,7 +410,7 @@ func (r *Renderer) makeMergeProps(props []*Prop, blacklist []string) []string {
 	return mergeProps
 }
 
-func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) *Prop {
+func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
 	m := make(map[string]string)
 
 	for _, errorer := range errorers {

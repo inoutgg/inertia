@@ -93,7 +93,7 @@ func Middleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) httpmiddlew
 // RenderContext represents an Inertia.js page context.
 type RenderContext struct {
 	T                 any // T is an optional custom data that can be passed to the template.
-	Props             []*Prop
+	Props             []Prop
 	ErrorBag          string
 	ValidationErrorer []ValidationErrorer
 	EncryptHistory    bool
@@ -145,7 +145,7 @@ func WithProps(props Proper) Option {
 		}
 
 		if renderCtx.Props == nil {
-			renderCtx.Props = make([]*Prop, 0, props.Len())
+			renderCtx.Props = make([]Prop, 0, props.Len())
 		}
 
 		renderCtx.Props = append(renderCtx.Props, props.Props()...)

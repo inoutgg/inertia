@@ -1,6 +1,6 @@
 module go.inout.gg/inertia
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/alitto/pond/v2 v2.5.0
@@ -9,7 +9,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/stretchr/testify v1.10.0
-	go.inout.gg/foundations v0.0.0-20250720220539-ad71c3f009a3
+	go.inout.gg/foundations v0.0.0-20250808175114-bcc385b29ad2
 	go.uber.org/mock v0.5.2
 )
 

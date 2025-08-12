@@ -1,6 +1,8 @@
 module go.inout.gg/examples/inertiaframe
 
-go 1.24
+go 1.24.0
+
+toolchain go1.24.4
 
 tool go.inout.gg/conduit/cmd/conduit
 
@@ -10,11 +12,11 @@ replace go.inout.gg/shield => ../../../shield
 
 require (
 	github.com/go-chi/chi/v5 v5.2.2
-	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
-	go.inout.gg/foundations v0.0.0-20250317134313-11fba59fcc30
+	go.inout.gg/foundations v0.0.0-20250808175114-bcc385b29ad2
 	go.inout.gg/inertia v0.0.0-00010101000000-000000000000
 	go.inout.gg/shield v0.0.0-00010101000000-000000000000
+	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 )
 
 require (
@@ -25,6 +27,8 @@ require (
 	github.com/go-playground/mold/v4 v4.5.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.27.0 // indirect
+	github.com/gofrs/uuid/v5 v5.3.2 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -36,9 +40,9 @@ require (
 	github.com/segmentio/go-snakecase v1.2.0 // indirect
 	github.com/urfave/cli/v3 v3.3.8 // indirect
 	go.inout.gg/conduit v0.1.3 // indirect
-	golang.org/x/crypto v0.39.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/crypto v0.41.0 // indirect
+	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
 )

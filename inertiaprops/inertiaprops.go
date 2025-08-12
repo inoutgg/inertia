@@ -11,8 +11,8 @@ var _ inertia.Proper = (*Map)(nil)
 // with inertia.Props instead.
 type Map map[string]any
 
-func (m Map) Props() []*inertia.Prop {
-	props := make([]*inertia.Prop, 0, len(m))
+func (m Map) Props() []inertia.Prop {
+	props := make([]inertia.Prop, 0, len(m))
 	for k, v := range m {
 		props = append(props, inertia.NewProp(k, v, nil))
 	}

@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/google/uuid"
 	"go.inout.gg/foundations/must"
 	"go.inout.gg/inertia/inertiaframe"
 	"go.inout.gg/shield/shieldsession"
+	"go.jetify.com/typeid/v2"
 )
 
 var _ inertiaframe.Endpoint[HomeRequest] = (*HomeEndpoint)(nil)
@@ -15,8 +15,8 @@ var _ inertiaframe.Endpoint[HomeRequest] = (*HomeEndpoint)(nil)
 type (
 	HomeRequest  struct{}
 	HomeResponse struct {
-		UserID    uuid.UUID `inertia:"user_id"`
-		SessionID uuid.UUID `inertia:"session_id"`
+		UserID    typeid.TypeID `inertia:"user_id"`
+		SessionID typeid.TypeID `inertia:"session_id"`
 	}
 )
 
