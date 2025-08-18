@@ -7,6 +7,7 @@ package inertia
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -282,7 +283,6 @@ func (r *Renderer) makeProps(
 	concurrency int,
 ) (map[string]any, error) {
 	ctx := req.Context()
-	m := make(map[string]any, len(props))
 
 	// If the request is a partial, we need to filter the props.
 	if isPartialComponentRequest(req, componentName) {
@@ -291,76 +291,90 @@ func (r *Renderer) makeProps(
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
 
-		var concurrentProps []Prop
+		return r.resolvePartialComponentRequest(ctx, props, whitelist, blacklist, concurrency)
+	}
 
-		for _, prop := range props {
-			key := prop.key
-			if prop.ignorable {
-				// It should be fine to go through slices here, as the number of props is expected to be small.
-				if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
-					len(blacklist) > 0 && slices.Contains(blacklist, key) {
-					continue
-				}
-			}
+	m := make(map[string]any, len(props))
 
-			if prop.concurrent {
-				concurrentProps = append(concurrentProps, prop)
-			} else {
-				val, err := prop.value(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
-				}
-
-				m[key] = val
-			}
+	for _, prop := range props {
+		// Skip lazy (deferred, optional) props on the first render.
+		if prop.lazy {
+			continue
 		}
 
-		if len(concurrentProps) > 0 {
-			pool := pond.NewResultPool[pair[string, any]](concurrency)
-			group := pool.NewGroupContext(ctx)
-
-			for _, prop := range concurrentProps {
-				group.SubmitErr(func() (pair[string, any], error) {
-					var kv pair[string, any]
-
-					val, err := prop.value(ctx)
-					if err != nil {
-						return kv, fmt.Errorf(
-							"inertia: failed to resolve prop %s: %w",
-							prop.key,
-							err,
-						)
-					}
-
-					kv.key = prop.key
-					kv.value = val
-
-					return kv, nil
-				})
-			}
-
-			result, err := group.Wait()
-			if err != nil {
-				return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
-			}
-
-			for i, prop := range concurrentProps {
-				m[prop.key] = result[i].value
-			}
+		val, err := prop.value(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
 		}
-	} else {
-		for _, prop := range props {
-			// Skip lazy (deferred, optional) props on the first render.
-			if prop.lazy {
+
+		m[prop.key] = val
+	}
+
+	return m, nil
+}
+
+func (r *Renderer) resolvePartialComponentRequest(
+	ctx context.Context,
+	props []Prop,
+	whitelist, blacklist []string,
+	concurrency int,
+) (map[string]any, error) {
+	m := make(map[string]any, len(props))
+	var concurrentProps []Prop
+
+	for _, prop := range props {
+		key := prop.key
+		if prop.ignorable {
+			// It should be fine to go through slices here, as the number of props is expected to be small.
+			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
+				len(blacklist) > 0 && slices.Contains(blacklist, key) {
 				continue
 			}
+		}
 
+		if prop.concurrent {
+			concurrentProps = append(concurrentProps, prop)
+		} else {
 			val, err := prop.value(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key, err)
 			}
 
-			m[prop.key] = val
+			m[key] = val
+		}
+	}
+
+	if len(concurrentProps) > 0 {
+		pool := pond.NewResultPool[pair[string, any]](concurrency)
+		group := pool.NewGroupContext(ctx)
+
+		for _, prop := range concurrentProps {
+			group.SubmitErr(func() (pair[string, any], error) {
+				var kv pair[string, any]
+
+				val, err := prop.value(ctx)
+				if err != nil {
+					return kv, fmt.Errorf(
+						"inertia: failed to resolve prop %s: %w",
+						prop.key,
+						err,
+					)
+				}
+
+				kv.key = prop.key
+				kv.value = val
+
+				return kv, nil
+			})
+		}
+
+		result, err := group.Wait()
+		if err != nil {
+			return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
+		}
+
+		for i, prop := range concurrentProps {
+			m[prop.key] = result[i].value
 		}
 	}
 

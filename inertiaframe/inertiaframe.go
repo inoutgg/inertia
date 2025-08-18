@@ -177,6 +177,7 @@ type ResponseConfig struct {
 	// ClearHistory determines whether the history should be cleared by
 	// the client.
 	ClearHistory bool
+	
 	// EncryptHistory determines whether the history should be encrypted by
 	// the client.
 	EncryptHistory bool

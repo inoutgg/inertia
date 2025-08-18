@@ -143,7 +143,7 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 }
 
 func (p Prop) Props() []Prop { return []Prop{p} }
-func (p Prop) Len() int       { return 1 }
+func (p Prop) Len() int      { return 1 }
 
 // value returns the prop value.
 func (p Prop) value(ctx context.Context) (any, error) {
@@ -153,8 +153,7 @@ func (p Prop) value(ctx context.Context) (any, error) {
 			return nil, err //nolint:wrapcheck
 		}
 
-		p.val = v
-		p.valFn = nil
+		return v, nil
 	}
 
 	return p.val, nil
@@ -173,5 +172,5 @@ type Proper interface {
 // Props is a collection of props.
 type Props []Prop
 
-func (p Props) Len() int       { return len(p) }
+func (p Props) Len() int      { return len(p) }
 func (p Props) Props() []Prop { return p }
