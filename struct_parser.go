@@ -203,7 +203,7 @@ func toLazy(v reflect.Value) (Lazy, error) {
 			return nil, errors.New("inertiaframe: invalid lazy function")
 		}
 
-		return LazyFunc(lazyFn), nil
+		return lazyFn, nil
 	}
 
 	return nil, errors.New("inertiaframe: invalid lazy value")

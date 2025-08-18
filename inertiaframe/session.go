@@ -119,10 +119,10 @@ func (s *session) Save(w http.ResponseWriter) error {
 		return fmt.Errorf("inertiaframe: failed to encode session: %w", err)
 	}
 
-	val := base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	//nolint:exhaustruct
 	cookie := &http.Cookie{
 		Name:     SessionCookieName,
-		Value:    val,
+		Value:    base64.RawURLEncoding.EncodeToString(buf.Bytes()),
 		Path:     SessionPath,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

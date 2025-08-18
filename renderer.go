@@ -320,7 +320,7 @@ func (r *Renderer) resolvePartialComponentRequest(
 	concurrency int,
 ) (map[string]any, error) {
 	m := make(map[string]any, len(props))
-	var concurrentProps []Prop
+	concurrentProps := make([]Prop, 0, len(props))
 
 	for _, prop := range props {
 		key := prop.key

@@ -35,6 +35,7 @@
               mockgen
               typos
               just
+              lefthook
 
               # Examples
               nodejs

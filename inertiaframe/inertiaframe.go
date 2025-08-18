@@ -177,7 +177,7 @@ type ResponseConfig struct {
 	// ClearHistory determines whether the history should be cleared by
 	// the client.
 	ClearHistory bool
-	
+
 	// EncryptHistory determines whether the history should be encrypted by
 	// the client.
 	EncryptHistory bool
@@ -415,8 +415,10 @@ func newHandler[M any](
 	handleError := httperror.WithErrorHandler(errorHandler)
 
 	return handleError(httperror.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		var msg M
-		var renderCtx inertia.RenderContext
+		var (
+			msg       M
+			renderCtx inertia.RenderContext
+		)
 
 		ctx := r.Context()
 
@@ -472,7 +474,7 @@ func newHandler[M any](
 		if resp == nil {
 			d("received empty response")
 
-			return fmt.Errorf("inertiaframe: empty response")
+			return errors.New("inertiaframe: empty response")
 		}
 
 		if writer, ok := resp.m.(RawResponseWriter); ok {
@@ -489,6 +491,7 @@ func newHandler[M any](
 		var props []inertia.Prop
 		if proper, ok := r.Context().Value(kCtxKey).(inertia.Proper); ok {
 			d("has shared props")
+
 			props = proper.Props()
 		}
 
@@ -499,6 +502,7 @@ func newHandler[M any](
 
 		if extractedProps.Len() > 0 {
 			d("has response props")
+
 			props = append(props, extractedProps...)
 		}
 
