@@ -336,26 +336,6 @@ type Endpoint[R any] interface {
 	Meta() *Meta
 }
 
-type MountOpts struct {
-	// Middleware is the middleware used to handle requests.
-	// If Middleware is nil, no middleware will be used.
-	Middleware httpmiddleware.Middleware
-
-	// Validator is the validator used to validate the request data.
-	// If Validator is nil, the default validator will be used.
-	Validator *validator.Validate
-
-	// FormDecoder is the decoder used to parse incoming request data
-	// when the request type is application/x-www-form-urlencoded or
-	// multipart/form-data.
-	// If FormDecoder is nil, the default form decoder will be used.
-	FormDecoder *form.Decoder
-
-	// ErrorHandler is the error handler used to handle errors.
-	// If ErrorHandler is nil, the default error handler will be used.
-	ErrorHandler httperror.ErrorHandler
-}
-
 // Mux is a universal interface for routing HTTP requests.
 type Mux interface {
 	// Handle handles the given HTTP request at the specified path.
@@ -363,6 +343,26 @@ type Mux interface {
 	// The pattern is a string following the http.ServeMux format:
 	// "<http-method> <path>".
 	Handle(pattern string, h http.Handler)
+}
+
+type MountOpts struct {
+	// Middleware is the middleware used to handle requests.
+	// If Middleware is nil, no middleware will be used.
+	Middleware httpmiddleware.Middleware
+
+	// Validator is the validator used to validate the request data.
+	// If Validator is nil, the DefaultValidator will be used.
+	Validator *validator.Validate
+
+	// FormDecoder is the decoder used to parse incoming request data
+	// when the request type is application/x-www-form-urlencoded or
+	// multipart/form-data.
+	// If FormDecoder is nil, the DefaultFormDecoder will be used.
+	FormDecoder *form.Decoder
+
+	// ErrorHandler is the error handler used to handle errors.
+	// If ErrorHandler is nil, the DefaultErrorHandler will be used.
+	ErrorHandler httperror.ErrorHandler
 }
 
 // Mount mounts the executor on the given mux.
