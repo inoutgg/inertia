@@ -35,6 +35,7 @@ func init() {
 
 // Session stores temporary flash data for the inertiaframe package.
 // It manages validation errors and the last visited path for redirect-back functionality.
+//
 // Session data is stored in a cookie and automatically cleared after being read.
 type session struct {
 	ErrorBag_         string                    //nolint:revive
@@ -61,15 +62,15 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 		return nil, fmt.Errorf("inertiaframe: failed to decode session cookie: %w", err)
 	}
 
-	sess = &session{} //nolint:exhaustruct
-	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(sess); err != nil {
+	var newSess session
+	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&newSess); err != nil {
 		return nil, fmt.Errorf("inertiaframe: failed to decode session: %w", err)
 	}
 
 	// Save session for future requests.
 	*r = *r.WithContext(context.WithValue(r.Context(), kSessCtx, sess))
 
-	return sess, nil
+	return &newSess, nil
 }
 
 // ValidationErrors returns validation errors from the previous request.
