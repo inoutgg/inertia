@@ -1,10 +1,11 @@
 package inertiaheader
 
 const (
-	HeaderXInertia                 = "X-Inertia"                              // client/server
-	HeaderXInertiaVersion          = "X-Inertia-Version"                      // client
-	HeaderXInertiaLocation         = "X-Inertia-Location"                     // client/server, redirect URL
-	HeaderXInertiaRedirect         = "X-Inertia-Redirect"                     // server, redirect URL with preserved fragment
+	HeaderXInertia         = "X-Inertia"          // client/server
+	HeaderXInertiaVersion  = "X-Inertia-Version"  // client
+	HeaderXInertiaLocation = "X-Inertia-Location" // client/server, redirect URL
+	HeaderXInertiaRedirect = "X-Inertia-Redirect"
+	// server, redirect URL with preserved fragment
 	HeaderXInertiaPartialData      = "X-Inertia-Partial-Data"                 // client, whitelist
 	HeaderXInertiaPartialExcept    = "X-Inertia-Partial-Except"               // client, blacklist
 	HeaderXInertiaPartialComponent = "X-Inertia-Partial-Component"            // client

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -26,7 +27,12 @@ const (
 	// DefaultRootViewID is the default root HTML element ID to which
 	// the Inertia.js app is mounted.
 	DefaultRootViewID = "app"
+
+	ScrollMergeIntentAppend  = "append"
+	ScrollMergeIntentPrepend = "prepend"
 )
+
+var ErrInvalidScrollMergeIntent = errors.New("inertia: invalid infinite scroll merge intent")
 
 // DefaultConcurrency is the default concurrency level for props resolution
 // marked as concurrently resolvable.
@@ -143,52 +149,56 @@ func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 // Version returns the current asset version string used for client version validation.
 func (r *Renderer) Version() string { return r.version }
 
-// Render sends an Inertia page response, automatically choosing the format:
+// render returns an Inertia response, automatically choosing the format:
 //   - JSON for Inertia requests (XHR navigation)
 //   - HTML for initial page loads or non-Inertia requests
 //
 // The renderCtx configures props, validation errors, and other page-specific settings.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string, renderCtx RenderContext) error {
+func (r *Renderer) render(
+	ctx context.Context,
+	req request,
+	name string,
+	renderCtx RenderContext,
+) (resp response, err error) {
 	renderCtx.Concurrency = max(cmp.Or(renderCtx.Concurrency, r.concurrency), 0)
 
-	page, err := r.newPage(req, name, renderCtx)
+	page, err := r.newPage(ctx, req, name, renderCtx)
 	if err != nil {
-		return err
+		return resp, err
 	}
 
-	if isInertiaRequest(req) {
-		d("Received inertia request, sending JSON response: %s",
-			req.Header.Get(inertiaheader.HeaderReferer))
+	if req.IsInertia {
+		d("Received inertia request, sending JSON response: %s", req.URL)
 
-		w.Header().Set(inertiaheader.HeaderXInertia, "true")
-		w.Header().Set(inertiaheader.HeaderContentType, inertiaheader.ContentTypeJSON)
-		w.WriteHeader(http.StatusOK)
-
-		if err := json.MarshalWrite(w, page, r.jsonMarshalOptions...); err != nil {
-			return fmt.Errorf("inertia: failed to encode JSON response: %w", err)
+		body, err := json.Marshal(page, r.jsonMarshalOptions...)
+		if err != nil {
+			return resp, fmt.Errorf("inertia: failed to encode JSON response: %w", err)
 		}
 
-		return nil
+		return response{
+			Headers: map[string]string{
+				inertiaheader.HeaderXInertia:    "true",
+				inertiaheader.HeaderContentType: inertiaheader.ContentTypeJSON,
+			},
+			Body: body,
+		}, nil
 	}
-
-	w.Header().Set(inertiaheader.HeaderContentType, inertiaheader.ContentTypeHTML)
-	w.WriteHeader(http.StatusOK)
 
 	data := TemplateData{T: renderCtx.T, InertiaHead: "", InertiaBody: ""}
 
 	if r.ssrClient != nil {
-		ssrData, err := r.ssrClient.Render(req.Context(), page)
+		ssrData, err := r.ssrClient.Render(ctx, page)
 		if err != nil {
 			body, err := r.makeRootView(page)
 			if err != nil {
-				return fmt.Errorf("inertia: failed to create an HTML container: %w", err)
+				return resp, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
 			}
 
 			data.InertiaBody = body
 		} else {
 			pageScript, err := r.makePageScript(page)
 			if err != nil {
-				return fmt.Errorf("inertia: failed to create an HTML page script: %w", err)
+				return resp, fmt.Errorf("inertia: failed to create an HTML page script: %w", err)
 			}
 
 			data.InertiaHead = template.HTML(ssrData.Head)              //nolint:gosec
@@ -197,37 +207,55 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	} else {
 		body, err := r.makeRootView(page)
 		if err != nil {
-			return fmt.Errorf("inertia: failed to create an HTML container: %w", err)
+			return resp, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
 		}
 
 		data.InertiaBody = body
 	}
 
-	if err := r.t.Execute(w, &data); err != nil {
-		return fmt.Errorf("inertia: failed to execute HTML template: %w", err)
+	body := bufPool.Get().(*bytes.Buffer) //nolint:forcetypeassert
+	body.Reset()
+
+	defer func() {
+		body.Reset()
+		bufPool.Put(body)
+	}()
+
+	if err := r.t.Execute(body, &data); err != nil {
+		return resp, fmt.Errorf("inertia: failed to execute HTML template: %w", err)
 	}
 
-	return nil
+	return response{
+		Headers: map[string]string{
+			inertiaheader.HeaderContentType: inertiaheader.ContentTypeHTML,
+		},
+		Body: append([]byte(nil), body.Bytes()...),
+	}, nil
 }
 
-func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
+func (r *Renderer) newPage(
+	ctx context.Context,
+	req request,
+	componentName string,
+	renderCtx RenderContext,
+) (*Page, error) {
 	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
-	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
+	rawProps = append(rawProps, makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
-	props, err := r.makeProps(req, componentName, rawProps, renderCtx.Concurrency)
+	props, err := makeProps(ctx, req, componentName, rawProps, renderCtx.Concurrency)
 	if err != nil {
 		return nil, err
 	}
 
-	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
-	onceProps := r.makeOnceProps(rawProps)
-	scrollProps := r.makeScrollProps(rawProps)
-	mergeProps := r.makeMergeProps(
+	deferredProps := makeDeferredProps(req, componentName, rawProps)
+	onceProps := makeOnceProps(rawProps)
+	scrollProps := makeScrollProps(rawProps)
+	mergeProps := makeMergeProps(
 		rawProps,
-		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
-		req.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
+		req.ResetProps,
+		req.ScrollMergeIntent,
 	)
 
 	return &Page{
@@ -241,7 +269,7 @@ func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx Re
 		DeepMergeProps:   mergeProps.deepMerge,
 		MatchPropsOn:     mergeProps.matchOn,
 		SharedProps:      makeSharedProps(renderCtx.SharedProps),
-		URL:              req.RequestURI,
+		URL:              req.URL,
 		Version:          r.version,
 		PreserveFragment: renderCtx.PreserveFragment,
 		ClearHistory:     renderCtx.ClearHistory,
@@ -257,6 +285,7 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	}
 
 	var w strings.Builder
+
 	_ = must.Must(w.WriteString(string(pageScript)))
 
 	_ = must.Must(w.WriteString(`<div id="`))
@@ -315,37 +344,29 @@ func escapeScriptJSON(b []byte) string {
 	return s
 }
 
-func (r *Renderer) makeProps(
-	req *http.Request,
+func makeProps(
+	ctx context.Context,
+	req request,
 	componentName string,
 	props []Prop,
 	concurrency int,
 ) (map[string]any, error) {
-	ctx := req.Context()
-
 	// If the request is a partial, we need to filter the props.
-	if isPartialComponentRequest(req, componentName) {
-		whitelist := extractHeaderValueList(req.Header.Get(
-			inertiaheader.HeaderXInertiaPartialData))
-		blacklist := extractHeaderValueList(req.Header.Get(
-			inertiaheader.HeaderXInertiaPartialExcept))
-
-		return r.resolvePartialComponentRequest(
+	if req.PartialComponent == componentName {
+		return resolvePartialComponentRequest(
 			ctx,
 			props,
-			whitelist,
-			blacklist,
-			extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps)),
+			req.PartialData,
+			req.PartialExcept,
+			req.ExceptOnceProps,
 			concurrency,
 		)
 	}
 
-	exceptOnceProps := extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps))
-
 	m := make(map[string]any, len(props))
 
 	for _, prop := range props {
-		if shouldSkipOnceProp(prop, exceptOnceProps, nil) {
+		if shouldSkipOnceProp(prop, req.ExceptOnceProps, nil) {
 			continue
 		}
 
@@ -365,7 +386,7 @@ func (r *Renderer) makeProps(
 	return m, nil
 }
 
-func (r *Renderer) resolvePartialComponentRequest(
+func resolvePartialComponentRequest(
 	ctx context.Context,
 	props []Prop,
 	whitelist, blacklist, exceptOnceProps []string,
@@ -439,11 +460,11 @@ func (r *Renderer) resolvePartialComponentRequest(
 
 // makeDeferredProps creates a map of deferred props that should be resolved
 // on the client side.
-func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, props []Prop) map[string][]string {
+func makeDeferredProps(req request, componentName string, props []Prop) map[string][]string {
 	// If the request is partial, then the client already got information
 	// about the deferred props in the initial request so we don't need to
 	// send them again.
-	if isPartialComponentRequest(req, componentName) {
+	if req.PartialComponent == componentName {
 		return nil
 	}
 
@@ -464,7 +485,7 @@ func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, pr
 	return m
 }
 
-func (r *Renderer) makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
+func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 	m := make(map[string]inertiabase.OnceProp)
 
 	for _, prop := range props {
@@ -508,8 +529,8 @@ func makeSharedProps(props []Prop) []string {
 
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func (r *Renderer) makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) mergeProps {
-	m := mergeProps{}
+func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) mergeProps {
+	var m mergeProps
 
 	for _, p := range props {
 		if len(blacklist) > 0 && slices.Contains(blacklist, p.key) || !p.mergeable {
@@ -517,7 +538,7 @@ func (r *Renderer) makeMergeProps(props []Prop, blacklist []string, scrollMergeI
 		}
 
 		if p.scroll {
-			if scrollMergeIntent == "prepend" {
+			if scrollMergeIntent == ScrollMergeIntentPrepend {
 				m.prepend = append(m.prepend, p.scrollPath)
 			} else {
 				m.append = append(m.append, p.scrollPath)
@@ -543,7 +564,7 @@ func (r *Renderer) makeMergeProps(props []Prop, blacklist []string, scrollMergeI
 	return m
 }
 
-func (r *Renderer) makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
+func makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
 	m := make(map[string]inertiabase.ScrollProp)
 
 	for _, prop := range props {
@@ -574,7 +595,7 @@ func qualifyPropPath(propKey, path string) string {
 	return propKey + "." + path
 }
 
-func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
+func makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
 	m := make(map[string]string)
 
 	for _, errorer := range errorers {
@@ -608,7 +629,7 @@ type TemplateData struct {
 // For Inertia requests, it uses a 409 Conflict response with X-Inertia-Location header.
 // For regular requests, it performs a standard HTTP redirect.
 func Location(w http.ResponseWriter, r *http.Request, url string) {
-	if isInertiaRequest(r) {
+	if r.Header.Get(inertiaheader.HeaderXInertia) == "true" {
 		h := w.Header()
 
 		h.Del(inertiaheader.HeaderVary)
@@ -629,7 +650,7 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 
 // RedirectPreserveFragment redirects while instructing Inertia to preserve the current URL fragment.
 func RedirectPreserveFragment(w http.ResponseWriter, r *http.Request, url string) {
-	if isInertiaRequest(r) {
+	if r.Header.Get(inertiaheader.HeaderXInertia) == "true" {
 		h := w.Header()
 
 		h.Del(inertiaheader.HeaderVary)
@@ -654,31 +675,6 @@ func ErrorBagFromRequest(r *http.Request) string {
 	}
 
 	return errorBag
-}
-
-// isInertiaRequest checks if the request is made by Inertia.js.
-func isInertiaRequest(req *http.Request) bool {
-	return req.Header.Get(inertiaheader.HeaderXInertia) == "true"
-}
-
-// isPartialComponentRequest checks if the request is a partial component request
-// matching the given componentName.
-func isPartialComponentRequest(req *http.Request, componentName string) bool {
-	return req.Header.Get(inertiaheader.HeaderXInertiaPartialComponent) == componentName
-}
-
-// extractHeaderValueList extracts a list of values from a comma-separated inertiaheader.Header value.
-func extractHeaderValueList(h string) []string {
-	if h == "" {
-		return nil
-	}
-
-	fields := strings.Split(h, ",")
-	for i, f := range fields {
-		fields[i] = strings.TrimSpace(f)
-	}
-
-	return fields
 }
 
 // pair is a key-value pair.

@@ -12,7 +12,9 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 )
 
-type ctxKey struct{}
+type (
+	ctxKey struct{}
+)
 
 //nolint:gochecknoglobals
 var kCtxKey = ctxKey{}
@@ -32,6 +34,11 @@ var DefaultVersionMismatchHandler = func(w http.ResponseWriter, r *http.Request)
 	Location(w, r, r.RequestURI)
 }
 
+//nolint:gochecknoglobals
+var DefaultInvalidRequestHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+	http.Error(w, err.Error(), http.StatusBadRequest)
+}
+
 // MiddlewareConfig configures the behavior of the Inertia.js middleware.
 type MiddlewareConfig struct {
 	// EmptyResponseHandler is called when a handler produces no response body.
@@ -43,6 +50,9 @@ type MiddlewareConfig struct {
 	//
 	// If nil, defaults to redirecting the client to the current URL to reload the page with fresh assets.
 	VersionMismatchHandler http.HandlerFunc
+
+	// InvalidRequestHandler is called before the handler when Inertia request headers are invalid.
+	InvalidRequestHandler func(http.ResponseWriter, *http.Request, error)
 }
 
 func (m *MiddlewareConfig) defaults() {
@@ -54,8 +64,13 @@ func (m *MiddlewareConfig) defaults() {
 		m.VersionMismatchHandler = DefaultVersionMismatchHandler
 	}
 
+	if m.InvalidRequestHandler == nil {
+		m.InvalidRequestHandler = DefaultInvalidRequestHandler
+	}
+
 	debug.Assert(m.EmptyResponseHandler != nil, "EmptyResponseHandler must be set")
 	debug.Assert(m.VersionMismatchHandler != nil, "VersionMismatchHandler must be set")
+	debug.Assert(m.InvalidRequestHandler != nil, "InvalidRequestHandler must be set")
 }
 
 // NewMiddleware creates an HTTP middleware that enables Inertia.js protocol handling.
@@ -76,20 +91,24 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req, err := parseRequest(r)
+			if err != nil {
+				config.InvalidRequestHandler(w, r, err)
+				return
+			}
+
 			h := w.Header()
 			r = r.WithContext(context.WithValue(r.Context(), kCtxKey, renderer))
 
 			h.Set(inertiaheader.HeaderVary, inertiaheader.HeaderXInertia)
 
-			if !isInertiaRequest(r) {
+			if !req.IsInertia {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			clientVersion := r.Header.Get(inertiaheader.HeaderXInertiaVersion)
-
 			serverVersion := renderer.Version()
-			if r.Method == http.MethodGet && clientVersion != serverVersion {
+			if r.Method == http.MethodGet && req.Version != serverVersion {
 				config.VersionMismatchHandler(w, r)
 				return
 			}
@@ -254,9 +273,22 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx R
 		)
 	}
 
-	if err := render.Render(w, r, componentName, rCtx); err != nil {
+	req, err := parseRequest(r)
+	if err != nil {
 		return err
 	}
+
+	resp, err := render.render(r.Context(), req, componentName, rCtx)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range resp.Headers {
+		w.Header().Set(key, value)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	must.Must(w.Write(resp.Body))
 
 	return nil
 }
