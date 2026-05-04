@@ -94,9 +94,8 @@ func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, error
 //nolint:gochecknoglobals
 var DefaultErrorHandler httphandler.ErrorHandler = httphandler.ErrorHandlerFunc(
 	func(w http.ResponseWriter, r *http.Request, err error) {
-		var errorer inertia.ValidationErrorer
-		if errors.As(err, &errorer) {
-			DefaultValidationErrorHandler(w, r, errorer)
+		if err, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
+			DefaultValidationErrorHandler(w, r, err)
 			return
 		}
 

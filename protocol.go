@@ -30,9 +30,10 @@ type response struct {
 }
 
 func parseRequest(r *http.Request) (request, error) {
+	//nolint:exhaustruct
 	req := request{
 		URL:       r.RequestURI,
-		IsInertia: r.Header.Get(inertiaheader.HeaderXInertia) == "true",
+		IsInertia: r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue,
 	}
 
 	if !req.IsInertia {

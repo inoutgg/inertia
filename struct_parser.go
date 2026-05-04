@@ -169,8 +169,12 @@ func ParseStruct(v any) (Props, error) {
 				fieldName,
 				fn,
 				&DeferredOptions{
+					Once:       nil,
 					Merge:      mergeable,
 					Group:      cmp.Or(inertiaGroup, DefaultDeferredGroup),
+					MatchOn:    nil,
+					Prepend:    false,
+					DeepMerge:  false,
 					Concurrent: concurrent,
 				},
 			)
@@ -180,7 +184,13 @@ func ParseStruct(v any) (Props, error) {
 			prop = NewProp(
 				fieldName,
 				fieldVal.Interface(),
-				&PropOptions{Merge: mergeable},
+				&PropOptions{
+					Once:      nil,
+					MatchOn:   nil,
+					Merge:     mergeable,
+					Prepend:   false,
+					DeepMerge: false,
+				},
 			)
 		default:
 			return nil, fmt.Errorf("inertiaframe: unknown field type %q", fieldType)

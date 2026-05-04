@@ -96,7 +96,7 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 		prop.prepend = opts.Prepend
 		prop.deepMerge = opts.DeepMerge
 		prop.matchOn = opts.MatchOn
-		prop.applyOnceOptions(key, opts.Once)
+		prop = applyOnceOptions(prop, key, opts.Once)
 		prop.concurrent = opts.Concurrent
 	}
 
@@ -140,6 +140,7 @@ type OnceOptions struct {
 
 // NewOnce creates a prop remembered by the client and skipped on subsequent visits.
 func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
+	//nolint:exhaustruct
 	prop := Prop{
 		ignorable: true, // important
 		key:       key,
@@ -147,12 +148,11 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 	}
 
 	if opts == nil {
+		//nolint:exhaustruct
 		opts = &OnceOptions{}
 	}
 
-	prop.applyOnceOptions(key, opts)
-
-	return prop
+	return applyOnceOptions(prop, key, opts)
 }
 
 // ScrollPage is a page number or cursor supported by Inertia infinite scroll metadata.
@@ -196,7 +196,13 @@ func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) 
 
 // NewScroll creates an infinite scroll prop with v3 scroll metadata.
 func NewScroll(key string, value any, opts *ScrollOptions) Prop {
-	prop := NewProp(key, value, &PropOptions{Merge: true})
+	prop := NewProp(key, value, &PropOptions{
+		Once:      nil,
+		MatchOn:   nil,
+		Merge:     true,
+		Prepend:   false,
+		DeepMerge: false,
+	})
 	if lazy, ok := value.(Lazy); ok {
 		prop.val = nil
 		prop.valFn = lazy
@@ -238,21 +244,23 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 		prop.prepend = opts.Prepend
 		prop.deepMerge = opts.DeepMerge
 		prop.matchOn = opts.MatchOn
-		prop.applyOnceOptions(key, opts.Once)
+		prop = applyOnceOptions(prop, key, opts.Once)
 	}
 
 	return prop
 }
 
-func (p *Prop) applyOnceOptions(defaultKey string, opts *OnceOptions) {
+func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 	if opts == nil {
-		return
+		return prop
 	}
 
-	p.once = true
-	p.onceKey = cmp.Or(opts.Key, defaultKey)
-	p.expiresAt = opts.ExpiresAt
-	p.fresh = opts.Fresh
+	prop.once = true
+	prop.onceKey = cmp.Or(opts.Key, defaultKey)
+	prop.expiresAt = opts.ExpiresAt
+	prop.fresh = opts.Fresh
+
+	return prop
 }
 
 func (p Prop) Props() []Prop { return []Prop{p} }
