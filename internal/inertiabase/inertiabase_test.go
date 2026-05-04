@@ -32,6 +32,7 @@ func TestPageJSONIncludesV3OptionalFields(t *testing.T) {
 	t.Parallel()
 
 	// arrange
+	expiresAt := int64(123)
 	page := Page{
 		Props:            map[string]any{"errors": map[string]any{}},
 		Component:        "Users/Index",
@@ -56,7 +57,7 @@ func TestPageJSONIncludesV3OptionalFields(t *testing.T) {
 		OnceProps: map[string]OnceProp{
 			"plans": {
 				Prop:      "plans",
-				ExpiresAt: nil,
+				ExpiresAt: &expiresAt,
 			},
 		},
 	}
@@ -75,4 +76,5 @@ func TestPageJSONIncludesV3OptionalFields(t *testing.T) {
 	assert.Contains(t, string(b), `"clearHistory":true`)
 	assert.Contains(t, string(b), `"scrollProps":{"users"`)
 	assert.Contains(t, string(b), `"onceProps":{"plans"`)
+	assert.Contains(t, string(b), `"expiresAt":123`)
 }

@@ -33,11 +33,11 @@ type Prop struct {
 	matchOn    []string
 	once       bool
 	onceKey    string
-	expiresAt  any
+	expiresAt  *int64
 	fresh      bool
 	scroll     bool
 	scrollPath string
-	scrollMeta ScrollMetadata
+	scrollMeta scrollMetadata
 	deferred   bool
 	lazy       bool // optional, deferred
 	ignorable  bool // false if always prop
@@ -158,8 +158,8 @@ type OnceOptions struct {
 	// Key is the client-side remembered key. Defaults to the prop key.
 	Key string
 
-	// ExpiresAt is emitted as once prop expiration metadata.
-	ExpiresAt any
+	// ExpiresAt is emitted as a Unix millisecond expiration timestamp.
+	ExpiresAt *int64
 
 	// Fresh forces the prop to resolve even if the client has already loaded it.
 	Fresh bool
@@ -182,8 +182,20 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 	return prop
 }
 
+// ScrollPage is a page number or cursor supported by Inertia infinite scroll metadata.
+type ScrollPage interface {
+	~int | ~int64 | ~string
+}
+
 // ScrollMetadata configures pagination metadata for infinite scroll props.
-type ScrollMetadata struct {
+type ScrollMetadata[T ScrollPage] struct {
+	PageName     string
+	PreviousPage *T
+	NextPage     *T
+	CurrentPage  *T
+}
+
+type scrollMetadata struct {
 	PageName     string
 	PreviousPage any
 	NextPage     any
@@ -196,7 +208,20 @@ type ScrollOptions struct {
 	Wrapper string
 
 	// Metadata is emitted as scrollProps for the client component.
-	Metadata ScrollMetadata
+	Metadata scrollMetadata
+}
+
+// NewScrollOptions creates type-safe infinite scroll options.
+func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) *ScrollOptions {
+	return &ScrollOptions{
+		Wrapper: wrapper,
+		Metadata: scrollMetadata{
+			PageName:     metadata.PageName,
+			PreviousPage: metadata.PreviousPage,
+			NextPage:     metadata.NextPage,
+			CurrentPage:  metadata.CurrentPage,
+		},
+	}
 }
 
 // NewScroll creates an infinite scroll prop with v3 scroll metadata.

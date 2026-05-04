@@ -793,18 +793,21 @@ func TestRenderer_Render(t *testing.T) {
 			}),
 			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
 			componentName: "TestComponent",
-			options: []Option{
-				WithProps(Props{
-					NewScroll("users", map[string]any{"data": []string{"one"}}, &ScrollOptions{
-						Metadata: ScrollMetadata{
+			options: func() []Option {
+				nextPage := 2
+				currentPage := 1
+
+				return []Option{
+					WithProps(Props{
+						NewScroll("users", map[string]any{"data": []string{"one"}}, NewScrollOptions("", ScrollMetadata[int]{
 							PageName:     "page",
 							PreviousPage: nil,
-							NextPage:     2,
-							CurrentPage:  1,
-						},
+							NextPage:     &nextPage,
+							CurrentPage:  &currentPage,
+						})),
 					}),
-				}),
-			},
+				}
+			}(),
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
 			expectError:        false,
