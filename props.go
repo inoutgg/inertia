@@ -28,6 +28,16 @@ type Prop struct {
 	key        string
 	group      string // deferred
 	mergeable  bool
+	prepend    bool
+	deepMerge  bool
+	matchOn    []string
+	once       bool
+	onceKey    string
+	expiresAt  any
+	fresh      bool
+	scroll     bool
+	scrollPath string
+	scrollMeta ScrollMetadata
 	deferred   bool
 	lazy       bool // optional, deferred
 	ignorable  bool // false if always prop
@@ -47,6 +57,18 @@ type DeferredOptions struct {
 	// If true, the prop value is merged with the existing client-side value.
 	// If false, the value is replaced entirely. Defaults to false.
 	Merge bool
+
+	// Prepend marks the prop for prepend merging instead of append merging.
+	Prepend bool
+
+	// DeepMerge marks the prop for deep merging.
+	DeepMerge bool
+
+	// MatchOn configures prop-relative paths used to match items while merging.
+	MatchOn []string
+
+	// Once configures the prop to be remembered and reused by the client.
+	Once *OnceOptions
 
 	// Concurrent enables parallel resolution for this prop.
 	//
@@ -93,6 +115,10 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 	if opts != nil {
 		prop.group = cmp.Or(opts.Group, DefaultDeferredGroup)
 		prop.mergeable = opts.Merge
+		prop.prepend = opts.Prepend
+		prop.deepMerge = opts.DeepMerge
+		prop.matchOn = opts.MatchOn
+		prop.applyOnceOptions(key, opts.Once)
 		prop.concurrent = opts.Concurrent
 	}
 
@@ -127,10 +153,87 @@ func NewOptional(key string, fn Lazy) Prop {
 	}
 }
 
+// OnceOptions configures once prop behavior.
+type OnceOptions struct {
+	// Key is the client-side remembered key. Defaults to the prop key.
+	Key string
+
+	// ExpiresAt is emitted as once prop expiration metadata.
+	ExpiresAt any
+
+	// Fresh forces the prop to resolve even if the client has already loaded it.
+	Fresh bool
+}
+
+// NewOnce creates a prop remembered by the client and skipped on subsequent visits.
+func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
+	prop := Prop{
+		ignorable: true, // important
+		key:       key,
+		valFn:     fn,
+	}
+
+	if opts == nil {
+		opts = &OnceOptions{}
+	}
+
+	prop.applyOnceOptions(key, opts)
+
+	return prop
+}
+
+// ScrollMetadata configures pagination metadata for infinite scroll props.
+type ScrollMetadata struct {
+	PageName     string
+	PreviousPage any
+	NextPage     any
+	CurrentPage  any
+}
+
+// ScrollOptions configures infinite scroll prop behavior.
+type ScrollOptions struct {
+	// Wrapper is the nested data path to merge. Defaults to "data".
+	Wrapper string
+
+	// Metadata is emitted as scrollProps for the client component.
+	Metadata ScrollMetadata
+}
+
+// NewScroll creates an infinite scroll prop with v3 scroll metadata.
+func NewScroll(key string, value any, opts *ScrollOptions) Prop {
+	prop := NewProp(key, value, &PropOptions{Merge: true})
+	if lazy, ok := value.(Lazy); ok {
+		prop.val = nil
+		prop.valFn = lazy
+	}
+
+	prop.scroll = true
+	prop.scrollPath = key + ".data"
+
+	if opts != nil {
+		prop.scrollPath = qualifyPropPath(key, cmp.Or(opts.Wrapper, "data"))
+		prop.scrollMeta = opts.Metadata
+	}
+
+	return prop
+}
+
 // PropOptions configures standard prop behavior.
 type PropOptions struct {
 	// Merge determines whether this prop's value is merged or replaced during partial reloads.
 	Merge bool
+
+	// Prepend marks the prop for prepend merging instead of append merging.
+	Prepend bool
+
+	// DeepMerge marks the prop for deep merging.
+	DeepMerge bool
+
+	// MatchOn configures prop-relative paths used to match items while merging.
+	MatchOn []string
+
+	// Once configures the prop to be remembered and reused by the client.
+	Once *OnceOptions
 }
 
 // NewProp creates a standard prop included on initial page load and partial reloads.
@@ -146,9 +249,24 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 
 	if opts != nil {
 		prop.mergeable = opts.Merge
+		prop.prepend = opts.Prepend
+		prop.deepMerge = opts.DeepMerge
+		prop.matchOn = opts.MatchOn
+		prop.applyOnceOptions(key, opts.Once)
 	}
 
 	return prop
+}
+
+func (p *Prop) applyOnceOptions(defaultKey string, opts *OnceOptions) {
+	if opts == nil {
+		return
+	}
+
+	p.once = true
+	p.onceKey = cmp.Or(opts.Key, defaultKey)
+	p.expiresAt = opts.ExpiresAt
+	p.fresh = opts.Fresh
 }
 
 func (p Prop) Props() []Prop { return []Prop{p} }

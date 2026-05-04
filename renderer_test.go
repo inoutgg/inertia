@@ -219,10 +219,14 @@ func TestRenderer_Render(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
+				// arrange
 				bodyStr := string(body)
-				assert.Contains(t, bodyStr, `<div id="app" data-page="`)
-				assert.Contains(t, bodyStr, template.HTMLEscapeString(`"component":"TestComponent"`))
-				assert.Contains(t, bodyStr, template.HTMLEscapeString(`"version":"1.0.0"`))
+
+				// act/assert
+				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
+				assert.Contains(t, bodyStr, `"component":"TestComponent"`)
+				assert.Contains(t, bodyStr, `"version":"1.0.0"`)
+				assert.Contains(t, bodyStr, `</script><div id="app" `)
 			},
 		},
 		{
@@ -274,25 +278,35 @@ func TestRenderer_Render(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
+				// arrange
 				bodyStr := string(body)
+
+				// act/assert
+				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
 				assert.Contains(t, bodyStr, "<title>SSR Title</title>")
 				assert.Contains(t, bodyStr, "<div>SSR Content</div>")
 			},
 		},
 		{
-			name: "ssr with error - returns error",
+			name: "ssr with error - falls back to client rendering",
 			renderer: New(basicTpl, &Config{
 				Version:   "1.0.0",
 				SSRClient: errorMockSsrClient,
 			}),
-			reqConfig:     &inertiatest.RequestConfig{},
-			componentName: "TestComponent",
-			options:       []Option{},
-			expectError:   true,
-			validateResponse: func(t *testing.T, _ []byte) {
+			reqConfig:          &inertiatest.RequestConfig{},
+			componentName:      "TestComponent",
+			options:            []Option{},
+			expectedStatusCode: http.StatusOK,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
-				// No validation needed as we expect an error
+				// arrange
+				bodyStr := string(body)
+
+				// act/assert
+				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
+				assert.Contains(t, bodyStr, `<div id="app" `)
 			},
 		},
 		{
@@ -315,10 +329,15 @@ func TestRenderer_Render(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
+				// arrange
 				bodyStr := string(body)
-				assert.Contains(t, bodyStr, `<div id="app" data-page="`)
+
+				// act/assert
+				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
+				assert.Contains(t, bodyStr, `<div id="app" `)
 				assert.Contains(t, bodyStr, `class="container"`)
 				assert.Contains(t, bodyStr, `data-test="value"`)
+				assert.NotContains(t, bodyStr, `should-be-skipped`)
 			},
 		},
 		{
@@ -478,7 +497,7 @@ func TestRenderer_Render(t *testing.T) {
 			},
 		},
 		{
-			name: "with lazy props",
+			name: "with deferred props",
 			renderer: New(basicTpl, &Config{
 				Version:    "1.0.0",
 				RootViewID: "app",
@@ -489,7 +508,7 @@ func TestRenderer_Render(t *testing.T) {
 				WithProps(Props{
 					NewProp("visible", "Visible Content", nil),
 					NewDeferred(
-						"lazy",
+						"deferred",
 						LazyFunc(
 							func(context.Context) (any, error) { return "Lazy Content", nil },
 						),
@@ -522,7 +541,7 @@ func TestRenderer_Render(t *testing.T) {
 				group1, ok := deferredProps["group1"].([]any)
 				require.True(t, ok, "group1 not found in deferredProps")
 
-				assert.Contains(t, group1, "lazy", "lazy not found in group1")
+				assert.Contains(t, group1, "deferred", "deferred not found in group1")
 			},
 		},
 		{
@@ -604,6 +623,282 @@ func TestRenderer_Render(t *testing.T) {
 			},
 		},
 		{
+			name: "with v3 merge metadata",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewProp("posts", []string{"one"}, &PropOptions{
+						Merge:   true,
+						MatchOn: []string{"id"},
+					}),
+					NewProp("notifications", []string{"one"}, &PropOptions{
+						Merge:   true,
+						Prepend: true,
+						MatchOn: []string{"uuid"},
+					}),
+					NewProp("conversation", map[string]any{"messages": []string{"one"}}, &PropOptions{
+						Merge:     true,
+						DeepMerge: true,
+						MatchOn:   []string{"messages.id"},
+					}),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				assert.Contains(t, page["mergeProps"], "posts")
+				assert.Contains(t, page["prependProps"], "notifications")
+				assert.Contains(t, page["deepMergeProps"], "conversation")
+				assert.ElementsMatch(t, []any{
+					"posts.id",
+					"notifications.uuid",
+					"conversation.messages.id",
+				}, page["matchPropsOn"])
+			},
+		},
+		{
+			name: "with once prop metadata",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewOnce("plans", LazyFunc(func(context.Context) (any, error) {
+						return []string{"basic"}, nil
+					}), nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				props := page["props"].(map[string]any)
+				assert.Contains(t, props, "plans")
+
+				onceProps := page["onceProps"].(map[string]any)
+				plans := onceProps["plans"].(map[string]any)
+				assert.Equal(t, "plans", plans["prop"])
+				assert.Nil(t, plans["expiresAt"])
+			},
+		},
+		{
+			name: "skips already loaded once prop",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig: &inertiatest.RequestConfig{
+				Inertia:   true,
+				OnceProps: []string{"plans"},
+			},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewOnce("plans", LazyFunc(func(context.Context) (any, error) {
+						return []string{"basic"}, nil
+					}), nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				props := page["props"].(map[string]any)
+				assert.NotContains(t, props, "plans")
+				assert.Contains(t, page, "onceProps")
+			},
+		},
+		{
+			name: "explicit partial reload resolves once prop",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig: &inertiatest.RequestConfig{
+				Inertia:          true,
+				PartialComponent: "TestComponent",
+				Whitelist:        []string{"plans"},
+				OnceProps:        []string{"plans"},
+			},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewOnce("plans", LazyFunc(func(context.Context) (any, error) {
+						return []string{"basic"}, nil
+					}), nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				props := page["props"].(map[string]any)
+				assert.Contains(t, props, "plans")
+			},
+		},
+		{
+			name: "with infinite scroll metadata",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewScroll("users", map[string]any{"data": []string{"one"}}, &ScrollOptions{
+						Metadata: ScrollMetadata{
+							PageName:     "page",
+							PreviousPage: nil,
+							NextPage:     2,
+							CurrentPage:  1,
+						},
+					}),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				assert.Contains(t, page["mergeProps"], "users.data")
+
+				scrollProps := page["scrollProps"].(map[string]any)
+				users := scrollProps["users"].(map[string]any)
+				assert.Equal(t, "page", users["pageName"])
+				assert.Nil(t, users["previousPage"])
+				assert.InEpsilon(t, 2, users["nextPage"], 0)
+				assert.InEpsilon(t, 1, users["currentPage"], 0)
+			},
+		},
+		{
+			name: "infinite scroll prepend intent",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig: &inertiatest.RequestConfig{
+				Inertia:           true,
+				ScrollMergeIntent: "prepend",
+			},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewScroll("users", map[string]any{"data": []string{"one"}}, nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				assert.NotContains(t, page, "mergeProps")
+				assert.Contains(t, page["prependProps"], "users.data")
+			},
+		},
+		{
+			name: "with shared props metadata",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
+			componentName: "TestComponent",
+			options: []Option{
+				WithSharedProps(Props{
+					NewProp("auth", "shared", nil),
+				}),
+				WithProps(Props{
+					NewProp("auth", "response", nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				props := page["props"].(map[string]any)
+				assert.Equal(t, "response", props["auth"])
+				assert.Contains(t, page["sharedProps"], "auth")
+			},
+		},
+		{
 			name: "clear history flag",
 			renderer: New(basicTpl, &Config{
 				Version:    "1.0.0",
@@ -653,6 +948,34 @@ func TestRenderer_Render(t *testing.T) {
 				assert.True(t, encryptHistory, "encryptHistory should be true")
 			},
 		},
+		{
+			name: "preserve fragment flag",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig:          &inertiatest.RequestConfig{Inertia: true},
+			componentName:      "TestComponent",
+			options:            []Option{WithPreserveFragment()},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				preserveFragment, ok := page["preserveFragment"].(bool)
+				require.True(t, ok, "preserveFragment not found or not a boolean")
+				assert.True(t, preserveFragment, "preserveFragment should be true")
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -694,7 +1017,7 @@ func TestRenderer_Render(t *testing.T) {
 				tt.validateResponse(t, w.Body.Bytes())
 			}
 
-			// Keep backward compatibility check for non-JSON responses
+			// Check expected HTML fragments.
 			if !tt.expectJSON && len(tt.expectedBodyContains) > 0 {
 				responseBody := w.Body.String()
 				for _, expected := range tt.expectedBodyContains {
@@ -902,6 +1225,41 @@ func TestRedirect(t *testing.T) {
 
 		// assert
 		assert.Equal(t, http.StatusSeeOther, w.Code)
+		assert.Equal(t, "/target", w.Header().Get("Location"))
+	})
+}
+
+func TestRedirectPreserveFragment(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Inertia request returns fragment redirect response", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		req, w := inertiatest.NewRequest(http.MethodGet, "/current", &inertiatest.RequestConfig{
+			Inertia: true,
+		})
+
+		// act
+		RedirectPreserveFragment(w, req, "/target")
+
+		// assert
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Equal(t, "/target", w.Header().Get(inertiaheader.HeaderXInertiaRedirect))
+		assert.Empty(t, w.Header().Get(inertiaheader.HeaderXInertiaLocation))
+	})
+
+	t.Run("non-Inertia request uses regular redirect", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		req, w := inertiatest.NewRequest(http.MethodGet, "/current", nil)
+
+		// act
+		RedirectPreserveFragment(w, req, "/target")
+
+		// assert
+		assert.Equal(t, http.StatusFound, w.Code)
 		assert.Equal(t, "/target", w.Header().Get("Location"))
 	})
 }

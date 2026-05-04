@@ -100,6 +100,31 @@ func TestMiddleware(t *testing.T) {
 		assert.NotEmpty(t, w.Header().Get(inertiaheader.HeaderXInertiaLocation))
 	})
 
+	t.Run("non-GET version mismatch continues request", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("continued"))
+		})
+
+		renderer := New(tpl, &Config{Version: "2.0.0"})
+		r, w := inertiatest.NewRequest(http.MethodPost, "/inertia", &inertiatest.RequestConfig{
+			Inertia: true,
+			Version: "1.0.0",
+		})
+
+		// act
+		middleware := newMiddleware(handler, renderer)
+		middleware.ServeHTTP(w, r)
+
+		// assert
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "continued", w.Body.String())
+		assert.Empty(t, w.Header().Get(inertiaheader.HeaderXInertiaLocation))
+	})
+
 	t.Run("version mismatch triggers custom handler", func(t *testing.T) {
 		t.Parallel()
 
