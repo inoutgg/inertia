@@ -159,12 +159,12 @@ func (r *Renderer) render(
 	req request,
 	name string,
 	renderCtx RenderContext,
-) (resp response, err error) {
+) (response, error) {
 	renderCtx.Concurrency = max(cmp.Or(renderCtx.Concurrency, r.concurrency), 0)
 
 	page, err := r.newPage(ctx, req, name, renderCtx)
 	if err != nil {
-		return resp, err
+		return response{}, err
 	}
 
 	if req.IsInertia {
@@ -172,12 +172,12 @@ func (r *Renderer) render(
 
 		body, err := json.Marshal(page, r.jsonMarshalOptions...)
 		if err != nil {
-			return resp, fmt.Errorf("inertia: failed to encode JSON response: %w", err)
+			return response{}, fmt.Errorf("inertia: failed to encode JSON response: %w", err)
 		}
 
 		return response{
 			Headers: map[string]string{
-				inertiaheader.HeaderXInertia:    "true",
+				inertiaheader.HeaderXInertia:    inertiaheader.HeaderValueTrue,
 				inertiaheader.HeaderContentType: inertiaheader.ContentTypeJSON,
 			},
 			Body: body,
@@ -191,14 +191,14 @@ func (r *Renderer) render(
 		if err != nil {
 			body, err := r.makeRootView(page)
 			if err != nil {
-				return resp, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
+				return response{}, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
 			}
 
 			data.InertiaBody = body
 		} else {
 			pageScript, err := r.makePageScript(page)
 			if err != nil {
-				return resp, fmt.Errorf("inertia: failed to create an HTML page script: %w", err)
+				return response{}, fmt.Errorf("inertia: failed to create an HTML page script: %w", err)
 			}
 
 			data.InertiaHead = template.HTML(ssrData.Head)              //nolint:gosec
@@ -207,7 +207,7 @@ func (r *Renderer) render(
 	} else {
 		body, err := r.makeRootView(page)
 		if err != nil {
-			return resp, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
+			return response{}, fmt.Errorf("inertia: failed to create an HTML container: %w", err)
 		}
 
 		data.InertiaBody = body
@@ -222,7 +222,7 @@ func (r *Renderer) render(
 	}()
 
 	if err := r.t.Execute(body, &data); err != nil {
-		return resp, fmt.Errorf("inertia: failed to execute HTML template: %w", err)
+		return response{}, fmt.Errorf("inertia: failed to execute HTML template: %w", err)
 	}
 
 	return response{
@@ -532,32 +532,32 @@ func makeSharedProps(props []Prop) []string {
 func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) mergeProps {
 	var m mergeProps
 
-	for _, p := range props {
-		if len(blacklist) > 0 && slices.Contains(blacklist, p.key) || !p.mergeable {
+	for _, prop := range props {
+		if len(blacklist) > 0 && slices.Contains(blacklist, prop.key) || !prop.mergeable {
 			continue
 		}
 
-		if p.scroll {
+		if prop.scroll {
 			if scrollMergeIntent == ScrollMergeIntentPrepend {
-				m.prepend = append(m.prepend, p.scrollPath)
+				m.prepend = append(m.prepend, prop.scrollPath)
 			} else {
-				m.append = append(m.append, p.scrollPath)
+				m.append = append(m.append, prop.scrollPath)
 			}
 
 			continue
 		}
 
 		switch {
-		case p.deepMerge:
-			m.deepMerge = append(m.deepMerge, p.key)
-		case p.prepend:
-			m.prepend = append(m.prepend, p.key)
+		case prop.deepMerge:
+			m.deepMerge = append(m.deepMerge, prop.key)
+		case prop.prepend:
+			m.prepend = append(m.prepend, prop.key)
 		default:
-			m.append = append(m.append, p.key)
+			m.append = append(m.append, prop.key)
 		}
 
-		for _, matchOn := range p.matchOn {
-			m.matchOn = append(m.matchOn, qualifyPropPath(p.key, matchOn))
+		for _, matchOn := range prop.matchOn {
+			m.matchOn = append(m.matchOn, qualifyPropPath(prop.key, matchOn))
 		}
 	}
 
@@ -629,7 +629,7 @@ type TemplateData struct {
 // For Inertia requests, it uses a 409 Conflict response with X-Inertia-Location header.
 // For regular requests, it performs a standard HTTP redirect.
 func Location(w http.ResponseWriter, r *http.Request, url string) {
-	if r.Header.Get(inertiaheader.HeaderXInertia) == "true" {
+	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
 		h := w.Header()
 
 		h.Del(inertiaheader.HeaderVary)
@@ -650,7 +650,7 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 
 // RedirectPreserveFragment redirects while instructing Inertia to preserve the current URL fragment.
 func RedirectPreserveFragment(w http.ResponseWriter, r *http.Request, url string) {
-	if r.Header.Get(inertiaheader.HeaderXInertia) == "true" {
+	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
 		h := w.Header()
 
 		h.Del(inertiaheader.HeaderVary)

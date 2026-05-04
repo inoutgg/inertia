@@ -45,7 +45,7 @@ func TestSsrRender(t *testing.T) {
 			assert.NoError(t, err)
 
 			var requestPage inertiabase.Page
-			require.NoError(t, json.Unmarshal(buf, &requestPage))
+			assert.NoError(t, json.Unmarshal(buf, &requestPage))
 
 			assert.Equal(t, page.Component, requestPage.Component)
 			assert.Equal(t, page.Props["foo"], requestPage.Props["foo"])

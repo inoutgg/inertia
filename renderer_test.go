@@ -707,11 +707,15 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props := page["props"].(map[string]any)
+				props, ok := page["props"].(map[string]any)
+				require.True(t, ok)
 				assert.Contains(t, props, "plans")
 
-				onceProps := page["onceProps"].(map[string]any)
-				plans := onceProps["plans"].(map[string]any)
+				onceProps, ok := page["onceProps"].(map[string]any)
+				require.True(t, ok)
+
+				plans, ok := onceProps["plans"].(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "plans", plans["prop"])
 				assert.Nil(t, plans["expiresAt"])
 			},
@@ -749,7 +753,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props := page["props"].(map[string]any)
+				props, ok := page["props"].(map[string]any)
+				require.True(t, ok)
 				assert.NotContains(t, props, "plans")
 				assert.Contains(t, page, "onceProps")
 			},
@@ -789,7 +794,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props := page["props"].(map[string]any)
+				props, ok := page["props"].(map[string]any)
+				require.True(t, ok)
 				assert.Contains(t, props, "plans")
 			},
 		},
@@ -836,8 +842,11 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				require.NoError(t, err, "Failed to parse response JSON")
 				assert.Contains(t, page["mergeProps"], "users.data")
 
-				scrollProps := page["scrollProps"].(map[string]any)
-				users := scrollProps["users"].(map[string]any)
+				scrollProps, ok := page["scrollProps"].(map[string]any)
+				require.True(t, ok)
+
+				users, ok := scrollProps["users"].(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "page", users["pageName"])
 				assert.Nil(t, users["previousPage"])
 				assert.InEpsilon(t, 2, users["nextPage"], 0)
@@ -965,7 +974,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				props := page["props"].(map[string]any)
+				props, ok := page["props"].(map[string]any)
+				require.True(t, ok)
 				assert.Equal(t, "response", props["auth"])
 				assert.Contains(t, page["sharedProps"], "auth")
 			},
@@ -1074,7 +1084,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				assert.Error(t, err, "expected an error but got none")
 
 				if tt.expectedError != nil {
-					assert.ErrorIs(t, err, tt.expectedError)
+					require.ErrorIs(t, err, tt.expectedError)
 				}
 
 				return

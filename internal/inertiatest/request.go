@@ -36,7 +36,7 @@ func NewRequest(
 	config = cmp.Or(config, &RequestConfig{})
 
 	if config.Inertia {
-		r.Header.Set(inertiaheader.HeaderXInertia, "true")
+		r.Header.Set(inertiaheader.HeaderXInertia, inertiaheader.HeaderValueTrue)
 	}
 
 	if config.Version != "" {
