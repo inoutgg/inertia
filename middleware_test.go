@@ -204,6 +204,114 @@ func TestMiddleware(t *testing.T) {
 		assert.True(t, called)
 	})
 
+	t.Run("invalid request is rejected before handler executes", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			configure func(*http.Request)
+			name      string
+		}{
+			{
+				name: "invalid scroll merge intent",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaScrollMerge, "sideways")
+				},
+			},
+			{
+				name: "empty partial data value",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, "Users/Index")
+					r.Header.Set(inertiaheader.HeaderXInertiaPartialData, "users,,roles")
+				},
+			},
+			{
+				name: "empty partial except value",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, "Users/Index")
+					r.Header.Set(inertiaheader.HeaderXInertiaPartialExcept, "users, ")
+				},
+			},
+			{
+				name: "empty reset value",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaReset, "users,,roles")
+				},
+			},
+			{
+				name: "empty once prop value",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaExceptOnceProps, "plans,,rates")
+				},
+			},
+			{
+				name: "missing partial component",
+				configure: func(r *http.Request) {
+					r.Header.Set(inertiaheader.HeaderXInertiaPartialData, "users")
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				// arrange
+				executed := false
+				handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					executed = true
+
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+					Inertia: true,
+				})
+				tc.configure(r)
+
+				// act
+				middleware := newMiddleware(handler, New(tpl, &Config{Version: ""}))
+				middleware.ServeHTTP(w, r)
+
+				// assert
+				assert.False(t, executed)
+				assert.Equal(t, http.StatusBadRequest, w.Code)
+				assert.Contains(t, w.Body.String(), "inertia: invalid")
+			})
+		}
+	})
+
+	t.Run("valid request headers execute handler", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		executed := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			executed = true
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("executed"))
+		})
+
+		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+			Inertia:           true,
+			PartialComponent:  "Users/Index",
+			Whitelist:         []string{"users", "roles"},
+			Blacklist:         []string{"companies"},
+			ResetProps:        []string{"users"},
+			OnceProps:         []string{"plans"},
+			ScrollMergeIntent: ScrollMergeIntentPrepend,
+		})
+
+		// act
+		middleware := newMiddleware(handler, New(tpl, &Config{Version: ""}))
+		middleware.ServeHTTP(w, r)
+
+		// assert
+		assert.True(t, executed)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "executed", w.Body.String())
+	})
+
 	t.Run("stores renderer in context for Render", func(t *testing.T) {
 		t.Parallel()
 

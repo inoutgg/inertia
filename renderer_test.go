@@ -153,7 +153,7 @@ func TestFromFS(t *testing.T) {
 	}
 }
 
-func TestRenderer_Render(t *testing.T) {
+func TestRenderer_RenderProtocolResponse(t *testing.T) {
 	t.Parallel()
 
 	// Basic template for testing
@@ -189,6 +189,7 @@ func TestRenderer_Render(t *testing.T) {
 	type responseValidator func(t *testing.T, body []byte)
 
 	tests := []struct {
+		expectedError        error
 		renderer             *Renderer
 		reqConfig            *inertiatest.RequestConfig
 		expectedHeaders      map[string]string
@@ -641,11 +642,15 @@ func TestRenderer_Render(t *testing.T) {
 						Prepend: true,
 						MatchOn: []string{"uuid"},
 					}),
-					NewProp("conversation", map[string]any{"messages": []string{"one"}}, &PropOptions{
-						Merge:     true,
-						DeepMerge: true,
-						MatchOn:   []string{"messages.id"},
-					}),
+					NewProp(
+						"conversation",
+						map[string]any{"messages": []string{"one"}},
+						&PropOptions{
+							Merge:     true,
+							DeepMerge: true,
+							MatchOn:   []string{"messages.id"},
+						},
+					),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -701,6 +706,7 @@ func TestRenderer_Render(t *testing.T) {
 
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
+
 				props := page["props"].(map[string]any)
 				assert.Contains(t, props, "plans")
 
@@ -742,6 +748,7 @@ func TestRenderer_Render(t *testing.T) {
 
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
+
 				props := page["props"].(map[string]any)
 				assert.NotContains(t, props, "plans")
 				assert.Contains(t, page, "onceProps")
@@ -781,6 +788,7 @@ func TestRenderer_Render(t *testing.T) {
 
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
+
 				props := page["props"].(map[string]any)
 				assert.Contains(t, props, "plans")
 			},
@@ -799,12 +807,16 @@ func TestRenderer_Render(t *testing.T) {
 
 				return []Option{
 					WithProps(Props{
-						NewScroll("users", map[string]any{"data": []string{"one"}}, NewScrollOptions("", ScrollMetadata[int]{
-							PageName:     "page",
-							PreviousPage: nil,
-							NextPage:     &nextPage,
-							CurrentPage:  &currentPage,
-						})),
+						NewScroll(
+							"users",
+							map[string]any{"data": []string{"one"}},
+							NewScrollOptions("", ScrollMetadata[int]{
+								PageName:     "page",
+								PreviousPage: nil,
+								NextPage:     &nextPage,
+								CurrentPage:  &currentPage,
+							}),
+						),
 					}),
 				}
 			}(),
@@ -867,6 +879,62 @@ func TestRenderer_Render(t *testing.T) {
 			},
 		},
 		{
+			name: "infinite scroll append intent",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig: &inertiatest.RequestConfig{
+				Inertia:           true,
+				ScrollMergeIntent: ScrollMergeIntentAppend,
+			},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewScroll("users", map[string]any{"data": []string{"one"}}, nil),
+				}),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectJSON:         false,
+			expectError:        false,
+			validateResponse: func(t *testing.T, body []byte) {
+				t.Helper()
+
+				// arrange
+				var page map[string]any
+
+				// act
+				err := json.Unmarshal(body, &page)
+
+				// assert
+				require.NoError(t, err, "Failed to parse response JSON")
+				assert.Contains(t, page["mergeProps"], "users.data")
+				assert.NotContains(t, page, "prependProps")
+			},
+		},
+		{
+			name: "invalid infinite scroll merge intent",
+			renderer: New(basicTpl, &Config{
+				Version:    "1.0.0",
+				RootViewID: "app",
+			}),
+			reqConfig: &inertiatest.RequestConfig{
+				Inertia:           true,
+				ScrollMergeIntent: "sideways",
+			},
+			componentName: "TestComponent",
+			options: []Option{
+				WithProps(Props{
+					NewScroll("users", map[string]any{"data": []string{"one"}}, nil),
+				}),
+			},
+			expectError:   true,
+			expectedError: ErrInvalidScrollMergeIntent,
+			validateResponse: func(t *testing.T, _ []byte) {
+				t.Helper()
+			},
+		},
+		{
 			name: "with shared props metadata",
 			renderer: New(basicTpl, &Config{
 				Version:    "1.0.0",
@@ -896,6 +964,7 @@ func TestRenderer_Render(t *testing.T) {
 
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
+
 				props := page["props"].(map[string]any)
 				assert.Equal(t, "response", props["auth"])
 				assert.Contains(t, page["sharedProps"], "auth")
@@ -974,6 +1043,7 @@ func TestRenderer_Render(t *testing.T) {
 
 				// assert
 				require.NoError(t, err, "Failed to parse response JSON")
+
 				preserveFragment, ok := page["preserveFragment"].(bool)
 				require.True(t, ok, "preserveFragment not found or not a boolean")
 				assert.True(t, preserveFragment, "preserveFragment should be true")
@@ -994,12 +1064,19 @@ func TestRenderer_Render(t *testing.T) {
 				opt(&rCtx)
 			}
 
-			// Call the Render function
-			err := tt.renderer.Render(w, req, tt.componentName, rCtx)
+			req = req.WithContext(context.WithValue(req.Context(), kCtxKey, tt.renderer))
+
+			// Call the package-level HTTP Render function
+			err := Render(w, req, tt.componentName, rCtx)
 
 			// Check for expected error conditions
 			if tt.expectError {
 				assert.Error(t, err, "expected an error but got none")
+
+				if tt.expectedError != nil {
+					assert.ErrorIs(t, err, tt.expectedError)
+				}
+
 				return
 			}
 
@@ -1094,7 +1171,40 @@ func TestRenderer_Version(t *testing.T) {
 	assert.Equal(t, "1.0.0", renderer.Version(), "renderer version should match config")
 }
 
-func TestExtractHeaderValueList(t *testing.T) {
+func TestRenderer_render(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns transport-neutral JSON response", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		renderer := New(testTpl, &Config{Version: "1.0.0"})
+		req := request{
+			URL:       "/users",
+			IsInertia: true,
+			Version:   "1.0.0",
+		}
+		rCtx := NewRenderContext(WithProps(Props{NewProp("name", "Roman", nil)}))
+
+		// act
+		resp, err := renderer.render(t.Context(), req, "Users/Index", rCtx)
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, inertiaheader.ContentTypeJSON,
+			resp.Headers[inertiaheader.HeaderContentType])
+		assert.Equal(t, "true", resp.Headers[inertiaheader.HeaderXInertia])
+
+		var page map[string]any
+
+		err = json.Unmarshal(resp.Body, &page)
+		require.NoError(t, err)
+		assert.Equal(t, "Users/Index", page["component"])
+		assert.Equal(t, "/users", page["url"])
+	})
+}
+
+func TestParseHeaderValueList(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -1138,9 +1248,8 @@ func TestExtractHeaderValueList(t *testing.T) {
 			expected: []string{"test"},
 		},
 		{
-			name:     "empty values between commas",
-			header:   "test1,,test2",
-			expected: []string{"test1", "", "test2"},
+			name:   "empty values between commas",
+			header: "test1,,test2",
 		},
 	}
 
@@ -1148,7 +1257,13 @@ func TestExtractHeaderValueList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := extractHeaderValueList(tt.header)
+			result, err := parseHeaderValueList(tt.header, "Test-Header")
+			if tt.expected == nil && tt.header != "" {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, result, "extracted list should match expected values")
 		})
 	}
@@ -1297,7 +1412,8 @@ func TestRenderer_ConcurrentProps(t *testing.T) {
 	)
 
 	// act
-	err := renderer.Render(w, req, "TestComponent", rCtx)
+	req = req.WithContext(context.WithValue(req.Context(), kCtxKey, renderer))
+	err := Render(w, req, "TestComponent", rCtx)
 
 	// assert
 	require.NoError(t, err)

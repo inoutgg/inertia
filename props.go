@@ -23,57 +23,35 @@ const DefaultDeferredGroup = "default"
 //
 // Attach props to a page using WithProps option.
 type Prop struct {
+	scrollMeta scrollMetadata
+	valFn      Lazy
 	val        any
-	valFn      Lazy // optional, deferred
+	expiresAt  *int64
+	onceKey    string
 	key        string
-	group      string // deferred
-	mergeable  bool
-	prepend    bool
-	deepMerge  bool
+	group      string
+	scrollPath string
 	matchOn    []string
 	once       bool
-	onceKey    string
-	expiresAt  *int64
+	deepMerge  bool
 	fresh      bool
 	scroll     bool
-	scrollPath string
-	scrollMeta scrollMetadata
+	prepend    bool
+	mergeable  bool
 	deferred   bool
-	lazy       bool // optional, deferred
-	ignorable  bool // false if always prop
-	concurrent bool // deferred
+	lazy       bool
+	ignorable  bool
+	concurrent bool
 }
 
 // DeferredOptions configures the behavior of deferred props.
 type DeferredOptions struct {
-	// Group assigns this prop to a named deferred group.
-	//
-	// Props in the same group are resolved together when requested by the client.
-	// Defaults to DefaultDeferredGroup if not specified.
-	Group string
-
-	// Merge determines how updates are handled on partial reloads.
-	//
-	// If true, the prop value is merged with the existing client-side value.
-	// If false, the value is replaced entirely. Defaults to false.
-	Merge bool
-
-	// Prepend marks the prop for prepend merging instead of append merging.
-	Prepend bool
-
-	// DeepMerge marks the prop for deep merging.
-	DeepMerge bool
-
-	// MatchOn configures prop-relative paths used to match items while merging.
-	MatchOn []string
-
-	// Once configures the prop to be remembered and reused by the client.
-	Once *OnceOptions
-
-	// Concurrent enables parallel resolution for this prop.
-	//
-	// When true, this prop can be resolved concurrently with other concurrent props
-	// within the same request, up to the configured concurrency limit.
+	Once       *OnceOptions
+	Group      string
+	MatchOn    []string
+	Merge      bool
+	Prepend    bool
+	DeepMerge  bool
 	Concurrent bool
 }
 
@@ -155,14 +133,9 @@ func NewOptional(key string, fn Lazy) Prop {
 
 // OnceOptions configures once prop behavior.
 type OnceOptions struct {
-	// Key is the client-side remembered key. Defaults to the prop key.
-	Key string
-
-	// ExpiresAt is emitted as a Unix millisecond expiration timestamp.
 	ExpiresAt *int64
-
-	// Fresh forces the prop to resolve even if the client has already loaded it.
-	Fresh bool
+	Key       string
+	Fresh     bool
 }
 
 // NewOnce creates a prop remembered by the client and skipped on subsequent visits.
@@ -189,26 +162,23 @@ type ScrollPage interface {
 
 // ScrollMetadata configures pagination metadata for infinite scroll props.
 type ScrollMetadata[T ScrollPage] struct {
-	PageName     string
 	PreviousPage *T
 	NextPage     *T
 	CurrentPage  *T
+	PageName     string
 }
 
 type scrollMetadata struct {
-	PageName     string
 	PreviousPage any
 	NextPage     any
 	CurrentPage  any
+	PageName     string
 }
 
 // ScrollOptions configures infinite scroll prop behavior.
 type ScrollOptions struct {
-	// Wrapper is the nested data path to merge. Defaults to "data".
-	Wrapper string
-
-	// Metadata is emitted as scrollProps for the client component.
 	Metadata scrollMetadata
+	Wrapper  string
 }
 
 // NewScrollOptions creates type-safe infinite scroll options.
@@ -245,20 +215,11 @@ func NewScroll(key string, value any, opts *ScrollOptions) Prop {
 
 // PropOptions configures standard prop behavior.
 type PropOptions struct {
-	// Merge determines whether this prop's value is merged or replaced during partial reloads.
-	Merge bool
-
-	// Prepend marks the prop for prepend merging instead of append merging.
-	Prepend bool
-
-	// DeepMerge marks the prop for deep merging.
+	Once      *OnceOptions
+	MatchOn   []string
+	Merge     bool
+	Prepend   bool
 	DeepMerge bool
-
-	// MatchOn configures prop-relative paths used to match items while merging.
-	MatchOn []string
-
-	// Once configures the prop to be remembered and reused by the client.
-	Once *OnceOptions
 }
 
 // NewProp creates a standard prop included on initial page load and partial reloads.
