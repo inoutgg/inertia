@@ -142,9 +142,10 @@ func TestProps(t *testing.T) {
 		t.Parallel()
 
 		// arrange
+		expiresAt := int64(123)
 		prop := NewOnce("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }), &OnceOptions{
 			Key:       "remembered-key",
-			ExpiresAt: int64(123),
+			ExpiresAt: &expiresAt,
 			Fresh:     true,
 		})
 
@@ -156,7 +157,7 @@ func TestProps(t *testing.T) {
 		assert.Equal(t, "val", val)
 		assert.True(t, prop.once)
 		assert.Equal(t, "remembered-key", prop.onceKey)
-		assert.Equal(t, int64(123), prop.expiresAt)
+		assert.Equal(t, &expiresAt, prop.expiresAt)
 		assert.True(t, prop.fresh)
 	})
 
@@ -164,15 +165,15 @@ func TestProps(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		prop := NewScroll("users", []string{"one"}, &ScrollOptions{
-			Wrapper: "items",
-			Metadata: ScrollMetadata{
-				PageName:     "users",
-				PreviousPage: nil,
-				NextPage:     2,
-				CurrentPage:  1,
-			},
-		})
+		previousPage := 1
+		nextPage := 3
+		currentPage := 2
+		prop := NewScroll("users", []string{"one"}, NewScrollOptions("items", ScrollMetadata[int]{
+			PageName:     "users",
+			PreviousPage: &previousPage,
+			NextPage:     &nextPage,
+			CurrentPage:  &currentPage,
+		}))
 
 		// act
 		val, err := prop.value(t.Context())
@@ -184,6 +185,30 @@ func TestProps(t *testing.T) {
 		assert.True(t, prop.mergeable)
 		assert.Equal(t, "users.items", prop.scrollPath)
 		assert.Equal(t, "users", prop.scrollMeta.PageName)
+		assert.Equal(t, &previousPage, prop.scrollMeta.PreviousPage)
+	})
+
+	t.Run("NewScroll with cursor metadata", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		nextPage := "cursor-next"
+		currentPage := "cursor-current"
+		prop := NewScroll("users", []string{"one"}, NewScrollOptions("data", ScrollMetadata[string]{
+			PageName:    "cursor",
+			NextPage:    &nextPage,
+			CurrentPage: &currentPage,
+		}))
+
+		// act
+		val, err := prop.value(t.Context())
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, []string{"one"}, val)
+		assert.Equal(t, "cursor", prop.scrollMeta.PageName)
+		assert.Nil(t, prop.scrollMeta.PreviousPage)
+		assert.Equal(t, &nextPage, prop.scrollMeta.NextPage)
 	})
 
 	t.Run("NewProp", func(t *testing.T) {

@@ -27,5 +27,5 @@ type ScrollProp struct {
 
 type OnceProp struct {
 	Prop      string `json:"prop"`
-	ExpiresAt any    `json:"expiresAt"`
+	ExpiresAt *int64 `json:"expiresAt"`
 }
