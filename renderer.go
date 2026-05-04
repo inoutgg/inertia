@@ -179,11 +179,21 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	if r.ssrClient != nil {
 		ssrData, err := r.ssrClient.Render(req.Context(), page)
 		if err != nil {
-			return fmt.Errorf("inertia: failed to render SSR data: %w", err)
-		}
+			body, err := r.makeRootView(page)
+			if err != nil {
+				return fmt.Errorf("inertia: failed to create an HTML container: %w", err)
+			}
 
-		data.InertiaHead = template.HTML(ssrData.Head) //nolint:gosec
-		data.InertiaBody = template.HTML(ssrData.Body) //nolint:gosec
+			data.InertiaBody = body
+		} else {
+			pageScript, err := r.makePageScript(page)
+			if err != nil {
+				return fmt.Errorf("inertia: failed to create an HTML page script: %w", err)
+			}
+
+			data.InertiaHead = template.HTML(ssrData.Head)              //nolint:gosec
+			data.InertiaBody = pageScript + template.HTML(ssrData.Body) //nolint:gosec
+		}
 	} else {
 		body, err := r.makeRootView(page)
 		if err != nil {
@@ -201,7 +211,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 }
 
 func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx RenderContext) (*Page, error) {
-	rawProps := make([]Prop, 0, len(renderCtx.Props)+1)
+	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
+	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
 	rawProps = append(rawProps, r.makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
@@ -211,47 +222,52 @@ func (r *Renderer) newPage(req *http.Request, componentName string, renderCtx Re
 	}
 
 	deferredProps := r.makeDeferredProps(req, componentName, rawProps)
+	onceProps := r.makeOnceProps(rawProps)
+	scrollProps := r.makeScrollProps(rawProps)
 	mergeProps := r.makeMergeProps(
 		rawProps,
 		extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaReset)),
+		req.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
 	)
 
 	return &Page{
-		Component:      componentName,
-		Props:          props,
-		DeferredProps:  deferredProps,
-		MergeProps:     mergeProps,
-		URL:            req.RequestURI,
-		Version:        r.version,
-		ClearHistory:   renderCtx.ClearHistory,
-		EncryptHistory: renderCtx.EncryptHistory,
+		Component:        componentName,
+		Props:            props,
+		DeferredProps:    deferredProps,
+		ScrollProps:      scrollProps,
+		OnceProps:        onceProps,
+		MergeProps:       mergeProps.append,
+		PrependProps:     mergeProps.prepend,
+		DeepMergeProps:   mergeProps.deepMerge,
+		MatchPropsOn:     mergeProps.matchOn,
+		SharedProps:      makeSharedProps(renderCtx.SharedProps),
+		URL:              req.RequestURI,
+		Version:          r.version,
+		PreserveFragment: renderCtx.PreserveFragment,
+		ClearHistory:     renderCtx.ClearHistory,
+		EncryptHistory:   renderCtx.EncryptHistory,
 	}, nil
 }
 
 // makeRootView creates a root view element with the given page data.
 func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
+	pageScript, err := r.makePageScript(page)
+	if err != nil {
+		return "", err
+	}
+
 	var w strings.Builder
+	_ = must.Must(w.WriteString(string(pageScript)))
 
 	_ = must.Must(w.WriteString(`<div id="`))
 	_ = must.Must(w.WriteString(r.rootViewID))
 	_ = must.Must(w.WriteRune('"'))
 	_ = must.Must(w.WriteRune(' '))
 
-	_ = must.Must(w.WriteString(`data-page="`))
-
-	pageBytes, err := json.Marshal(page, r.jsonMarshalOptions...)
-	if err != nil {
-		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
-	}
-
-	template.HTMLEscape(&w, pageBytes)
-	_ = must.Must(w.WriteRune('"'))
-	_ = must.Must(w.WriteRune(' '))
-
 	if r.rootViewAttrs != nil {
 		for _, kv := range r.rootViewAttrs {
-			// Skip the data-page attribute as it's already set.
-			if bytes.Equal(kv.key, []byte("data-page")) {
+			// Skip generated attributes as they're already set.
+			if bytes.Equal(kv.key, []byte("data-page")) || bytes.Equal(kv.key, []byte("id")) {
 				continue
 			}
 
@@ -270,6 +286,35 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	return template.HTML(w.String()), nil
 }
 
+func (r *Renderer) makePageScript(page *Page) (template.HTML, error) {
+	var w strings.Builder
+
+	_ = must.Must(w.WriteString(`<script data-page="`))
+	_ = must.Must(w.WriteString(r.rootViewID))
+	_ = must.Must(w.WriteString(`" type="application/json">`))
+
+	pageBytes, err := json.Marshal(page, r.jsonMarshalOptions...)
+	if err != nil {
+		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
+	}
+
+	_ = must.Must(w.WriteString(escapeScriptJSON(pageBytes)))
+	_ = must.Must(w.WriteString(`</script>`))
+
+	return template.HTML(w.String()), nil //nolint:gosec
+}
+
+func escapeScriptJSON(b []byte) string {
+	s := string(b)
+	s = strings.ReplaceAll(s, "&", `\u0026`)
+	s = strings.ReplaceAll(s, "<", `\u003c`)
+	s = strings.ReplaceAll(s, ">", `\u003e`)
+	s = strings.ReplaceAll(s, "\u2028", `\u2028`)
+	s = strings.ReplaceAll(s, "\u2029", `\u2029`)
+
+	return s
+}
+
 func (r *Renderer) makeProps(
 	req *http.Request,
 	componentName string,
@@ -285,13 +330,26 @@ func (r *Renderer) makeProps(
 		blacklist := extractHeaderValueList(req.Header.Get(
 			inertiaheader.HeaderXInertiaPartialExcept))
 
-		return r.resolvePartialComponentRequest(ctx, props, whitelist, blacklist, concurrency)
+		return r.resolvePartialComponentRequest(
+			ctx,
+			props,
+			whitelist,
+			blacklist,
+			extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps)),
+			concurrency,
+		)
 	}
+
+	exceptOnceProps := extractHeaderValueList(req.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps))
 
 	m := make(map[string]any, len(props))
 
 	for _, prop := range props {
-		// Skip lazy (deferred, optional) props on the first render.
+		if shouldSkipOnceProp(prop, exceptOnceProps, nil) {
+			continue
+		}
+
+		// Skip deferred and optional props on the first render.
 		if prop.lazy {
 			continue
 		}
@@ -310,7 +368,7 @@ func (r *Renderer) makeProps(
 func (r *Renderer) resolvePartialComponentRequest(
 	ctx context.Context,
 	props []Prop,
-	whitelist, blacklist []string,
+	whitelist, blacklist, exceptOnceProps []string,
 	concurrency int,
 ) (map[string]any, error) {
 	m := make(map[string]any, len(props))
@@ -318,6 +376,10 @@ func (r *Renderer) resolvePartialComponentRequest(
 
 	for _, prop := range props {
 		key := prop.key
+		if shouldSkipOnceProp(prop, exceptOnceProps, whitelist) {
+			continue
+		}
+
 		if prop.ignorable {
 			// It should be fine to go through slices here, as the number of props is expected to be small.
 			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
@@ -402,20 +464,114 @@ func (r *Renderer) makeDeferredProps(req *http.Request, componentName string, pr
 	return m
 }
 
+func (r *Renderer) makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
+	m := make(map[string]inertiabase.OnceProp)
+
+	for _, prop := range props {
+		if !prop.once {
+			continue
+		}
+
+		m[prop.onceKey] = inertiabase.OnceProp{
+			Prop:      prop.key,
+			ExpiresAt: prop.expiresAt,
+		}
+	}
+
+	if len(m) == 0 {
+		return nil
+	}
+
+	return m
+}
+
+func shouldSkipOnceProp(prop Prop, exceptOnceProps, whitelist []string) bool {
+	if !prop.once || prop.fresh || !slices.Contains(exceptOnceProps, prop.onceKey) {
+		return false
+	}
+
+	return !slices.Contains(whitelist, prop.key)
+}
+
+func makeSharedProps(props []Prop) []string {
+	if len(props) == 0 {
+		return nil
+	}
+
+	sharedProps := make([]string, 0, len(props))
+	for _, prop := range props {
+		sharedProps = append(sharedProps, prop.key)
+	}
+
+	return sharedProps
+}
+
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func (r *Renderer) makeMergeProps(props []Prop, blacklist []string) []string {
-	mergeProps := make([]string, 0, len(props))
+func (r *Renderer) makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) mergeProps {
+	m := mergeProps{}
 
 	for _, p := range props {
 		if len(blacklist) > 0 && slices.Contains(blacklist, p.key) || !p.mergeable {
 			continue
 		}
 
-		mergeProps = append(mergeProps, p.key)
+		if p.scroll {
+			if scrollMergeIntent == "prepend" {
+				m.prepend = append(m.prepend, p.scrollPath)
+			} else {
+				m.append = append(m.append, p.scrollPath)
+			}
+
+			continue
+		}
+
+		switch {
+		case p.deepMerge:
+			m.deepMerge = append(m.deepMerge, p.key)
+		case p.prepend:
+			m.prepend = append(m.prepend, p.key)
+		default:
+			m.append = append(m.append, p.key)
+		}
+
+		for _, matchOn := range p.matchOn {
+			m.matchOn = append(m.matchOn, qualifyPropPath(p.key, matchOn))
+		}
 	}
 
-	return mergeProps
+	return m
+}
+
+func (r *Renderer) makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
+	m := make(map[string]inertiabase.ScrollProp)
+
+	for _, prop := range props {
+		if !prop.scroll {
+			continue
+		}
+
+		m[prop.key] = inertiabase.ScrollProp{
+			PageName:     prop.scrollMeta.PageName,
+			PreviousPage: prop.scrollMeta.PreviousPage,
+			NextPage:     prop.scrollMeta.NextPage,
+			CurrentPage:  prop.scrollMeta.CurrentPage,
+		}
+	}
+
+	if len(m) == 0 {
+		return nil
+	}
+
+	return m
+}
+
+func qualifyPropPath(propKey, path string) string {
+	if path == "" || strings.HasPrefix(path, propKey+".") || path == propKey {
+		return path
+	}
+
+	return propKey + "." + path
 }
 
 func (r *Renderer) makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
@@ -471,6 +627,22 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 	inertiaredirect.Redirect(w, r, url)
 }
 
+// RedirectPreserveFragment redirects while instructing Inertia to preserve the current URL fragment.
+func RedirectPreserveFragment(w http.ResponseWriter, r *http.Request, url string) {
+	if isInertiaRequest(r) {
+		h := w.Header()
+
+		h.Del(inertiaheader.HeaderVary)
+		h.Del(inertiaheader.HeaderXInertia)
+		h.Set(inertiaheader.HeaderXInertiaRedirect, url)
+		w.WriteHeader(http.StatusConflict)
+
+		return
+	}
+
+	inertiaredirect.Redirect(w, r, url)
+}
+
 // ErrorBagFromRequest extracts the error bag name from the X-Inertia-Error-Bag header.
 //
 // Returns the default error bag (empty string) if the header is not present.
@@ -513,4 +685,11 @@ func extractHeaderValueList(h string) []string {
 type pair[K any, V any] struct {
 	key   K
 	value V
+}
+
+type mergeProps struct {
+	append    []string
+	prepend   []string
+	deepMerge []string
+	matchOn   []string
 }

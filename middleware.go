@@ -89,7 +89,7 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 			clientVersion := r.Header.Get(inertiaheader.HeaderXInertiaVersion)
 
 			serverVersion := renderer.Version()
-			if clientVersion != serverVersion {
+			if r.Method == http.MethodGet && clientVersion != serverVersion {
 				config.VersionMismatchHandler(w, r)
 				return
 			}
@@ -121,6 +121,9 @@ type RenderContext struct {
 	// Props are the properties sent to the page component.
 	Props []Prop
 
+	// SharedProps are globally shared properties sent to the page component.
+	SharedProps []Prop
+
 	// ErrorBag specifies the validation error bag name for scoped error handling.
 	ErrorBag string
 
@@ -132,6 +135,9 @@ type RenderContext struct {
 
 	// ClearHistory instructs the client to clear the history stack.
 	ClearHistory bool
+
+	// PreserveFragment instructs the client to preserve the current URL fragment.
+	PreserveFragment bool
 
 	// Concurrency sets the maximum number of concurrent prop resolutions for this page.
 	// If 0, uses the renderer's default. Negative values mean sequential resolution.
@@ -172,6 +178,11 @@ func WithEncryptHistory() Option {
 	return func(opt *RenderContext) { opt.EncryptHistory = true }
 }
 
+// WithPreserveFragment instructs the client to preserve the current URL fragment.
+func WithPreserveFragment() Option {
+	return func(opt *RenderContext) { opt.PreserveFragment = true }
+}
+
 // WithProps adds properties to the page component.
 //
 // Multiple calls append additional props to the existing set.
@@ -186,6 +197,21 @@ func WithProps(props Proper) Option {
 		}
 
 		renderCtx.Props = append(renderCtx.Props, props.Props()...)
+	}
+}
+
+// WithSharedProps adds shared properties to the page component.
+func WithSharedProps(props Proper) Option {
+	return func(renderCtx *RenderContext) {
+		if props == nil {
+			return
+		}
+
+		if renderCtx.SharedProps == nil {
+			renderCtx.SharedProps = make([]Prop, 0, props.Len())
+		}
+
+		renderCtx.SharedProps = append(renderCtx.SharedProps, props.Props()...)
 	}
 }
 

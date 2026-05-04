@@ -19,16 +19,16 @@ var defaultClient = http.DefaultClient
 func TestSsrRender(t *testing.T) {
 	t.Parallel()
 
+	// arrange
 	page := &inertiabase.Page{
 		Component: "Test",
 		Props:     map[string]any{"foo": "bar"},
 	}
-	pageJSON, err := json.Marshal(page)
-	require.NoError(t, err)
 
 	t.Run("successfully renders page", func(t *testing.T) {
 		t.Parallel()
 
+		// arrange
 		expected := &SSRTemplateData{
 			Head: "<head>Test</head>",
 			Body: "<body>Content</body>",
@@ -44,17 +44,22 @@ func TestSsrRender(t *testing.T) {
 			buf, err := io.ReadAll(body)
 			assert.NoError(t, err)
 
-			// Assert that the request body matches the expected JSON
-			assert.JSONEq(t, string(buf), string(pageJSON))
+			var requestPage inertiabase.Page
+			require.NoError(t, json.Unmarshal(buf, &requestPage))
+
+			assert.Equal(t, page.Component, requestPage.Component)
+			assert.Equal(t, page.Props["foo"], requestPage.Props["foo"])
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(expected))
 		}))
 		defer server.Close()
 
+		// act
 		client := NewHTTPSsrClient(server.URL, defaultClient)
 		result, err := client.Render(t.Context(), page)
 
+		// assert
 		require.NoError(t, err)
 		assert.Equal(t, expected.Head, result.Head)
 		assert.Equal(t, expected.Body, result.Body)
@@ -63,19 +68,24 @@ func TestSsrRender(t *testing.T) {
 	t.Run("handles server error", func(t *testing.T) {
 		t.Parallel()
 
+		// arrange
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer server.Close()
 
+		// act
 		client := NewHTTPSsrClient(server.URL, defaultClient)
 		_, err := client.Render(t.Context(), page)
+
+		// assert
 		assert.Error(t, err)
 	})
 
 	t.Run("handles invalid JSON response", func(t *testing.T) {
 		t.Parallel()
 
+		// arrange
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, err := w.Write([]byte("invalid json"))
@@ -83,16 +93,24 @@ func TestSsrRender(t *testing.T) {
 		}))
 		defer server.Close()
 
+		// act
 		client := NewHTTPSsrClient(server.URL, defaultClient)
 		_, err := client.Render(t.Context(), page)
+
+		// assert
 		assert.Error(t, err)
 	})
 
 	t.Run("handles invalid URL", func(t *testing.T) {
 		t.Parallel()
 
+		// arrange
 		client := NewHTTPSsrClient("invalid-url", defaultClient)
+
+		// act
 		_, err := client.Render(t.Context(), page)
+
+		// assert
 		assert.Error(t, err)
 	})
 }

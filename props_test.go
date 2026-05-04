@@ -57,7 +57,7 @@ func TestProps(t *testing.T) {
 			assert.False(t, prop.mergeable)
 		})
 
-		t.Run("Mergeable", func(t *testing.T) {
+		t.Run("Merge", func(t *testing.T) {
 			t.Parallel()
 
 			prop := NewDeferred(
@@ -138,6 +138,54 @@ func TestProps(t *testing.T) {
 		assert.False(t, prop.concurrent)
 	})
 
+	t.Run("NewOnce", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		prop := NewOnce("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }), &OnceOptions{
+			Key:       "remembered-key",
+			ExpiresAt: int64(123),
+			Fresh:     true,
+		})
+
+		// act
+		val, err := prop.value(t.Context())
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, "val", val)
+		assert.True(t, prop.once)
+		assert.Equal(t, "remembered-key", prop.onceKey)
+		assert.Equal(t, int64(123), prop.expiresAt)
+		assert.True(t, prop.fresh)
+	})
+
+	t.Run("NewScroll", func(t *testing.T) {
+		t.Parallel()
+
+		// arrange
+		prop := NewScroll("users", []string{"one"}, &ScrollOptions{
+			Wrapper: "items",
+			Metadata: ScrollMetadata{
+				PageName:     "users",
+				PreviousPage: nil,
+				NextPage:     2,
+				CurrentPage:  1,
+			},
+		})
+
+		// act
+		val, err := prop.value(t.Context())
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, []string{"one"}, val)
+		assert.True(t, prop.scroll)
+		assert.True(t, prop.mergeable)
+		assert.Equal(t, "users.items", prop.scrollPath)
+		assert.Equal(t, "users", prop.scrollMeta.PageName)
+	})
+
 	t.Run("NewProp", func(t *testing.T) {
 		t.Parallel()
 
@@ -160,18 +208,44 @@ func TestProps(t *testing.T) {
 		t.Run("With options", func(t *testing.T) {
 			t.Parallel()
 
+			// arrange
 			prop := NewProp("key", "val", &PropOptions{Merge: true})
 
-			assert.Equal(t, "key", prop.key)
+			// act
 			val, err := prop.value(t.Context())
+
+			// assert
+			assert.Equal(t, "key", prop.key)
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
-
 			assert.False(t, prop.lazy)
 			assert.True(t, prop.ignorable)
 			assert.False(t, prop.deferred)
 			assert.True(t, prop.mergeable)
 			assert.False(t, prop.concurrent)
+		})
+
+		t.Run("With v3 merge options", func(t *testing.T) {
+			t.Parallel()
+
+			// arrange
+			prop := NewProp("key", "val", &PropOptions{
+				Merge:     true,
+				Prepend:   true,
+				DeepMerge: true,
+				MatchOn:   []string{"id"},
+			})
+
+			// act
+			val, err := prop.value(t.Context())
+
+			// assert
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
+			assert.True(t, prop.mergeable)
+			assert.True(t, prop.prepend)
+			assert.True(t, prop.deepMerge)
+			assert.Equal(t, []string{"id"}, prop.matchOn)
 		})
 	})
 }

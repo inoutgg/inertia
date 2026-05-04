@@ -482,13 +482,15 @@ func newHandler[M any](
 			renderCtx.Concurrency = opts.Concurrency
 		}
 
-		var props []inertia.Prop
+		var sharedProps []inertia.Prop
 
 		if proper, ok := r.Context().Value(kCtxKey).(inertia.Proper); ok {
 			d("has shared props")
 
-			props = proper.Props()
+			sharedProps = proper.Props()
 		}
+
+		var props []inertia.Prop
 
 		proper := resp.Proper()
 		if proper.Len() > 0 {
@@ -497,6 +499,7 @@ func newHandler[M any](
 			props = append(props, proper.Props()...)
 		}
 
+		renderCtx.SharedProps = sharedProps
 		renderCtx.Props = props
 
 		sess, err := sessionFromRequest(r)
