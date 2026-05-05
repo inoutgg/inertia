@@ -1,0 +1,52 @@
+
+[TestRenderer_RenderProtocolResponse/ssr_enabled_-_html_response - 1]
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Template</title>
+    <title>SSR Title</title>
+</head>
+<body>
+    <script data-page="app" type="application/json">{"props":{"errors":{}},"component":"TestComponent","url":"/","version":"1.0.0","preserveFragment":false,"encryptHistory":false,"clearHistory":false}</script><div>SSR Content</div>
+</body>
+</html>
+---
+
+[TestRenderer_RenderProtocolResponse/ssr_with_error_-_falls_back_to_client_rendering - 1]
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Template</title>
+    
+</head>
+<body>
+    <script data-page="app" type="application/json">{"props":{"errors":{}},"component":"TestComponent","url":"/","version":"1.0.0","preserveFragment":false,"encryptHistory":false,"clearHistory":false}</script><div id="app" ></div>
+</body>
+</html>
+---
+
+[TestRenderer_RenderProtocolResponse/with_root_view_attributes - 1]
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Template</title>
+    
+</head>
+<body>
+    <script data-page="app" type="application/json">{"props":{"errors":{}},"component":"TestComponent","url":"/","version":"1.0.0","preserveFragment":false,"encryptHistory":false,"clearHistory":false}</script><div id="app" class="container" data-test="value" ></div>
+</body>
+</html>
+---
+
+[TestRenderer_RenderProtocolResponse/non-inertia_request_-_html_response - 1]
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Template</title>
+    
+</head>
+<body>
+    <script data-page="app" type="application/json">{"props":{"errors":{}},"component":"TestComponent","url":"/","version":"1.0.0","preserveFragment":false,"encryptHistory":false,"clearHistory":false}</script><div id="app" ></div>
+</body>
+</html>
+---

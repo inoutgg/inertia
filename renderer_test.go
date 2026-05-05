@@ -9,6 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -189,18 +190,17 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 	type responseValidator func(t *testing.T, body []byte)
 
 	tests := []struct {
-		expectedError        error
-		renderer             *Renderer
-		reqConfig            *inertiatest.RequestConfig
-		expectedHeaders      map[string]string
-		validateResponse     responseValidator
-		name                 string
-		componentName        string
-		options              []Option
-		expectedBodyContains []string
-		expectedStatusCode   int
-		expectJSON           bool
-		expectError          bool
+		expectedError      error
+		renderer           *Renderer
+		reqConfig          *inertiatest.RequestConfig
+		expectedHeaders    map[string]string
+		validateResponse   responseValidator
+		name               string
+		componentName      string
+		options            []Option
+		expectedStatusCode int
+		expectJSON         bool
+		expectError        bool
 	}{
 		{
 			name: "non-inertia request - html response",
@@ -220,14 +220,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
-				// arrange
-				bodyStr := string(body)
-
-				// act/assert
-				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
-				assert.Contains(t, bodyStr, `"component":"TestComponent"`)
-				assert.Contains(t, bodyStr, `"version":"1.0.0"`)
-				assert.Contains(t, bodyStr, `</script><div id="app" `)
+				// assert
+				snaps.MatchSnapshot(t, string(body))
 			},
 		},
 		{
@@ -279,13 +273,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
-				// arrange
-				bodyStr := string(body)
-
-				// act/assert
-				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
-				assert.Contains(t, bodyStr, "<title>SSR Title</title>")
-				assert.Contains(t, bodyStr, "<div>SSR Content</div>")
+				// assert
+				snaps.MatchSnapshot(t, string(body))
 			},
 		},
 		{
@@ -302,12 +291,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
-				// arrange
-				bodyStr := string(body)
-
-				// act/assert
-				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
-				assert.Contains(t, bodyStr, `<div id="app" `)
+				// assert
+				snaps.MatchSnapshot(t, string(body))
 			},
 		},
 		{
@@ -330,15 +315,8 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			validateResponse: func(t *testing.T, body []byte) {
 				t.Helper()
 
-				// arrange
-				bodyStr := string(body)
-
-				// act/assert
-				assert.Contains(t, bodyStr, `<script data-page="app" type="application/json">`)
-				assert.Contains(t, bodyStr, `<div id="app" `)
-				assert.Contains(t, bodyStr, `class="container"`)
-				assert.Contains(t, bodyStr, `data-test="value"`)
-				assert.NotContains(t, bodyStr, `should-be-skipped`)
+				// assert
+				snaps.MatchSnapshot(t, string(body))
 			},
 		},
 		{
@@ -1105,15 +1083,6 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			// Run the custom validation function for this test case
 			if tt.validateResponse != nil {
 				tt.validateResponse(t, w.Body.Bytes())
-			}
-
-			// Check expected HTML fragments.
-			if !tt.expectJSON && len(tt.expectedBodyContains) > 0 {
-				responseBody := w.Body.String()
-				for _, expected := range tt.expectedBodyContains {
-					assert.Contains(t, responseBody, expected,
-						"body does not contain expected content")
-				}
 			}
 		})
 	}
