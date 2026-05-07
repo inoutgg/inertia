@@ -23,25 +23,49 @@ const DefaultDeferredGroup = "default"
 //
 // Attach props to a page using WithProps option.
 type Prop struct {
-	scrollMeta scrollMetadata
-	valFn      Lazy
-	val        any
-	expiresAt  *int64
-	onceKey    string
-	key        string
+	value    value
+	scroll   scrollable
+	once     onceable
+	deferred deferrable
+	merge    mergeable
+	partial  partial
+}
+
+type value struct {
+	fn  Lazy
+	val any
+	key string
+}
+
+type partial struct {
+	ignorable bool
+	lazy      bool
+}
+
+type deferrable struct {
 	group      string
-	scrollPath string
-	matchOn    []string
-	once       bool
-	deepMerge  bool
-	fresh      bool
-	scroll     bool
-	prepend    bool
-	mergeable  bool
-	deferred   bool
-	lazy       bool
-	ignorable  bool
+	enabled    bool
 	concurrent bool
+}
+
+type mergeable struct {
+	matchOn   []string
+	deepMerge bool
+	prepend   bool
+	enabled   bool
+}
+
+type scrollable struct {
+	meta    scrollMetadata
+	path    string
+	enabled bool
+}
+
+type onceable struct {
+	expiresAt *int64
+	key       string
+	fresh     bool
+	enabled   bool
 }
 
 // DeferredOptions configures the behavior of deferred props.
@@ -81,23 +105,28 @@ func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
-		deferred:   true, // important
-		lazy:       true, // important
-		ignorable:  true, // important
-		key:        key,
-		valFn:      fn,
-		group:      DefaultDeferredGroup,
-		concurrent: false,
+		deferred: deferrable{
+			enabled: true, // important
+			group:   DefaultDeferredGroup,
+		},
+		partial: partial{
+			lazy:      true, // important
+			ignorable: true, // important
+		},
+		value: value{
+			key: key,
+			fn:  fn,
+		},
 	}
 
 	if opts != nil {
-		prop.group = cmp.Or(opts.Group, DefaultDeferredGroup)
-		prop.mergeable = opts.Merge
-		prop.prepend = opts.Prepend
-		prop.deepMerge = opts.DeepMerge
-		prop.matchOn = opts.MatchOn
+		prop.deferred.group = cmp.Or(opts.Group, DefaultDeferredGroup)
+		prop.merge.enabled = opts.Merge
+		prop.merge.prepend = opts.Prepend
+		prop.merge.deepMerge = opts.DeepMerge
+		prop.merge.matchOn = opts.MatchOn
 		prop = applyOnceOptions(prop, key, opts.Once)
-		prop.concurrent = opts.Concurrent
+		prop.deferred.concurrent = opts.Concurrent
 	}
 
 	return prop
@@ -108,12 +137,16 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 //
 // It is particularly useful to enforce load of critical data that must always be present,
 // such as authentication state or global config.
-func NewAlways(key string, value any) Prop {
+func NewAlways(key string, val any) Prop {
 	//nolint:exhaustruct
 	return Prop{
-		ignorable: false, // important
-		key:       key,
-		val:       value,
+		partial: partial{
+			ignorable: false, // important
+		},
+		value: value{
+			key: key,
+			val: val,
+		},
 	}
 }
 
@@ -124,10 +157,14 @@ func NewAlways(key string, value any) Prop {
 func NewOptional(key string, fn Lazy) Prop {
 	//nolint:exhaustruct
 	return Prop{
-		ignorable: true, // important
-		lazy:      true, // important
-		key:       key,
-		valFn:     fn,
+		partial: partial{
+			ignorable: true, // important
+			lazy:      true, // important
+		},
+		value: value{
+			key: key,
+			fn:  fn,
+		},
 	}
 }
 
@@ -142,9 +179,13 @@ type OnceOptions struct {
 func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
-		ignorable: true, // important
-		key:       key,
-		valFn:     fn,
+		partial: partial{
+			ignorable: true, // important
+		},
+		value: value{
+			key: key,
+			fn:  fn,
+		},
 	}
 
 	if opts == nil {
@@ -204,16 +245,16 @@ func NewScroll(key string, value any, opts *ScrollOptions) Prop {
 		DeepMerge: false,
 	})
 	if lazy, ok := value.(Lazy); ok {
-		prop.val = nil
-		prop.valFn = lazy
+		prop.value.val = nil
+		prop.value.fn = lazy
 	}
 
-	prop.scroll = true
-	prop.scrollPath = key + ".data"
+	prop.scroll.enabled = true
+	prop.scroll.path = key + ".data"
 
 	if opts != nil {
-		prop.scrollPath = qualifyPropPath(key, cmp.Or(opts.Wrapper, "data"))
-		prop.scrollMeta = opts.Metadata
+		prop.scroll.path = qualifyPropPath(key, cmp.Or(opts.Wrapper, "data"))
+		prop.scroll.meta = opts.Metadata
 	}
 
 	return prop
@@ -234,16 +275,20 @@ type PropOptions struct {
 func NewProp(key string, val any, opts *PropOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
-		ignorable: true, // important
-		key:       key,
-		val:       val,
+		partial: partial{
+			ignorable: true, // important
+		},
+		value: value{
+			key: key,
+			val: val,
+		},
 	}
 
 	if opts != nil {
-		prop.mergeable = opts.Merge
-		prop.prepend = opts.Prepend
-		prop.deepMerge = opts.DeepMerge
-		prop.matchOn = opts.MatchOn
+		prop.merge.enabled = opts.Merge
+		prop.merge.prepend = opts.Prepend
+		prop.merge.deepMerge = opts.DeepMerge
+		prop.merge.matchOn = opts.MatchOn
 		prop = applyOnceOptions(prop, key, opts.Once)
 	}
 
@@ -255,10 +300,10 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 		return prop
 	}
 
-	prop.once = true
-	prop.onceKey = cmp.Or(opts.Key, defaultKey)
-	prop.expiresAt = opts.ExpiresAt
-	prop.fresh = opts.Fresh
+	prop.once.enabled = true
+	prop.once.key = cmp.Or(opts.Key, defaultKey)
+	prop.once.expiresAt = opts.ExpiresAt
+	prop.once.fresh = opts.Fresh
 
 	return prop
 }
@@ -266,10 +311,10 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 func (p Prop) Props() []Prop { return []Prop{p} }
 func (p Prop) Len() int      { return 1 }
 
-// value returns the prop value.
-func (p Prop) value(ctx context.Context) (any, error) {
-	if p.valFn != nil {
-		v, err := p.valFn.Value(ctx)
+// resolveValue returns the prop value.
+func (p Prop) resolveValue(ctx context.Context) (any, error) {
+	if p.value.fn != nil {
+		v, err := p.value.fn.Value(ctx)
 		if err != nil {
 			return nil, err //nolint:wrapcheck
 		}
@@ -277,7 +322,7 @@ func (p Prop) value(ctx context.Context) (any, error) {
 		return v, nil
 	}
 
-	return p.val, nil
+	return p.value.val, nil
 }
 
 // Proper represents a collection of props that can be attached to a render context.
