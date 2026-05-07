@@ -5,10 +5,7 @@ import (
 	"context"
 )
 
-var (
-	_ Proper = (Props)(nil)
-	_ Proper = (*Prop)(nil)
-)
+var _ Proper = (Props)(nil)
 
 const DefaultDeferredGroup = "default"
 
@@ -22,29 +19,133 @@ const DefaultDeferredGroup = "default"
 //   - NewDeferred: Lazy-loaded, requested by a client after initial render
 //
 // Attach props to a page using WithProps option.
-type Prop struct {
-	valFn      Lazy
-	val        any
-	key        string
-	scroll     scrollable
+type Prop interface {
+	Key() string
+	Value(context.Context) (any, error)
+}
+
+type (
+	firstLoadIgnorable interface {
+		IgnoreFirstLoad() bool
+	}
+
+	partialFilterBypasser interface {
+		BypassPartialFilters() bool
+	}
+
+	deferrableProp interface {
+		Deferrable() (deferrable, bool)
+	}
+
+	mergeableProp interface {
+		Mergeable() (mergeable, bool)
+	}
+
+	scrollableProp interface {
+		Scrollable() (scrollable, bool)
+	}
+
+	onceableProp interface {
+		Onceable() (onceable, bool)
+	}
+
+	concurrentProp interface {
+		Concurrent() bool
+	}
+)
+
+type baseProp struct {
+	valFn Lazy
+	val   any
+	key   string
+}
+
+func (p baseProp) Key() string { return p.key }
+func (p baseProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+type standardProp struct {
+	baseProp
+
+	once       onceable
+	merge      mergeable
+	concurrent bool
+	mergeable  bool
+	onceable   bool
+}
+
+func (p standardProp) Mergeable() (mergeable, bool) { return p.merge, p.mergeable }
+func (p standardProp) Onceable() (onceable, bool)   { return p.once, p.onceable }
+func (p standardProp) Concurrent() bool             { return p.concurrent }
+
+type deferredProp struct {
+	baseProp
+
 	once       onceable
 	deferred   deferrable
 	merge      mergeable
 	concurrent bool
-	ignorable  bool
-	lazy       bool
+	mergeable  bool
+	onceable   bool
 }
 
+func (p deferredProp) IgnoreFirstLoad() bool          { return true }
+func (p deferredProp) Deferrable() (deferrable, bool) { return p.deferred, true }
+func (p deferredProp) Mergeable() (mergeable, bool)   { return p.merge, p.mergeable }
+func (p deferredProp) Onceable() (onceable, bool)     { return p.once, p.onceable }
+func (p deferredProp) Concurrent() bool               { return p.concurrent }
+
+type scrollProp struct {
+	baseProp
+
+	scroll scrollable
+	merge  mergeable
+}
+
+func (p scrollProp) Scrollable() (scrollable, bool) { return p.scroll, true }
+func (p scrollProp) Mergeable() (mergeable, bool)   { return p.merge, true }
+
+type alwaysProp struct {
+	baseProp
+}
+
+func (p alwaysProp) BypassPartialFilters() bool { return true }
+
+type optionalProp struct {
+	baseProp
+
+	once       onceable
+	concurrent bool
+	onceable   bool
+}
+
+func (p optionalProp) IgnoreFirstLoad() bool      { return true }
+func (p optionalProp) Onceable() (onceable, bool) { return p.once, p.onceable }
+func (p optionalProp) Concurrent() bool           { return p.concurrent }
+
+type onceProp struct {
+	baseProp
+
+	once       onceable
+	concurrent bool
+}
+
+func (p onceProp) Onceable() (onceable, bool) { return p.once, true }
+func (p onceProp) Concurrent() bool           { return p.concurrent }
+
 type deferrable struct {
-	group   string
-	enabled bool
+	group string
 }
 
 type mergeable struct {
 	matchOn   []string
 	deepMerge bool
 	prepend   bool
-	enabled   bool
 }
 
 type scrollable struct {
@@ -53,14 +154,12 @@ type scrollable struct {
 	CurrentPage  any
 	PageName     string
 	path         string
-	enabled      bool
 }
 
 type onceable struct {
 	expiresAt *int64
 	key       string
 	fresh     bool
-	enabled   bool
 }
 
 // DeferredOptions configures the behavior of deferred props.
@@ -98,27 +197,39 @@ func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 //
 // If opts is nil, default options are used (default group, no merging, sequential resolution).
 func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
-	//nolint:exhaustruct
-	prop := Prop{
-		deferred: deferrable{
-			enabled: true, // important
-			group:   DefaultDeferredGroup,
+	prop := deferredProp{
+		baseProp: baseProp{
+			key:   key,
+			valFn: fn,
+			val:   nil,
 		},
-		lazy:      true, // important
-		ignorable: true, // important
-		key:       key,
-		valFn:     fn,
+		deferred: deferrable{
+			group: DefaultDeferredGroup,
+		},
+		once: onceable{
+			expiresAt: nil,
+			key:       "",
+			fresh:     false,
+		},
+		merge: mergeable{
+			matchOn:   nil,
+			deepMerge: false,
+			prepend:   false,
+		},
+		concurrent: false,
+		mergeable:  false,
+		onceable:   false,
 	}
 
 	if opts != nil {
 		opts.validate()
 
 		prop.deferred.group = cmp.Or(opts.Group, DefaultDeferredGroup)
-		prop.merge.enabled = opts.Merge || opts.Prepend || opts.DeepMerge
+		prop.mergeable = opts.Merge || opts.Prepend || opts.DeepMerge
 		prop.merge.prepend = opts.Prepend
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
-		prop = applyOnceOptions(prop, key, opts.Once)
+		prop.once, prop.onceable, prop.concurrent = onceFromOptions(key, opts.Once)
 		prop.concurrent = opts.Concurrent || prop.concurrent
 	}
 
@@ -131,11 +242,12 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 // It is particularly useful to enforce load of critical data that must always be present,
 // such as authentication state or global config.
 func NewAlways(key string, val any) Prop {
-	//nolint:exhaustruct
-	return Prop{
-		ignorable: false, // important
-		key:       key,
-		val:       val,
+	return alwaysProp{
+		baseProp: baseProp{
+			key:   key,
+			val:   val,
+			valFn: nil,
+		},
 	}
 }
 
@@ -144,12 +256,19 @@ func NewAlways(key string, val any) Prop {
 //
 // The value function is only called when the client specifically requests this prop.
 func NewOptional(key string, fn Lazy) Prop {
-	//nolint:exhaustruct
-	return Prop{
-		ignorable: true, // important
-		lazy:      true, // important
-		key:       key,
-		valFn:     fn,
+	return optionalProp{
+		baseProp: baseProp{
+			key:   key,
+			valFn: fn,
+			val:   nil,
+		},
+		once: onceable{
+			expiresAt: nil,
+			key:       "",
+			fresh:     false,
+		},
+		concurrent: false,
+		onceable:   false,
 	}
 }
 
@@ -163,19 +282,21 @@ type OnceOptions struct {
 
 // NewOnce creates a prop remembered by the client and skipped on subsequent visits.
 func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
-	//nolint:exhaustruct
-	prop := Prop{
-		ignorable: true, // important
-		key:       key,
-		valFn:     fn,
-	}
-
 	if opts == nil {
-		//nolint:exhaustruct
-		opts = &OnceOptions{}
+		opts = &OnceOptions{} //nolint:exhaustruct
 	}
 
-	return applyOnceOptions(prop, key, opts)
+	once, _, concurrent := onceFromOptions(key, opts)
+
+	return onceProp{
+		baseProp: baseProp{
+			key:   key,
+			valFn: fn,
+			val:   nil,
+		},
+		once:       once,
+		concurrent: concurrent,
+	}
 }
 
 // ScrollPage is a page number or cursor supported by Inertia infinite scroll metadata.
@@ -207,27 +328,37 @@ func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) 
 			NextPage:     metadata.NextPage,
 			CurrentPage:  metadata.CurrentPage,
 			path:         "",
-			enabled:      false,
 		},
 	}
 }
 
 // NewScroll creates an infinite scroll prop with v3 scroll metadata.
 func NewScroll(key string, value any, opts *ScrollOptions) Prop {
-	prop := NewProp(key, value, &PropOptions{
-		Once:      nil,
-		MatchOn:   nil,
-		Merge:     true,
-		Prepend:   false,
-		DeepMerge: false,
-	})
+	base := baseProp{
+		key:   key,
+		val:   value,
+		valFn: nil,
+	}
 	if lazy, ok := value.(Lazy); ok {
-		prop.val = nil
-		prop.valFn = lazy
+		base.val = nil
+		base.valFn = lazy
 	}
 
-	prop.scroll.enabled = true
-	prop.scroll.path = key + ".data"
+	prop := scrollProp{
+		baseProp: base,
+		scroll: scrollable{
+			PreviousPage: nil,
+			NextPage:     nil,
+			CurrentPage:  nil,
+			PageName:     "",
+			path:         key + ".data",
+		},
+		merge: mergeable{
+			matchOn:   nil,
+			deepMerge: false,
+			prepend:   false,
+		},
+	}
 
 	if opts != nil {
 		prop.scroll.PageName = opts.Metadata.PageName
@@ -272,21 +403,35 @@ func (opts PropOptions) validate() {
 //
 // If opts is nil, default options are used (no merging).
 func NewProp(key string, val any, opts *PropOptions) Prop {
-	//nolint:exhaustruct
-	prop := Prop{
-		ignorable: true, // important
-		key:       key,
-		val:       val,
+	prop := standardProp{
+		baseProp: baseProp{
+			key:   key,
+			val:   val,
+			valFn: nil,
+		},
+		once: onceable{
+			expiresAt: nil,
+			key:       "",
+			fresh:     false,
+		},
+		merge: mergeable{
+			matchOn:   nil,
+			deepMerge: false,
+			prepend:   false,
+		},
+		concurrent: false,
+		mergeable:  false,
+		onceable:   false,
 	}
 
 	if opts != nil {
 		opts.validate()
 
-		prop.merge.enabled = opts.Merge || opts.Prepend || opts.DeepMerge
+		prop.mergeable = opts.Merge || opts.Prepend || opts.DeepMerge
 		prop.merge.prepend = opts.Prepend
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
-		prop = applyOnceOptions(prop, key, opts.Once)
+		prop.once, prop.onceable, prop.concurrent = onceFromOptions(key, opts.Once)
 	}
 
 	return prop
@@ -311,40 +456,86 @@ func (opts DeferredOptions) validate() {
 	}
 }
 
-func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
+func onceFromOptions(defaultKey string, opts *OnceOptions) (onceable, bool, bool) {
 	if opts == nil {
-		return prop
+		return onceable{
+			expiresAt: nil,
+			key:       "",
+			fresh:     false,
+		}, false, false
 	}
 
-	prop.once.enabled = true
-	prop.once.key = cmp.Or(opts.Key, defaultKey)
-	prop.once.expiresAt = opts.ExpiresAt
-	prop.once.fresh = opts.Fresh
-	prop.concurrent = opts.Concurrent
-
-	return prop
+	return onceable{
+		key:       cmp.Or(opts.Key, defaultKey),
+		expiresAt: opts.ExpiresAt,
+		fresh:     opts.Fresh,
+	}, true, opts.Concurrent
 }
 
-func (p Prop) Props() []Prop { return []Prop{p} }
-func (p Prop) Len() int      { return 1 }
+func shouldIgnoreFirstLoad(prop Prop) bool {
+	ignorable, ok := prop.(firstLoadIgnorable)
+	return ok && ignorable.IgnoreFirstLoad()
+}
 
-func (p Prop) Key() string { return p.key }
-func (p Prop) Value(ctx context.Context) (any, error) {
-	if p.valFn != nil {
-		return p.valFn.Value(ctx) //nolint:wrapcheck
+func shouldBypassPartialFilters(prop Prop) bool {
+	bypasser, ok := prop.(partialFilterBypasser)
+	return ok && bypasser.BypassPartialFilters()
+}
+
+func isConcurrent(prop Prop) bool {
+	concurrent, ok := prop.(concurrentProp)
+	return ok && concurrent.Concurrent()
+}
+
+func getDeferrable(prop Prop) (deferrable, bool) {
+	deferrableProp, ok := prop.(deferrableProp)
+	if !ok {
+		return deferrable{group: ""}, false
 	}
 
-	return p.val, nil
+	return deferrableProp.Deferrable()
 }
 
-func (p Prop) isFirstIgnorable() bool   { return !p.lazy }
-func (p Prop) shouldIgnoreFilter() bool { return !p.ignorable }
-func (p Prop) isConcurrent() bool       { return p.concurrent }
+func getMergeable(prop Prop) (mergeable, bool) {
+	mergeableProp, ok := prop.(mergeableProp)
+	if !ok {
+		return mergeable{
+			matchOn:   nil,
+			deepMerge: false,
+			prepend:   false,
+		}, false
+	}
 
-func (p Prop) deferrable() (deferrable, bool) { return p.deferred, p.deferred.enabled }
-func (p Prop) mergeable() (mergeable, bool)   { return p.merge, p.merge.enabled }
-func (p Prop) scrollable() (scrollable, bool) { return p.scroll, p.scroll.enabled }
-func (p Prop) onceable() (onceable, bool)     { return p.once, p.once.enabled }
+	return mergeableProp.Mergeable()
+}
+
+func getScrollable(prop Prop) (scrollable, bool) {
+	scrollableProp, ok := prop.(scrollableProp)
+	if !ok {
+		return scrollable{
+			PreviousPage: nil,
+			NextPage:     nil,
+			CurrentPage:  nil,
+			PageName:     "",
+			path:         "",
+		}, false
+	}
+
+	return scrollableProp.Scrollable()
+}
+
+func getOnceable(prop Prop) (onceable, bool) {
+	onceableProp, ok := prop.(onceableProp)
+	if !ok {
+		return onceable{
+			expiresAt: nil,
+			key:       "",
+			fresh:     false,
+		}, false
+	}
+
+	return onceableProp.Onceable()
+}
 
 // Proper represents a collection of props that can be attached to a render context.
 type Proper interface {
