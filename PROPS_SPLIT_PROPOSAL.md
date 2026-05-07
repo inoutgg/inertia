@@ -68,6 +68,7 @@ Preserve these current Go behaviors:
 - Existing constructors continue to work: `NewProp`, `NewDeferred`, `NewScroll`, `NewAlways`, `NewOptional`, and `NewOnce`.
 - Existing option structs continue to work: `PropOptions`, `DeferredOptions`, `ScrollOptions`, and `OnceOptions`.
 - `NewDeferred` keeps the current Go-specific `Concurrent` option.
+- `OnceOptions` can also mark a once prop for concurrent resolution.
 - `DefaultDeferredGroup` remains `default`.
 - `Props` and `Proper` continue to let callers pass one prop or a collection into rendering options.
 - Initial responses continue to skip deferred and optional props.
@@ -96,9 +97,9 @@ Consider adding these upstream v3 parity outputs during or after the split:
 
 `props.go` stores all behavior flags and metadata on one exported `Prop` struct:
 
-- value resolution: `val`, `valFn`
+- value resolution: `val`, `valFn`, `concurrent`
 - identity: `key`
-- deferred: `deferred`, `group`, `concurrent`
+- deferred: `deferred`, `group`
 - optional/deferred initial exclusion: `lazy`
 - partial reload filtering: `ignorable`
 - merge: `mergeable`, `prepend`, `deepMerge`, `matchOn`
@@ -127,11 +128,11 @@ Do not store an internal implementation interface like `impl propImpl` on `Prop`
 ```go
 type Prop struct {
 	value    value
-	partial  partial
-	deferred deferrable
-	merge    mergeable
 	scroll   scrollable
 	once     onceable
+	deferred deferrable
+	merge    mergeable
+	partial  partial
 }
 ```
 
@@ -144,10 +145,10 @@ func (p Prop) key() string
 func (p Prop) value(context.Context) (any, error)
 func (p Prop) includeOnInitial() bool
 func (p Prop) ignorePartialFilters() bool
-func (p Prop) deferrable() (deferredMetadata, bool)
-func (p Prop) mergeable() (mergeMetadata, bool)
-func (p Prop) scrollable() (scrollMetadata, bool)
-func (p Prop) onceable() (onceMetadata, bool)
+func (p Prop) deferrable() (deferrable, bool)
+func (p Prop) mergeable() (mergeable, bool)
+func (p Prop) scrollable() (scrollable, bool)
+func (p Prop) onceable() (onceable, bool)
 func (p Prop) resolveConcurrently() bool
 ```
 
@@ -201,11 +202,11 @@ Preferred shape:
 ```go
 type Prop struct {
 	value    value
-	partial  partial
-	deferred deferrable
-	merge    mergeable
 	scroll   scrollable
 	once     onceable
+	deferred deferrable
+	merge    mergeable
+	partial  partial
 }
 ```
 
@@ -234,11 +235,13 @@ Fields:
 - `key string`
 - `val any`
 - `valFn Lazy`
+- `concurrent bool`
 
 Behavior:
 
 - Resolve `valFn` when present.
 - Return `val` otherwise.
+- Mark resolution as concurrent independently of whether the prop is deferred or onceable.
 
 ### Merge Metadata
 
@@ -267,6 +270,7 @@ Fields:
 - `onceKey string`
 - `expiresAt *int64`
 - `fresh bool`
+- `concurrent bool` in `OnceOptions`, stored on the value capability.
 
 Behavior:
 
@@ -310,7 +314,7 @@ Capabilities:
 
 - Merge metadata.
 - Once metadata.
-- Concurrent resolution, preserving the current Go-specific option.
+- Concurrent resolution through the shared value capability, preserving the current Go-specific option.
 - Future rescue metadata.
 
 Constructor mapping:
