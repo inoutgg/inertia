@@ -97,8 +97,8 @@ Consider adding these upstream v3 parity outputs during or after the split:
 
 `props.go` stores all behavior flags and metadata on one exported `Prop` struct:
 
-- value resolution: `val`, `fn`, `concurrent`
-- identity: `propKey`
+- value resolution: `val`, `valFn`, `concurrent`
+- identity: `key`
 - deferred: `deferred`, `group`
 - optional/deferred initial exclusion: `lazy`
 - partial reload filtering: `ignorable`
@@ -127,9 +127,9 @@ Do not store an internal implementation interface like `impl propImpl` on `Prop`
 
 ```go
 type Prop struct {
-	fn       Lazy
+	valFn    Lazy
 	val      any
-	propKey  string
+	key      string
 	scroll   scrollable
 	once     onceable
 	deferred deferrable
@@ -205,9 +205,9 @@ Preferred shape:
 
 ```go
 type Prop struct {
-	fn       Lazy
+	valFn    Lazy
 	val      any
-	propKey  string
+	key      string
 	scroll   scrollable
 	once     onceable
 	deferred deferrable
@@ -240,16 +240,16 @@ Required by every prop group and stored directly on `Prop` instead of behind a n
 
 Fields:
 
-- `propKey string`
+- `key string`
 - `val any`
-- `fn Lazy`
+- `valFn Lazy`
 - `concurrent bool`
 - `lazy bool`
 - `ignorable bool`
 
 Behavior:
 
-- Resolve `fn` when present.
+- Resolve `valFn` when present.
 - Return `val` otherwise.
 - Mark resolution as concurrent independently of whether the prop is deferred or onceable.
 - Control initial-response exclusion with `lazy`.
@@ -271,6 +271,19 @@ Behavior:
 
 - Emits `mergeProps`, `prependProps`, `deepMergeProps`, and `matchPropsOn`.
 - Skips metadata when the prop is reset via `X-Inertia-Reset`.
+
+### Scroll Metadata
+
+Reusable by `scrollProp`.
+
+Fields are stored directly on `scrollable` instead of behind a nested metadata struct:
+
+- `PageName`
+- `PreviousPage`
+- `NextPage`
+- `CurrentPage`
+- `path`
+- `enabled`
 
 ### Once Metadata
 
