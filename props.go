@@ -32,9 +32,10 @@ type Prop struct {
 }
 
 type value struct {
-	fn  Lazy
-	val any
-	key string
+	fn         Lazy
+	val        any
+	key        string
+	concurrent bool
 }
 
 type partial struct {
@@ -43,9 +44,8 @@ type partial struct {
 }
 
 type deferrable struct {
-	group      string
-	enabled    bool
-	concurrent bool
+	group   string
+	enabled bool
 }
 
 type mergeable struct {
@@ -114,8 +114,9 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 			ignorable: true, // important
 		},
 		value: value{
-			key: key,
-			fn:  fn,
+			key:        key,
+			fn:         fn,
+			concurrent: false,
 		},
 	}
 
@@ -126,7 +127,7 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
 		prop = applyOnceOptions(prop, key, opts.Once)
-		prop.deferred.concurrent = opts.Concurrent
+		prop.value.concurrent = opts.Concurrent || prop.value.concurrent
 	}
 
 	return prop
@@ -144,8 +145,9 @@ func NewAlways(key string, val any) Prop {
 			ignorable: false, // important
 		},
 		value: value{
-			key: key,
-			val: val,
+			key:        key,
+			val:        val,
+			concurrent: false,
 		},
 	}
 }
@@ -162,17 +164,19 @@ func NewOptional(key string, fn Lazy) Prop {
 			lazy:      true, // important
 		},
 		value: value{
-			key: key,
-			fn:  fn,
+			key:        key,
+			fn:         fn,
+			concurrent: false,
 		},
 	}
 }
 
 // OnceOptions configures once prop behavior.
 type OnceOptions struct {
-	ExpiresAt *int64
-	Key       string
-	Fresh     bool
+	ExpiresAt  *int64
+	Key        string
+	Fresh      bool
+	Concurrent bool
 }
 
 // NewOnce creates a prop remembered by the client and skipped on subsequent visits.
@@ -183,8 +187,9 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 			ignorable: true, // important
 		},
 		value: value{
-			key: key,
-			fn:  fn,
+			key:        key,
+			fn:         fn,
+			concurrent: false,
 		},
 	}
 
@@ -279,8 +284,9 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 			ignorable: true, // important
 		},
 		value: value{
-			key: key,
-			val: val,
+			key:        key,
+			val:        val,
+			concurrent: false,
 		},
 	}
 
@@ -304,6 +310,7 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 	prop.once.key = cmp.Or(opts.Key, defaultKey)
 	prop.once.expiresAt = opts.ExpiresAt
 	prop.once.fresh = opts.Fresh
+	prop.value.concurrent = opts.Concurrent
 
 	return prop
 }
@@ -333,7 +340,7 @@ func (p Prop) onceable() (onceable, bool) {
 	return p.once, p.once.enabled
 }
 
-func (p Prop) resolveConcurrently() bool { return p.deferred.concurrent }
+func (p Prop) resolveConcurrently() bool { return p.value.concurrent }
 
 // resolveValue returns the prop value.
 func (p Prop) resolveValue(ctx context.Context) (any, error) {

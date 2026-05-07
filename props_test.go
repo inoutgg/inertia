@@ -101,7 +101,7 @@ func TestProps(t *testing.T) {
 			assert.True(t, prop.partial.ignorable)
 			assert.True(t, prop.deferred.enabled)
 			assert.False(t, prop.merge.enabled)
-			assert.True(t, prop.deferred.concurrent)
+			assert.True(t, prop.value.concurrent)
 		})
 	})
 
@@ -135,7 +135,7 @@ func TestProps(t *testing.T) {
 		assert.True(t, prop.partial.ignorable)
 		assert.False(t, prop.deferred.enabled)
 		assert.False(t, prop.merge.enabled)
-		assert.False(t, prop.deferred.concurrent)
+		assert.False(t, prop.value.concurrent)
 	})
 
 	t.Run("NewOnce", func(t *testing.T) {
@@ -144,9 +144,10 @@ func TestProps(t *testing.T) {
 		// arrange
 		expiresAt := int64(123)
 		prop := NewOnce("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }), &OnceOptions{
-			Key:       "remembered-key",
-			ExpiresAt: &expiresAt,
-			Fresh:     true,
+			Key:        "remembered-key",
+			ExpiresAt:  &expiresAt,
+			Fresh:      true,
+			Concurrent: true,
 		})
 
 		// act
@@ -159,6 +160,7 @@ func TestProps(t *testing.T) {
 		assert.Equal(t, "remembered-key", prop.once.key)
 		assert.Equal(t, &expiresAt, prop.once.expiresAt)
 		assert.True(t, prop.once.fresh)
+		assert.True(t, prop.resolveConcurrently())
 	})
 
 	t.Run("NewScroll", func(t *testing.T) {
@@ -247,7 +249,7 @@ func TestProps(t *testing.T) {
 			assert.True(t, prop.partial.ignorable)
 			assert.False(t, prop.deferred.enabled)
 			assert.True(t, prop.merge.enabled)
-			assert.False(t, prop.deferred.concurrent)
+			assert.False(t, prop.value.concurrent)
 		})
 
 		t.Run("With v3 merge options", func(t *testing.T) {
@@ -311,9 +313,10 @@ func TestPropCapabilities(t *testing.T) {
 			return []string{"one"}, nil
 		}), &DeferredOptions{
 			Once: &OnceOptions{
-				Key:       "remembered-users",
-				ExpiresAt: &expiresAt,
-				Fresh:     true,
+				Key:        "remembered-users",
+				ExpiresAt:  &expiresAt,
+				Fresh:      true,
+				Concurrent: false,
 			},
 			Group:      "attributes",
 			MatchOn:    []string{"id"},
