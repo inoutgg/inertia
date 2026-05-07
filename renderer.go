@@ -371,7 +371,7 @@ func makeProps(
 		}
 
 		// Skip deferred and optional props on the first render.
-		if shouldIgnoreFirstLoad(prop) {
+		if prop.IgnoreFirstLoad() {
 			continue
 		}
 
@@ -401,7 +401,7 @@ func resolvePartialComponentRequest(
 			continue
 		}
 
-		if !shouldBypassPartialFilters(prop) {
+		if !prop.BypassPartialFilters() {
 			// It should be fine to go through slices here, as the number of props is expected to be small.
 			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
 				len(blacklist) > 0 && slices.Contains(blacklist, key) {
@@ -409,7 +409,7 @@ func resolvePartialComponentRequest(
 			}
 		}
 
-		if isConcurrent(prop) {
+		if prop.Concurrent() {
 			concurrentProps = append(concurrentProps, prop)
 		} else {
 			val, err := prop.Value(ctx)
@@ -471,7 +471,7 @@ func makeDeferredProps(req request, componentName string, props []Prop) map[stri
 	m := make(map[string][]string, len(props))
 
 	for _, prop := range props {
-		deferred, ok := getDeferrable(prop)
+		deferred, ok := prop.Deferrable()
 		if !ok {
 			continue
 		}
@@ -490,7 +490,7 @@ func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 	m := make(map[string]inertiabase.OnceProp)
 
 	for _, prop := range props {
-		once, ok := getOnceable(prop)
+		once, ok := prop.Onceable()
 		if !ok {
 			continue
 		}
@@ -509,7 +509,7 @@ func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 }
 
 func shouldSkipOnceProp(prop Prop, exceptOnceProps, whitelist []string) bool {
-	once, ok := getOnceable(prop)
+	once, ok := prop.Onceable()
 	if !ok || once.fresh || !slices.Contains(exceptOnceProps, once.key) {
 		return false
 	}
@@ -536,12 +536,12 @@ func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) 
 	var m mergeProps
 
 	for _, prop := range props {
-		merge, ok := getMergeable(prop)
+		merge, ok := prop.Mergeable()
 		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) || !ok {
 			continue
 		}
 
-		if scroll, ok := getScrollable(prop); ok {
+		if scroll, ok := prop.Scrollable(); ok {
 			if scrollMergeIntent == ScrollMergeIntentPrepend {
 				m.prepend = append(m.prepend, scroll.path)
 			} else {
@@ -572,7 +572,7 @@ func makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
 	m := make(map[string]inertiabase.ScrollProp)
 
 	for _, prop := range props {
-		scroll, ok := getScrollable(prop)
+		scroll, ok := prop.Scrollable()
 		if !ok {
 			continue
 		}

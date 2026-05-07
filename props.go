@@ -22,37 +22,14 @@ const DefaultDeferredGroup = "default"
 type Prop interface {
 	Key() string
 	Value(context.Context) (any, error)
+	IgnoreFirstLoad() bool
+	BypassPartialFilters() bool
+	Deferrable() (deferrable, bool)
+	Mergeable() (mergeable, bool)
+	Scrollable() (scrollable, bool)
+	Onceable() (onceable, bool)
+	Concurrent() bool
 }
-
-type (
-	firstLoadIgnorable interface {
-		IgnoreFirstLoad() bool
-	}
-
-	partialFilterBypasser interface {
-		BypassPartialFilters() bool
-	}
-
-	deferrableProp interface {
-		Deferrable() (deferrable, bool)
-	}
-
-	mergeableProp interface {
-		Mergeable() (mergeable, bool)
-	}
-
-	scrollableProp interface {
-		Scrollable() (scrollable, bool)
-	}
-
-	onceableProp interface {
-		Onceable() (onceable, bool)
-	}
-
-	concurrentProp interface {
-		Concurrent() bool
-	}
-)
 
 type baseProp struct {
 	valFn Lazy
@@ -68,6 +45,41 @@ func (p baseProp) Value(ctx context.Context) (any, error) {
 
 	return p.val, nil
 }
+
+func (p baseProp) IgnoreFirstLoad() bool      { return false }
+func (p baseProp) BypassPartialFilters() bool { return false }
+
+func (p baseProp) Deferrable() (deferrable, bool) {
+	return deferrable{group: ""}, false
+}
+
+func (p baseProp) Mergeable() (mergeable, bool) {
+	return mergeable{
+		matchOn:   nil,
+		deepMerge: false,
+		prepend:   false,
+	}, false
+}
+
+func (p baseProp) Scrollable() (scrollable, bool) {
+	return scrollable{
+		PreviousPage: nil,
+		NextPage:     nil,
+		CurrentPage:  nil,
+		PageName:     "",
+		path:         "",
+	}, false
+}
+
+func (p baseProp) Onceable() (onceable, bool) {
+	return onceable{
+		expiresAt: nil,
+		key:       "",
+		fresh:     false,
+	}, false
+}
+
+func (p baseProp) Concurrent() bool { return false }
 
 type standardProp struct {
 	baseProp
@@ -197,7 +209,7 @@ func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 //
 // If opts is nil, default options are used (default group, no merging, sequential resolution).
 func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
-	prop := deferredProp{
+	prop := &deferredProp{
 		baseProp: baseProp{
 			key:   key,
 			valFn: fn,
@@ -242,7 +254,7 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 // It is particularly useful to enforce load of critical data that must always be present,
 // such as authentication state or global config.
 func NewAlways(key string, val any) Prop {
-	return alwaysProp{
+	return &alwaysProp{
 		baseProp: baseProp{
 			key:   key,
 			val:   val,
@@ -256,7 +268,7 @@ func NewAlways(key string, val any) Prop {
 //
 // The value function is only called when the client specifically requests this prop.
 func NewOptional(key string, fn Lazy) Prop {
-	return optionalProp{
+	return &optionalProp{
 		baseProp: baseProp{
 			key:   key,
 			valFn: fn,
@@ -288,7 +300,7 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 
 	once, _, concurrent := onceFromOptions(key, opts)
 
-	return onceProp{
+	return &onceProp{
 		baseProp: baseProp{
 			key:   key,
 			valFn: fn,
@@ -344,7 +356,7 @@ func NewScroll(key string, value any, opts *ScrollOptions) Prop {
 		base.valFn = lazy
 	}
 
-	prop := scrollProp{
+	prop := &scrollProp{
 		baseProp: base,
 		scroll: scrollable{
 			PreviousPage: nil,
@@ -403,7 +415,7 @@ func (opts PropOptions) validate() {
 //
 // If opts is nil, default options are used (no merging).
 func NewProp(key string, val any, opts *PropOptions) Prop {
-	prop := standardProp{
+	prop := &standardProp{
 		baseProp: baseProp{
 			key:   key,
 			val:   val,
@@ -470,71 +482,6 @@ func onceFromOptions(defaultKey string, opts *OnceOptions) (onceable, bool, bool
 		expiresAt: opts.ExpiresAt,
 		fresh:     opts.Fresh,
 	}, true, opts.Concurrent
-}
-
-func shouldIgnoreFirstLoad(prop Prop) bool {
-	ignorable, ok := prop.(firstLoadIgnorable)
-	return ok && ignorable.IgnoreFirstLoad()
-}
-
-func shouldBypassPartialFilters(prop Prop) bool {
-	bypasser, ok := prop.(partialFilterBypasser)
-	return ok && bypasser.BypassPartialFilters()
-}
-
-func isConcurrent(prop Prop) bool {
-	concurrent, ok := prop.(concurrentProp)
-	return ok && concurrent.Concurrent()
-}
-
-func getDeferrable(prop Prop) (deferrable, bool) {
-	deferrableProp, ok := prop.(deferrableProp)
-	if !ok {
-		return deferrable{group: ""}, false
-	}
-
-	return deferrableProp.Deferrable()
-}
-
-func getMergeable(prop Prop) (mergeable, bool) {
-	mergeableProp, ok := prop.(mergeableProp)
-	if !ok {
-		return mergeable{
-			matchOn:   nil,
-			deepMerge: false,
-			prepend:   false,
-		}, false
-	}
-
-	return mergeableProp.Mergeable()
-}
-
-func getScrollable(prop Prop) (scrollable, bool) {
-	scrollableProp, ok := prop.(scrollableProp)
-	if !ok {
-		return scrollable{
-			PreviousPage: nil,
-			NextPage:     nil,
-			CurrentPage:  nil,
-			PageName:     "",
-			path:         "",
-		}, false
-	}
-
-	return scrollableProp.Scrollable()
-}
-
-func getOnceable(prop Prop) (onceable, bool) {
-	onceableProp, ok := prop.(onceableProp)
-	if !ok {
-		return onceable{
-			expiresAt: nil,
-			key:       "",
-			fresh:     false,
-		}, false
-	}
-
-	return onceableProp.Onceable()
 }
 
 // Proper represents a collection of props that can be attached to a render context.
