@@ -111,8 +111,10 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 	}
 
 	if opts != nil {
+		opts.validate()
+
 		prop.deferred.group = cmp.Or(opts.Group, DefaultDeferredGroup)
-		prop.merge.enabled = opts.Merge
+		prop.merge.enabled = opts.Merge || opts.Prepend || opts.DeepMerge
 		prop.merge.prepend = opts.Prepend
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
@@ -247,6 +249,25 @@ type PropOptions struct {
 	DeepMerge bool
 }
 
+func (opts PropOptions) validate() {
+	modes := 0
+	if opts.Merge {
+		modes++
+	}
+
+	if opts.Prepend {
+		modes++
+	}
+
+	if opts.DeepMerge {
+		modes++
+	}
+
+	if modes > 1 {
+		panic("inertia: merge, prepend, and deep merge are mutually exclusive")
+	}
+}
+
 // NewProp creates a standard prop included on initial page load and partial reloads.
 //
 // If opts is nil, default options are used (no merging).
@@ -259,7 +280,9 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 	}
 
 	if opts != nil {
-		prop.merge.enabled = opts.Merge
+		opts.validate()
+
+		prop.merge.enabled = opts.Merge || opts.Prepend || opts.DeepMerge
 		prop.merge.prepend = opts.Prepend
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
@@ -267,6 +290,25 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 	}
 
 	return prop
+}
+
+func (opts DeferredOptions) validate() {
+	modes := 0
+	if opts.Merge {
+		modes++
+	}
+
+	if opts.Prepend {
+		modes++
+	}
+
+	if opts.DeepMerge {
+		modes++
+	}
+
+	if modes > 1 {
+		panic("inertia: merge, prepend, and deep merge are mutually exclusive")
+	}
 }
 
 func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
