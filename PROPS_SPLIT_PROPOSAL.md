@@ -100,10 +100,10 @@ type Prop interface {
 	Value(context.Context) (any, error)
 	IgnoreFirstLoad() bool
 	BypassPartialFilters() bool
-	Deferrable() (deferrable, bool)
-	Mergeable() (mergeable, bool)
-	Scrollable() (scrollable, bool)
-	Onceable() (onceable, bool)
+	Deferrable() (*deferrable, bool)
+	Mergeable() (*mergeable, bool)
+	Scrollable() (*scrollable, bool)
+	Onceable() (*onceable, bool)
 	Concurrent() bool
 }
 ```
@@ -132,29 +132,31 @@ func NewOnce(...) Prop
 
 This intentionally breaks compatibility with code that expected `Prop` to be a concrete struct.
 
-## Base Value
+## Concrete Values
 
-All concrete prop types should embed a small value resolver:
+Each concrete prop type owns its value fields and implements the full `Prop` interface directly:
 
 ```go
-type baseProp struct {
+type standardProp struct {
 	key   string
 	val   any
 	valFn Lazy
+	merge *mergeable
+	once  *onceable
 }
 
-func (p baseProp) Key() string
-func (p baseProp) Value(context.Context) (any, error)
-func (p baseProp) IgnoreFirstLoad() bool
-func (p baseProp) BypassPartialFilters() bool
-func (p baseProp) Deferrable() (deferrable, bool)
-func (p baseProp) Mergeable() (mergeable, bool)
-func (p baseProp) Scrollable() (scrollable, bool)
-func (p baseProp) Onceable() (onceable, bool)
-func (p baseProp) Concurrent() bool
+func (p *standardProp) Key() string
+func (p *standardProp) Value(context.Context) (any, error)
+func (p *standardProp) IgnoreFirstLoad() bool
+func (p *standardProp) BypassPartialFilters() bool
+func (p *standardProp) Deferrable() (*deferrable, bool)
+func (p *standardProp) Mergeable() (*mergeable, bool)
+func (p *standardProp) Scrollable() (*scrollable, bool)
+func (p *standardProp) Onceable() (*onceable, bool)
+func (p *standardProp) Concurrent() bool
 ```
 
-`baseProp` supplies disabled defaults for all capability methods. Concrete prop types override only the capabilities they enable.
+Do not use `baseProp` or embedded default capability implementations. Every concrete prop type should make its supported and unsupported capabilities explicit. Capability metadata is pointer-backed; unsupported optional capabilities are represented by `nil`.
 
 Concurrent resolution is a capability of lazy resolution, not a deferred-only field. Store it on concrete types that expose concurrency, or use a small embedded `concurrent` capability.
 
@@ -180,9 +182,9 @@ Represents normal page data.
 
 Fields/capabilities:
 
-- `baseProp`
-- optional `mergeable`
-- optional `onceable`
+- value fields: `key`, `val`, `valFn`
+- optional `*mergeable`
+- optional `*onceable`
 - optional `concurrent`
 
 Behavior:
@@ -196,11 +198,11 @@ Represents data loaded after the initial page render.
 
 Fields/capabilities:
 
-- `baseProp`
-- `deferrable`
+- value fields: `key`, `val`, `valFn`
+- `*deferrable`
 - `IgnoreFirstLoad()` override
-- optional `mergeable`
-- optional `onceable`
+- optional `*mergeable`
+- optional `*onceable`
 - optional `concurrent`
 - future `rescuable`
 
@@ -217,10 +219,10 @@ Represents paginated data for Inertia v3 infinite scroll.
 
 Fields/capabilities:
 
-- `baseProp`
-- `scrollable`
-- `mergeable`
-- optional `deferrable` in a follow-up if scroll deferring is implemented.
+- value fields: `key`, `val`, `valFn`
+- `*scrollable`
+- `*mergeable`
+- optional `*deferrable` in a follow-up if scroll deferring is implemented.
 
 Behavior:
 
@@ -235,7 +237,7 @@ Represents data that must be included in every response.
 
 Fields/capabilities:
 
-- `baseProp`
+- value fields: `key`, `val`, `valFn`
 - `BypassPartialFilters()` override
 
 Behavior:
@@ -250,9 +252,9 @@ Represents data that is never sent unless explicitly requested.
 
 Fields/capabilities:
 
-- `baseProp`
+- value fields: `key`, `val`, `valFn`
 - `IgnoreFirstLoad()` override
-- optional `onceable`
+- optional `*onceable`
 - optional `concurrent`
 
 Behavior:
@@ -267,8 +269,8 @@ Represents a standalone once prop.
 
 Fields/capabilities:
 
-- `baseProp`
-- `onceable`
+- value fields: `key`, `val`, `valFn`
+- `*onceable`
 - optional `concurrent`
 
 Behavior:
@@ -327,7 +329,7 @@ Mitigations:
 
 - Return concrete pointers as `Prop` at constructor boundaries.
 - Keep concrete prop structs small.
-- Use embedded value/capability structs to avoid repeated fields.
+- Avoid embedded default implementations; keep concrete prop behavior explicit.
 - Benchmark after the split if prop creation becomes hot.
 
 ## Renderer Changes
@@ -349,7 +351,7 @@ The renderer should not use concrete type switches for normal protocol behavior.
 Each step should be independently reviewable and committed before starting the next one.
 
 1. Convert `Prop` from a concrete struct to an interface and update `Props` to hold `[]Prop`.
-2. Add `baseProp` and concrete prop types with constructor mappings.
+2. Add concrete prop types with constructor mappings.
 3. Add capability methods and metadata structs.
 4. Move constructor option handling and validation onto the concrete types.
 5. Update renderer helpers to consume capability methods.
