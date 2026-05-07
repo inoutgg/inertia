@@ -2,7 +2,7 @@
 
 ## Goal
 
-Replace the current catch-all `Prop` struct with concrete prop types plus capability interfaces that match Inertia v3 behavior. Compatibility with the current `Prop` struct API is not a constraint.
+Replace the current catch-all `Prop` struct with a `Prop` interface, concrete prop types, and capability methods that match Inertia v3 behavior. Compatibility with the current `Prop` struct API is not a constraint.
 
 The target prop types are:
 
@@ -98,6 +98,13 @@ Consider adding these upstream v3 parity outputs during or after the split:
 type Prop interface {
 	Key() string
 	Value(context.Context) (any, error)
+	IgnoreFirstLoad() bool
+	BypassPartialFilters() bool
+	Deferrable() (deferrable, bool)
+	Mergeable() (mergeable, bool)
+	Scrollable() (scrollable, bool)
+	Onceable() (onceable, bool)
+	Concurrent() bool
 }
 ```
 
@@ -112,7 +119,7 @@ type Proper interface {
 type Props []Prop
 ```
 
-Constructors return `Prop` interface values:
+Constructors return `Prop` interface values backed by pointers to concrete implementations:
 
 ```go
 func NewProp(...) Prop
@@ -138,56 +145,30 @@ type baseProp struct {
 
 func (p baseProp) Key() string
 func (p baseProp) Value(context.Context) (any, error)
+func (p baseProp) IgnoreFirstLoad() bool
+func (p baseProp) BypassPartialFilters() bool
+func (p baseProp) Deferrable() (deferrable, bool)
+func (p baseProp) Mergeable() (mergeable, bool)
+func (p baseProp) Scrollable() (scrollable, bool)
+func (p baseProp) Onceable() (onceable, bool)
+func (p baseProp) Concurrent() bool
 ```
+
+`baseProp` supplies disabled defaults for all capability methods. Concrete prop types override only the capabilities they enable.
 
 Concurrent resolution is a capability of lazy resolution, not a deferred-only field. Store it on concrete types that expose concurrency, or use a small embedded `concurrent` capability.
 
 ## Capability Interfaces
 
-The renderer should detect behavior by asserting small interfaces.
+Capability methods live on `Prop` itself instead of separate assertion-only interfaces. Renderer logic should avoid switching on concrete prop type and ask each prop for the relevant capability:
 
 ```go
-type firstLoadIgnorable interface {
-	IgnoreFirstLoad() bool
-}
-
-type partialFilterBypasser interface {
-	BypassPartialFilters() bool
-}
-
-type deferrableProp interface {
-	Deferrable() (deferrable, bool)
-}
-
-type mergeableProp interface {
-	Mergeable() (mergeable, bool)
-}
-
-type scrollableProp interface {
-	Scrollable() (scrollable, bool)
-}
-
-type onceableProp interface {
-	Onceable() (onceable, bool)
-}
-
-type concurrentProp interface {
-	Concurrent() bool
-}
-```
-
-Renderer logic should avoid switching on concrete prop type. It should ask for capabilities:
-
-```go
-if p, ok := prop.(firstLoadIgnorable); ok && p.IgnoreFirstLoad() {
+if prop.IgnoreFirstLoad() {
 	continue
 }
 
-if p, ok := prop.(mergeableProp); ok {
-	merge, enabled := p.Mergeable()
-	if enabled {
-		// collect merge metadata
-	}
+if merge, ok := prop.Mergeable(); ok {
+	// collect merge metadata
 }
 ```
 
@@ -217,7 +198,7 @@ Fields/capabilities:
 
 - `baseProp`
 - `deferrable`
-- `firstLoadIgnorable`
+- `IgnoreFirstLoad()` override
 - optional `mergeable`
 - optional `onceable`
 - optional `concurrent`
@@ -255,7 +236,7 @@ Represents data that must be included in every response.
 Fields/capabilities:
 
 - `baseProp`
-- `partialFilterBypasser`
+- `BypassPartialFilters()` override
 
 Behavior:
 
@@ -270,7 +251,7 @@ Represents data that is never sent unless explicitly requested.
 Fields/capabilities:
 
 - `baseProp`
-- `firstLoadIgnorable`
+- `IgnoreFirstLoad()` override
 - optional `onceable`
 - optional `concurrent`
 
@@ -344,22 +325,22 @@ The split design stores concrete props behind interfaces, so it may allocate mor
 
 Mitigations:
 
-- Prefer returning concrete values as `Prop` only at constructor boundaries.
+- Return concrete pointers as `Prop` at constructor boundaries.
 - Keep concrete prop structs small.
 - Use embedded value/capability structs to avoid repeated fields.
 - Benchmark after the split if prop creation becomes hot.
 
 ## Renderer Changes
 
-Renderer helpers should consume `[]Prop` interface values and assert capabilities:
+Renderer helpers should consume `[]Prop` interface values and call capability methods directly:
 
-- `firstLoadIgnorable` for initial response exclusion.
-- `partialFilterBypasser` for always props.
-- `deferrableProp` for `deferredProps`.
-- `mergeableProp` for merge metadata.
-- `scrollableProp` for `scrollProps`.
-- `onceableProp` for `onceProps` and loaded-once skipping.
-- `concurrentProp` for concurrent lazy resolution.
+- `IgnoreFirstLoad` for initial response exclusion.
+- `BypassPartialFilters` for always props.
+- `Deferrable` for `deferredProps`.
+- `Mergeable` for merge metadata.
+- `Scrollable` for `scrollProps`.
+- `Onceable` for `onceProps` and loaded-once skipping.
+- `Concurrent` for concurrent lazy resolution.
 
 The renderer should not use concrete type switches for normal protocol behavior.
 
@@ -369,9 +350,9 @@ Each step should be independently reviewable and committed before starting the n
 
 1. Convert `Prop` from a concrete struct to an interface and update `Props` to hold `[]Prop`.
 2. Add `baseProp` and concrete prop types with constructor mappings.
-3. Add capability interfaces and metadata structs.
+3. Add capability methods and metadata structs.
 4. Move constructor option handling and validation onto the concrete types.
-5. Update renderer helpers to consume capability interfaces.
+5. Update renderer helpers to consume capability methods.
 6. Update struct parsing and tests for the new constructor return types.
 7. Run the full test suite and clean up obsolete value-struct code.
 8. Handle parity follow-ups separately: `rescuedProps`, scroll `reset`, scroll deferring, and richer path-specific merge behavior.

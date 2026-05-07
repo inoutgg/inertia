@@ -29,14 +29,14 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val123", val)
 
-			deferred, ok := getDeferrable(prop)
+			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, shouldIgnoreFirstLoad(prop))
-			assert.False(t, shouldBypassPartialFilters(prop))
-			assert.False(t, isConcurrent(prop))
+			assert.True(t, prop.IgnoreFirstLoad())
+			assert.False(t, prop.BypassPartialFilters())
+			assert.False(t, prop.Concurrent())
 
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.False(t, ok)
 		})
 
@@ -54,13 +54,13 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "deferred-val", val)
 
-			deferred, ok := getDeferrable(prop)
+			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "custom", deferred.group)
-			assert.True(t, shouldIgnoreFirstLoad(prop))
-			assert.False(t, shouldBypassPartialFilters(prop))
+			assert.True(t, prop.IgnoreFirstLoad())
+			assert.False(t, prop.BypassPartialFilters())
 
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.False(t, ok)
 		})
 
@@ -80,12 +80,12 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
-			deferred, ok := getDeferrable(prop)
+			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, shouldIgnoreFirstLoad(prop))
+			assert.True(t, prop.IgnoreFirstLoad())
 
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.True(t, ok)
 		})
 
@@ -105,13 +105,13 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
-			deferred, ok := getDeferrable(prop)
+			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, shouldIgnoreFirstLoad(prop))
-			assert.True(t, isConcurrent(prop))
+			assert.True(t, prop.IgnoreFirstLoad())
+			assert.True(t, prop.Concurrent())
 
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.False(t, ok)
 		})
 	})
@@ -126,13 +126,13 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
-		assert.False(t, shouldIgnoreFirstLoad(prop))
-		assert.True(t, shouldBypassPartialFilters(prop))
-		assert.False(t, isConcurrent(prop))
+		assert.False(t, prop.IgnoreFirstLoad())
+		assert.True(t, prop.BypassPartialFilters())
+		assert.False(t, prop.Concurrent())
 
-		_, ok := getDeferrable(prop)
+		_, ok := prop.Deferrable()
 		assert.False(t, ok)
-		_, ok = getMergeable(prop)
+		_, ok = prop.Mergeable()
 		assert.False(t, ok)
 	})
 
@@ -146,13 +146,13 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
-		assert.True(t, shouldIgnoreFirstLoad(prop))
-		assert.False(t, shouldBypassPartialFilters(prop))
-		assert.False(t, isConcurrent(prop))
+		assert.True(t, prop.IgnoreFirstLoad())
+		assert.False(t, prop.BypassPartialFilters())
+		assert.False(t, prop.Concurrent())
 
-		_, ok := getDeferrable(prop)
+		_, ok := prop.Deferrable()
 		assert.False(t, ok)
-		_, ok = getMergeable(prop)
+		_, ok = prop.Mergeable()
 		assert.False(t, ok)
 	})
 
@@ -172,12 +172,12 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
-		once, ok := getOnceable(prop)
+		once, ok := prop.Onceable()
 		require.True(t, ok)
 		assert.Equal(t, "remembered-key", once.key)
 		assert.Equal(t, &expiresAt, once.expiresAt)
 		assert.True(t, once.fresh)
-		assert.True(t, isConcurrent(prop))
+		assert.True(t, prop.Concurrent())
 	})
 
 	t.Run("NewScroll", func(t *testing.T) {
@@ -198,13 +198,13 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"one"}, val)
 
-		scroll, ok := getScrollable(prop)
+		scroll, ok := prop.Scrollable()
 		require.True(t, ok)
 		assert.Equal(t, "users.items", scroll.path)
 		assert.Equal(t, "users", scroll.PageName)
 		assert.Equal(t, &previousPage, scroll.PreviousPage)
 
-		_, ok = getMergeable(prop)
+		_, ok = prop.Mergeable()
 		assert.True(t, ok)
 	})
 
@@ -224,7 +224,7 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"one"}, val)
 
-		scroll, ok := getScrollable(prop)
+		scroll, ok := prop.Scrollable()
 		require.True(t, ok)
 		assert.Equal(t, "cursor", scroll.PageName)
 		assert.Nil(t, scroll.PreviousPage)
@@ -244,11 +244,11 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
-			assert.False(t, shouldIgnoreFirstLoad(prop))
-			assert.False(t, shouldBypassPartialFilters(prop))
-			_, ok := getDeferrable(prop)
+			assert.False(t, prop.IgnoreFirstLoad())
+			assert.False(t, prop.BypassPartialFilters())
+			_, ok := prop.Deferrable()
 			assert.False(t, ok)
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.False(t, ok)
 		})
 
@@ -262,12 +262,12 @@ func TestProps(t *testing.T) {
 			assert.Equal(t, "key", prop.Key())
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
-			assert.False(t, shouldIgnoreFirstLoad(prop))
-			_, ok := getDeferrable(prop)
+			assert.False(t, prop.IgnoreFirstLoad())
+			_, ok := prop.Deferrable()
 			assert.False(t, ok)
-			_, ok = getMergeable(prop)
+			_, ok = prop.Mergeable()
 			assert.True(t, ok)
-			assert.False(t, isConcurrent(prop))
+			assert.False(t, prop.Concurrent())
 		})
 
 		t.Run("With v3 prepend options", func(t *testing.T) {
@@ -283,7 +283,7 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
-			merge, ok := getMergeable(prop)
+			merge, ok := prop.Mergeable()
 			require.True(t, ok)
 			assert.True(t, merge.prepend)
 			assert.False(t, merge.deepMerge)
@@ -298,7 +298,7 @@ func TestProps(t *testing.T) {
 				MatchOn:   []string{"messages.id"},
 			})
 
-			merge, ok := getMergeable(prop)
+			merge, ok := prop.Mergeable()
 			require.True(t, ok)
 			assert.False(t, merge.prepend)
 			assert.True(t, merge.deepMerge)
@@ -365,20 +365,20 @@ func TestPropCapabilities(t *testing.T) {
 			Concurrent: true,
 		})
 
-		deferred, ok := getDeferrable(prop)
+		deferred, ok := prop.Deferrable()
 		require.True(t, ok)
 		assert.Equal(t, "attributes", deferred.group)
-		assert.True(t, shouldIgnoreFirstLoad(prop))
-		assert.False(t, shouldBypassPartialFilters(prop))
-		assert.True(t, isConcurrent(prop))
+		assert.True(t, prop.IgnoreFirstLoad())
+		assert.False(t, prop.BypassPartialFilters())
+		assert.True(t, prop.Concurrent())
 
-		merge, ok := getMergeable(prop)
+		merge, ok := prop.Mergeable()
 		require.True(t, ok)
 		assert.True(t, merge.prepend)
 		assert.False(t, merge.deepMerge)
 		assert.Equal(t, []string{"id"}, merge.matchOn)
 
-		once, ok := getOnceable(prop)
+		once, ok := prop.Onceable()
 		require.True(t, ok)
 		assert.Equal(t, "remembered-users", once.key)
 		assert.Equal(t, &expiresAt, once.expiresAt)
@@ -404,14 +404,14 @@ func TestPropCapabilities(t *testing.T) {
 		prop := NewAlways("auth", map[string]string{"name": "Roman"})
 
 		assert.Equal(t, "auth", prop.Key())
-		assert.False(t, shouldIgnoreFirstLoad(prop))
-		assert.True(t, shouldBypassPartialFilters(prop))
+		assert.False(t, prop.IgnoreFirstLoad())
+		assert.True(t, prop.BypassPartialFilters())
 
-		_, ok := getDeferrable(prop)
+		_, ok := prop.Deferrable()
 		assert.False(t, ok)
-		_, ok = getMergeable(prop)
+		_, ok = prop.Mergeable()
 		assert.False(t, ok)
-		_, ok = getOnceable(prop)
+		_, ok = prop.Onceable()
 		assert.False(t, ok)
 	})
 
@@ -424,13 +424,13 @@ func TestPropCapabilities(t *testing.T) {
 			NextPage: &nextPage,
 		}))
 
-		scroll, ok := getScrollable(prop)
+		scroll, ok := prop.Scrollable()
 		require.True(t, ok)
 		assert.Equal(t, "users.data", scroll.path)
 		assert.Equal(t, "page", scroll.PageName)
 		assert.Equal(t, &nextPage, scroll.NextPage)
 
-		_, ok = getMergeable(prop)
+		_, ok = prop.Mergeable()
 		assert.True(t, ok)
 	})
 }
