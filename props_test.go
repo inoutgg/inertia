@@ -299,3 +299,82 @@ func TestPropsCollections(t *testing.T) {
 		assert.Equal(t, "val2", val)
 	})
 }
+
+func TestPropCapabilities(t *testing.T) {
+	t.Parallel()
+
+	t.Run("deferred merge once", func(t *testing.T) {
+		t.Parallel()
+
+		expiresAt := int64(123)
+		prop := NewDeferred("users", LazyFunc(func(context.Context) (any, error) {
+			return []string{"one"}, nil
+		}), &DeferredOptions{
+			Once: &OnceOptions{
+				Key:       "remembered-users",
+				ExpiresAt: &expiresAt,
+				Fresh:     true,
+			},
+			Group:      "attributes",
+			MatchOn:    []string{"id"},
+			Merge:      true,
+			Prepend:    true,
+			Concurrent: true,
+		})
+
+		deferred, ok := prop.deferrable()
+		require.True(t, ok)
+		assert.Equal(t, "attributes", deferred.group)
+		assert.False(t, prop.includeOnInitial())
+		assert.False(t, prop.ignorePartialFilters())
+		assert.True(t, prop.resolveConcurrently())
+
+		merge, ok := prop.mergeable()
+		require.True(t, ok)
+		assert.True(t, merge.prepend)
+		assert.False(t, merge.deepMerge)
+		assert.Equal(t, []string{"id"}, merge.matchOn)
+
+		once, ok := prop.onceable()
+		require.True(t, ok)
+		assert.Equal(t, "remembered-users", once.key)
+		assert.Equal(t, &expiresAt, once.expiresAt)
+		assert.True(t, once.fresh)
+	})
+
+	t.Run("always", func(t *testing.T) {
+		t.Parallel()
+
+		prop := NewAlways("auth", map[string]string{"name": "Roman"})
+
+		assert.Equal(t, "auth", prop.key())
+		assert.True(t, prop.includeOnInitial())
+		assert.True(t, prop.ignorePartialFilters())
+
+		_, ok := prop.deferrable()
+		assert.False(t, ok)
+		_, ok = prop.mergeable()
+		assert.False(t, ok)
+		_, ok = prop.onceable()
+		assert.False(t, ok)
+	})
+
+	t.Run("scroll", func(t *testing.T) {
+		t.Parallel()
+
+		nextPage := 2
+		prop := NewScroll("users", []string{"one"}, NewScrollOptions("data", ScrollMetadata[int]{
+			PageName: "page",
+			NextPage: &nextPage,
+		}))
+
+		scroll, ok := prop.scrollable()
+		require.True(t, ok)
+		assert.Equal(t, "users.data", scroll.path)
+		assert.Equal(t, "page", scroll.meta.PageName)
+		assert.Equal(t, &nextPage, scroll.meta.NextPage)
+
+		_, ok = prop.mergeable()
+		assert.True(t, ok)
+	})
+}
