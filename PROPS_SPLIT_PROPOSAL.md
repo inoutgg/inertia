@@ -269,6 +269,9 @@ Fields:
 
 Behavior:
 
+- Treat `Merge`, `Prepend`, and `DeepMerge` as mutually exclusive root merge modes.
+- Let each root merge mode enable merge metadata by itself, so `Prepend` and `DeepMerge` do not require `Merge` to also be set.
+- Enforce invalid combinations with `validate()` methods on `PropOptions` and `DeferredOptions`.
 - Emits `mergeProps`, `prependProps`, `deepMergeProps`, and `matchPropsOn`.
 - Skips metadata when the prop is reset via `X-Inertia-Reset`.
 

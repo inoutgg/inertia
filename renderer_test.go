@@ -616,7 +616,6 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 						MatchOn: []string{"id"},
 					}),
 					NewProp("notifications", []string{"one"}, &PropOptions{
-						Merge:   true,
 						Prepend: true,
 						MatchOn: []string{"uuid"},
 					}),
@@ -624,7 +623,6 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 						"conversation",
 						map[string]any{"messages": []string{"one"}},
 						&PropOptions{
-							Merge:     true,
 							DeepMerge: true,
 							MatchOn:   []string{"messages.id"},
 						},

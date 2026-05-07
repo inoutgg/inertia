@@ -252,15 +252,13 @@ func TestProps(t *testing.T) {
 			assert.False(t, prop.concurrent)
 		})
 
-		t.Run("With v3 merge options", func(t *testing.T) {
+		t.Run("With v3 prepend options", func(t *testing.T) {
 			t.Parallel()
 
 			// arrange
 			prop := NewProp("key", "val", &PropOptions{
-				Merge:     true,
-				Prepend:   true,
-				DeepMerge: true,
-				MatchOn:   []string{"id"},
+				Prepend: true,
+				MatchOn: []string{"id"},
 			})
 
 			// act
@@ -271,8 +269,35 @@ func TestProps(t *testing.T) {
 			assert.Equal(t, "val", val)
 			assert.True(t, prop.merge.enabled)
 			assert.True(t, prop.merge.prepend)
-			assert.True(t, prop.merge.deepMerge)
+			assert.False(t, prop.merge.deepMerge)
 			assert.Equal(t, []string{"id"}, prop.merge.matchOn)
+		})
+
+		t.Run("With v3 deep merge options", func(t *testing.T) {
+			t.Parallel()
+
+			// arrange
+			prop := NewProp("key", "val", &PropOptions{
+				DeepMerge: true,
+				MatchOn:   []string{"messages.id"},
+			})
+
+			// assert
+			assert.True(t, prop.merge.enabled)
+			assert.False(t, prop.merge.prepend)
+			assert.True(t, prop.merge.deepMerge)
+			assert.Equal(t, []string{"messages.id"}, prop.merge.matchOn)
+		})
+
+		t.Run("With conflicting merge options", func(t *testing.T) {
+			t.Parallel()
+
+			assert.Panics(t, func() {
+				NewProp("key", "val", &PropOptions{
+					Merge:     true,
+					DeepMerge: true,
+				})
+			})
 		})
 	})
 }
@@ -320,7 +345,6 @@ func TestPropCapabilities(t *testing.T) {
 			},
 			Group:      "attributes",
 			MatchOn:    []string{"id"},
-			Merge:      true,
 			Prepend:    true,
 			Concurrent: true,
 		})
@@ -343,6 +367,19 @@ func TestPropCapabilities(t *testing.T) {
 		assert.Equal(t, "remembered-users", once.key)
 		assert.Equal(t, &expiresAt, once.expiresAt)
 		assert.True(t, once.fresh)
+	})
+
+	t.Run("conflicting deferred merge options", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Panics(t, func() {
+			NewDeferred("users", LazyFunc(func(context.Context) (any, error) {
+				return []string{"one"}, nil
+			}), &DeferredOptions{
+				Merge:   true,
+				Prepend: true,
+			})
+		})
 	})
 
 	t.Run("always", func(t *testing.T) {
