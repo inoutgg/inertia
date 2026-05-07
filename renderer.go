@@ -371,16 +371,16 @@ func makeProps(
 		}
 
 		// Skip deferred and optional props on the first render.
-		if !prop.includeOnInitial() {
+		if !prop.isFirstIgnorable() {
 			continue
 		}
 
-		val, err := prop.resolveValue(ctx)
+		val, err := prop.Value(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key(), err)
+			return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
 		}
 
-		m[prop.key()] = val
+		m[prop.Key()] = val
 	}
 
 	return m, nil
@@ -396,12 +396,12 @@ func resolvePartialComponentRequest(
 	concurrentProps := make([]Prop, 0, len(props))
 
 	for _, prop := range props {
-		key := prop.key()
+		key := prop.Key()
 		if shouldSkipOnceProp(prop, exceptOnceProps, whitelist) {
 			continue
 		}
 
-		if !prop.ignorePartialFilters() {
+		if !prop.shouldIgnoreFilter() {
 			// It should be fine to go through slices here, as the number of props is expected to be small.
 			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
 				len(blacklist) > 0 && slices.Contains(blacklist, key) {
@@ -409,12 +409,12 @@ func resolvePartialComponentRequest(
 			}
 		}
 
-		if prop.resolveConcurrently() {
+		if prop.isConcurrent() {
 			concurrentProps = append(concurrentProps, prop)
 		} else {
-			val, err := prop.resolveValue(ctx)
+			val, err := prop.Value(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.key(), err)
+				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
 			}
 
 			m[key] = val
@@ -429,16 +429,16 @@ func resolvePartialComponentRequest(
 			group.SubmitErr(func() (pair[string, any], error) {
 				var kv pair[string, any]
 
-				val, err := prop.resolveValue(ctx)
+				val, err := prop.Value(ctx)
 				if err != nil {
 					return kv, fmt.Errorf(
 						"inertia: failed to resolve prop %s: %w",
-						prop.key(),
+						prop.Key(),
 						err,
 					)
 				}
 
-				kv.key = prop.key()
+				kv.key = prop.Key()
 				kv.value = val
 
 				return kv, nil
@@ -451,7 +451,7 @@ func resolvePartialComponentRequest(
 		}
 
 		for i, prop := range concurrentProps {
-			m[prop.key()] = result[i].value
+			m[prop.Key()] = result[i].value
 		}
 	}
 
@@ -480,7 +480,7 @@ func makeDeferredProps(req request, componentName string, props []Prop) map[stri
 			m[deferred.group] = []string{}
 		}
 
-		m[deferred.group] = append(m[deferred.group], prop.key())
+		m[deferred.group] = append(m[deferred.group], prop.Key())
 	}
 
 	return m
@@ -496,7 +496,7 @@ func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 		}
 
 		m[once.key] = inertiabase.OnceProp{
-			Prop:      prop.key(),
+			Prop:      prop.Key(),
 			ExpiresAt: once.expiresAt,
 		}
 	}
@@ -514,7 +514,7 @@ func shouldSkipOnceProp(prop Prop, exceptOnceProps, whitelist []string) bool {
 		return false
 	}
 
-	return !slices.Contains(whitelist, prop.key())
+	return !slices.Contains(whitelist, prop.Key())
 }
 
 func makeSharedProps(props []Prop) []string {
@@ -524,7 +524,7 @@ func makeSharedProps(props []Prop) []string {
 
 	sharedProps := make([]string, 0, len(props))
 	for _, prop := range props {
-		sharedProps = append(sharedProps, prop.key())
+		sharedProps = append(sharedProps, prop.Key())
 	}
 
 	return sharedProps
@@ -537,7 +537,7 @@ func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) 
 
 	for _, prop := range props {
 		merge, ok := prop.mergeable()
-		if len(blacklist) > 0 && slices.Contains(blacklist, prop.key()) || !ok {
+		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) || !ok {
 			continue
 		}
 
@@ -553,15 +553,15 @@ func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) 
 
 		switch {
 		case merge.deepMerge:
-			m.deepMerge = append(m.deepMerge, prop.key())
+			m.deepMerge = append(m.deepMerge, prop.Key())
 		case merge.prepend:
-			m.prepend = append(m.prepend, prop.key())
+			m.prepend = append(m.prepend, prop.Key())
 		default:
-			m.append = append(m.append, prop.key())
+			m.append = append(m.append, prop.Key())
 		}
 
 		for _, matchOn := range merge.matchOn {
-			m.matchOn = append(m.matchOn, qualifyPropPath(prop.key(), matchOn))
+			m.matchOn = append(m.matchOn, qualifyPropPath(prop.Key(), matchOn))
 		}
 	}
 
@@ -577,11 +577,11 @@ func makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
 			continue
 		}
 
-		m[prop.key()] = inertiabase.ScrollProp{
-			PageName:     scroll.meta.PageName,
-			PreviousPage: scroll.meta.PreviousPage,
-			NextPage:     scroll.meta.NextPage,
-			CurrentPage:  scroll.meta.CurrentPage,
+		m[prop.Key()] = inertiabase.ScrollProp{
+			PageName:     scroll.PageName,
+			PreviousPage: scroll.PreviousPage,
+			NextPage:     scroll.NextPage,
+			CurrentPage:  scroll.CurrentPage,
 		}
 	}
 

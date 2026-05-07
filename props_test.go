@@ -24,8 +24,8 @@ func TestProps(t *testing.T) {
 				nil,
 			)
 
-			assert.Equal(t, "key", prop.propKey)
-			val, err := prop.value(t.Context())
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.Value(t.Context())
 			require.NoError(t, err)
 			assert.Equal(t, "val123", val)
 			assert.Equal(t, "default", prop.deferred.group)
@@ -45,8 +45,8 @@ func TestProps(t *testing.T) {
 				Group: "custom",
 			})
 
-			assert.Equal(t, "key", prop.propKey)
-			val, err := prop.value(t.Context())
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.Value(t.Context())
 			require.NoError(t, err)
 			assert.Equal(t, "deferred-val", val)
 			assert.Equal(t, "custom", prop.deferred.group)
@@ -68,8 +68,8 @@ func TestProps(t *testing.T) {
 				},
 			)
 
-			assert.Equal(t, "key", prop.propKey)
-			val, err := prop.value(t.Context())
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.Value(t.Context())
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 			assert.Equal(t, "default", prop.deferred.group)
@@ -91,8 +91,8 @@ func TestProps(t *testing.T) {
 				},
 			)
 
-			assert.Equal(t, "key", prop.propKey)
-			val, err := prop.value(t.Context())
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.Value(t.Context())
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 			assert.Equal(t, "default", prop.deferred.group)
@@ -110,8 +110,8 @@ func TestProps(t *testing.T) {
 
 		prop := NewAlways("key", "val")
 
-		assert.Equal(t, "key", prop.propKey)
-		val, err := prop.value(t.Context())
+		assert.Equal(t, "key", prop.key)
+		val, err := prop.Value(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
@@ -126,8 +126,8 @@ func TestProps(t *testing.T) {
 
 		prop := NewOptional("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }))
 
-		assert.Equal(t, "key", prop.propKey)
-		val, err := prop.value(t.Context())
+		assert.Equal(t, "key", prop.key)
+		val, err := prop.Value(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
@@ -151,7 +151,7 @@ func TestProps(t *testing.T) {
 		})
 
 		// act
-		val, err := prop.value(t.Context())
+		val, err := prop.Value(t.Context())
 
 		// assert
 		require.NoError(t, err)
@@ -178,7 +178,7 @@ func TestProps(t *testing.T) {
 		}))
 
 		// act
-		val, err := prop.value(t.Context())
+		val, err := prop.Value(t.Context())
 
 		// assert
 		require.NoError(t, err)
@@ -186,8 +186,8 @@ func TestProps(t *testing.T) {
 		assert.True(t, prop.scroll.enabled)
 		assert.True(t, prop.merge.enabled)
 		assert.Equal(t, "users.items", prop.scroll.path)
-		assert.Equal(t, "users", prop.scroll.meta.PageName)
-		assert.Equal(t, &previousPage, prop.scroll.meta.PreviousPage)
+		assert.Equal(t, "users", prop.scroll.PageName)
+		assert.Equal(t, &previousPage, prop.scroll.PreviousPage)
 	})
 
 	t.Run("NewScroll with cursor metadata", func(t *testing.T) {
@@ -203,14 +203,14 @@ func TestProps(t *testing.T) {
 		}))
 
 		// act
-		val, err := prop.value(t.Context())
+		val, err := prop.Value(t.Context())
 
 		// assert
 		require.NoError(t, err)
 		assert.Equal(t, []string{"one"}, val)
-		assert.Equal(t, "cursor", prop.scroll.meta.PageName)
-		assert.Nil(t, prop.scroll.meta.PreviousPage)
-		assert.Equal(t, &nextPage, prop.scroll.meta.NextPage)
+		assert.Equal(t, "cursor", prop.scroll.PageName)
+		assert.Nil(t, prop.scroll.PreviousPage)
+		assert.Equal(t, &nextPage, prop.scroll.NextPage)
 	})
 
 	t.Run("NewProp", func(t *testing.T) {
@@ -221,8 +221,8 @@ func TestProps(t *testing.T) {
 
 			prop := NewProp("key", "val", nil)
 
-			assert.Equal(t, "key", prop.propKey)
-			val, err := prop.value(t.Context())
+			assert.Equal(t, "key", prop.key)
+			val, err := prop.Value(t.Context())
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
@@ -239,10 +239,10 @@ func TestProps(t *testing.T) {
 			prop := NewProp("key", "val", &PropOptions{Merge: true})
 
 			// act
-			val, err := prop.value(t.Context())
+			val, err := prop.Value(t.Context())
 
 			// assert
-			assert.Equal(t, "key", prop.propKey)
+			assert.Equal(t, "key", prop.key)
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 			assert.False(t, prop.lazy)
@@ -264,7 +264,7 @@ func TestProps(t *testing.T) {
 			})
 
 			// act
-			val, err := prop.value(t.Context())
+			val, err := prop.Value(t.Context())
 
 			// assert
 			require.NoError(t, err)
@@ -290,13 +290,13 @@ func TestPropsCollections(t *testing.T) {
 
 		assert.Equal(t, 2, props.Len())
 		assert.Len(t, props.Props(), 2)
-		assert.Equal(t, "key1", props.Props()[0].propKey)
+		assert.Equal(t, "key1", props.Props()[0].key)
 
-		val, err := props.Props()[0].value(t.Context())
+		val, err := props.Props()[0].Value(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, "val1", val)
-		assert.Equal(t, "key2", props.Props()[1].propKey)
-		val, err = props.Props()[1].value(t.Context())
+		assert.Equal(t, "key2", props.Props()[1].key)
+		val, err = props.Props()[1].Value(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, "val2", val)
 	})
@@ -350,7 +350,7 @@ func TestPropCapabilities(t *testing.T) {
 
 		prop := NewAlways("auth", map[string]string{"name": "Roman"})
 
-		assert.Equal(t, "auth", prop.key())
+		assert.Equal(t, "auth", prop.Key())
 		assert.True(t, prop.isFirstIgnorable())
 		assert.True(t, prop.shouldIgnoreFilter())
 
@@ -374,8 +374,8 @@ func TestPropCapabilities(t *testing.T) {
 		scroll, ok := prop.scrollable()
 		require.True(t, ok)
 		assert.Equal(t, "users.data", scroll.path)
-		assert.Equal(t, "page", scroll.meta.PageName)
-		assert.Equal(t, &nextPage, scroll.meta.NextPage)
+		assert.Equal(t, "page", scroll.PageName)
+		assert.Equal(t, &nextPage, scroll.NextPage)
 
 		_, ok = prop.mergeable()
 		assert.True(t, ok)

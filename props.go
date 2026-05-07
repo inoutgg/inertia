@@ -23,9 +23,9 @@ const DefaultDeferredGroup = "default"
 //
 // Attach props to a page using WithProps option.
 type Prop struct {
-	fn         Lazy
+	valFn      Lazy
 	val        any
-	propKey    string
+	key        string
 	scroll     scrollable
 	once       onceable
 	deferred   deferrable
@@ -48,9 +48,12 @@ type mergeable struct {
 }
 
 type scrollable struct {
-	meta    scrollMetadata
-	path    string
-	enabled bool
+	PreviousPage any
+	NextPage     any
+	CurrentPage  any
+	PageName     string
+	path         string
+	enabled      bool
 }
 
 type onceable struct {
@@ -103,8 +106,8 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 		},
 		lazy:      true, // important
 		ignorable: true, // important
-		propKey:   key,
-		fn:        fn,
+		key:       key,
+		valFn:     fn,
 	}
 
 	if opts != nil {
@@ -129,7 +132,7 @@ func NewAlways(key string, val any) Prop {
 	//nolint:exhaustruct
 	return Prop{
 		ignorable: false, // important
-		propKey:   key,
+		key:       key,
 		val:       val,
 	}
 }
@@ -143,8 +146,8 @@ func NewOptional(key string, fn Lazy) Prop {
 	return Prop{
 		ignorable: true, // important
 		lazy:      true, // important
-		propKey:   key,
-		fn:        fn,
+		key:       key,
+		valFn:     fn,
 	}
 }
 
@@ -161,8 +164,8 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
 		ignorable: true, // important
-		propKey:   key,
-		fn:        fn,
+		key:       key,
+		valFn:     fn,
 	}
 
 	if opts == nil {
@@ -186,28 +189,23 @@ type ScrollMetadata[T ScrollPage] struct {
 	PageName     string
 }
 
-type scrollMetadata struct {
-	PreviousPage any
-	NextPage     any
-	CurrentPage  any
-	PageName     string
-}
-
 // ScrollOptions configures infinite scroll prop behavior.
 type ScrollOptions struct {
-	Metadata scrollMetadata
 	Wrapper  string
+	Metadata scrollable
 }
 
 // NewScrollOptions creates type-safe infinite scroll options.
 func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) *ScrollOptions {
 	return &ScrollOptions{
 		Wrapper: wrapper,
-		Metadata: scrollMetadata{
+		Metadata: scrollable{
 			PageName:     metadata.PageName,
 			PreviousPage: metadata.PreviousPage,
 			NextPage:     metadata.NextPage,
 			CurrentPage:  metadata.CurrentPage,
+			path:         "",
+			enabled:      false,
 		},
 	}
 }
@@ -223,15 +221,18 @@ func NewScroll(key string, value any, opts *ScrollOptions) Prop {
 	})
 	if lazy, ok := value.(Lazy); ok {
 		prop.val = nil
-		prop.fn = lazy
+		prop.valFn = lazy
 	}
 
 	prop.scroll.enabled = true
 	prop.scroll.path = key + ".data"
 
 	if opts != nil {
+		prop.scroll.PageName = opts.Metadata.PageName
+		prop.scroll.PreviousPage = opts.Metadata.PreviousPage
+		prop.scroll.NextPage = opts.Metadata.NextPage
+		prop.scroll.CurrentPage = opts.Metadata.CurrentPage
 		prop.scroll.path = qualifyPropPath(key, cmp.Or(opts.Wrapper, "data"))
-		prop.scroll.meta = opts.Metadata
 	}
 
 	return prop
@@ -253,7 +254,7 @@ func NewProp(key string, val any, opts *PropOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
 		ignorable: true, // important
-		propKey:   key,
+		key:       key,
 		val:       val,
 	}
 
@@ -285,11 +286,10 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 func (p Prop) Props() []Prop { return []Prop{p} }
 func (p Prop) Len() int      { return 1 }
 
-func (p Prop) key() string { return p.propKey }
-
-func (p Prop) value(ctx context.Context) (any, error) {
-	if p.fn != nil {
-		return p.fn.Value(ctx) //nolint:wrapcheck
+func (p Prop) Key() string { return p.key }
+func (p Prop) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
 
 	return p.val, nil
@@ -297,20 +297,12 @@ func (p Prop) value(ctx context.Context) (any, error) {
 
 func (p Prop) isFirstIgnorable() bool   { return !p.lazy }
 func (p Prop) shouldIgnoreFilter() bool { return !p.ignorable }
-
-func (p Prop) includeOnInitial() bool     { return p.isFirstIgnorable() }
-func (p Prop) ignorePartialFilters() bool { return p.shouldIgnoreFilter() }
+func (p Prop) isConcurrent() bool       { return p.concurrent }
 
 func (p Prop) deferrable() (deferrable, bool) { return p.deferred, p.deferred.enabled }
 func (p Prop) mergeable() (mergeable, bool)   { return p.merge, p.merge.enabled }
 func (p Prop) scrollable() (scrollable, bool) { return p.scroll, p.scroll.enabled }
 func (p Prop) onceable() (onceable, bool)     { return p.once, p.once.enabled }
-
-func (p Prop) isConcurrent() bool { return p.concurrent }
-
-func (p Prop) resolveConcurrently() bool { return p.isConcurrent() }
-
-func (p Prop) resolveValue(ctx context.Context) (any, error) { return p.value(ctx) }
 
 // Proper represents a collection of props that can be attached to a render context.
 type Proper interface {
