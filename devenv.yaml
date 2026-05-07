@@ -1,8 +1,13 @@
 inputs:
-    go-overlay:
-        url: github:purpleclay/go-overlay
-        inputs:
-            nixpkgs:
-                follows: nixpkgs
-        overlays:
-            - default
+  git-hooks:
+    url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  go-overlay:
+    url: github:purpleclay/go-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+    overlays:
+    - default
