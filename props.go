@@ -68,27 +68,6 @@ type onceable struct {
 	enabled   bool
 }
 
-type deferredMetadata struct {
-	group string
-}
-
-type mergeMetadata struct {
-	matchOn   []string
-	deepMerge bool
-	prepend   bool
-}
-
-type scrollableMetadata struct {
-	meta scrollMetadata
-	path string
-}
-
-type onceMetadata struct {
-	expiresAt *int64
-	key       string
-	fresh     bool
-}
-
 // DeferredOptions configures the behavior of deferred props.
 type DeferredOptions struct {
 	Once       *OnceOptions
@@ -338,55 +317,20 @@ func (p Prop) includeOnInitial() bool { return !p.partial.lazy }
 
 func (p Prop) ignorePartialFilters() bool { return !p.partial.ignorable }
 
-func (p Prop) deferrable() (deferredMetadata, bool) {
-	if !p.deferred.enabled {
-		return deferredMetadata{group: ""}, false
-	}
-
-	return deferredMetadata{group: p.deferred.group}, true
+func (p Prop) deferrable() (deferrable, bool) {
+	return p.deferred, p.deferred.enabled
 }
 
-func (p Prop) mergeable() (mergeMetadata, bool) {
-	if !p.merge.enabled {
-		return mergeMetadata{matchOn: nil, deepMerge: false, prepend: false}, false
-	}
-
-	return mergeMetadata{
-		matchOn:   p.merge.matchOn,
-		deepMerge: p.merge.deepMerge,
-		prepend:   p.merge.prepend,
-	}, true
+func (p Prop) mergeable() (mergeable, bool) {
+	return p.merge, p.merge.enabled
 }
 
-func (p Prop) scrollable() (scrollableMetadata, bool) {
-	if !p.scroll.enabled {
-		return scrollableMetadata{
-			meta: scrollMetadata{
-				PreviousPage: nil,
-				NextPage:     nil,
-				CurrentPage:  nil,
-				PageName:     "",
-			},
-			path: "",
-		}, false
-	}
-
-	return scrollableMetadata{
-		meta: p.scroll.meta,
-		path: p.scroll.path,
-	}, true
+func (p Prop) scrollable() (scrollable, bool) {
+	return p.scroll, p.scroll.enabled
 }
 
-func (p Prop) onceable() (onceMetadata, bool) {
-	if !p.once.enabled {
-		return onceMetadata{expiresAt: nil, key: "", fresh: false}, false
-	}
-
-	return onceMetadata{
-		key:       p.once.key,
-		expiresAt: p.once.expiresAt,
-		fresh:     p.once.fresh,
-	}, true
+func (p Prop) onceable() (onceable, bool) {
+	return p.once, p.once.enabled
 }
 
 func (p Prop) resolveConcurrently() bool { return p.deferred.concurrent }
