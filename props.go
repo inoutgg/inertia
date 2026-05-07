@@ -23,24 +23,16 @@ const DefaultDeferredGroup = "default"
 //
 // Attach props to a page using WithProps option.
 type Prop struct {
-	value    value
-	scroll   scrollable
-	once     onceable
-	deferred deferrable
-	merge    mergeable
-	partial  partial
-}
-
-type value struct {
 	fn         Lazy
 	val        any
-	key        string
+	propKey    string
+	scroll     scrollable
+	once       onceable
+	deferred   deferrable
+	merge      mergeable
 	concurrent bool
-}
-
-type partial struct {
-	ignorable bool
-	lazy      bool
+	ignorable  bool
+	lazy       bool
 }
 
 type deferrable struct {
@@ -109,15 +101,10 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 			enabled: true, // important
 			group:   DefaultDeferredGroup,
 		},
-		partial: partial{
-			lazy:      true, // important
-			ignorable: true, // important
-		},
-		value: value{
-			key:        key,
-			fn:         fn,
-			concurrent: false,
-		},
+		lazy:      true, // important
+		ignorable: true, // important
+		propKey:   key,
+		fn:        fn,
 	}
 
 	if opts != nil {
@@ -127,7 +114,7 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 		prop.merge.deepMerge = opts.DeepMerge
 		prop.merge.matchOn = opts.MatchOn
 		prop = applyOnceOptions(prop, key, opts.Once)
-		prop.value.concurrent = opts.Concurrent || prop.value.concurrent
+		prop.concurrent = opts.Concurrent || prop.concurrent
 	}
 
 	return prop
@@ -141,14 +128,9 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 func NewAlways(key string, val any) Prop {
 	//nolint:exhaustruct
 	return Prop{
-		partial: partial{
-			ignorable: false, // important
-		},
-		value: value{
-			key:        key,
-			val:        val,
-			concurrent: false,
-		},
+		ignorable: false, // important
+		propKey:   key,
+		val:       val,
 	}
 }
 
@@ -159,15 +141,10 @@ func NewAlways(key string, val any) Prop {
 func NewOptional(key string, fn Lazy) Prop {
 	//nolint:exhaustruct
 	return Prop{
-		partial: partial{
-			ignorable: true, // important
-			lazy:      true, // important
-		},
-		value: value{
-			key:        key,
-			fn:         fn,
-			concurrent: false,
-		},
+		ignorable: true, // important
+		lazy:      true, // important
+		propKey:   key,
+		fn:        fn,
 	}
 }
 
@@ -183,14 +160,9 @@ type OnceOptions struct {
 func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
-		partial: partial{
-			ignorable: true, // important
-		},
-		value: value{
-			key:        key,
-			fn:         fn,
-			concurrent: false,
-		},
+		ignorable: true, // important
+		propKey:   key,
+		fn:        fn,
 	}
 
 	if opts == nil {
@@ -250,8 +222,8 @@ func NewScroll(key string, value any, opts *ScrollOptions) Prop {
 		DeepMerge: false,
 	})
 	if lazy, ok := value.(Lazy); ok {
-		prop.value.val = nil
-		prop.value.fn = lazy
+		prop.val = nil
+		prop.fn = lazy
 	}
 
 	prop.scroll.enabled = true
@@ -280,14 +252,9 @@ type PropOptions struct {
 func NewProp(key string, val any, opts *PropOptions) Prop {
 	//nolint:exhaustruct
 	prop := Prop{
-		partial: partial{
-			ignorable: true, // important
-		},
-		value: value{
-			key:        key,
-			val:        val,
-			concurrent: false,
-		},
+		ignorable: true, // important
+		propKey:   key,
+		val:       val,
 	}
 
 	if opts != nil {
@@ -310,7 +277,7 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 	prop.once.key = cmp.Or(opts.Key, defaultKey)
 	prop.once.expiresAt = opts.ExpiresAt
 	prop.once.fresh = opts.Fresh
-	prop.value.concurrent = opts.Concurrent
+	prop.concurrent = opts.Concurrent
 
 	return prop
 }
@@ -318,43 +285,32 @@ func applyOnceOptions(prop Prop, defaultKey string, opts *OnceOptions) Prop {
 func (p Prop) Props() []Prop { return []Prop{p} }
 func (p Prop) Len() int      { return 1 }
 
-func (p Prop) key() string { return p.value.key }
+func (p Prop) key() string { return p.propKey }
 
-func (p Prop) includeOnInitial() bool { return !p.partial.lazy }
-
-func (p Prop) ignorePartialFilters() bool { return !p.partial.ignorable }
-
-func (p Prop) deferrable() (deferrable, bool) {
-	return p.deferred, p.deferred.enabled
-}
-
-func (p Prop) mergeable() (mergeable, bool) {
-	return p.merge, p.merge.enabled
-}
-
-func (p Prop) scrollable() (scrollable, bool) {
-	return p.scroll, p.scroll.enabled
-}
-
-func (p Prop) onceable() (onceable, bool) {
-	return p.once, p.once.enabled
-}
-
-func (p Prop) resolveConcurrently() bool { return p.value.concurrent }
-
-// resolveValue returns the prop value.
-func (p Prop) resolveValue(ctx context.Context) (any, error) {
-	if p.value.fn != nil {
-		v, err := p.value.fn.Value(ctx)
-		if err != nil {
-			return nil, err //nolint:wrapcheck
-		}
-
-		return v, nil
+func (p Prop) value(ctx context.Context) (any, error) {
+	if p.fn != nil {
+		return p.fn.Value(ctx) //nolint:wrapcheck
 	}
 
-	return p.value.val, nil
+	return p.val, nil
 }
+
+func (p Prop) isFirstIgnorable() bool   { return !p.lazy }
+func (p Prop) shouldIgnoreFilter() bool { return !p.ignorable }
+
+func (p Prop) includeOnInitial() bool     { return p.isFirstIgnorable() }
+func (p Prop) ignorePartialFilters() bool { return p.shouldIgnoreFilter() }
+
+func (p Prop) deferrable() (deferrable, bool) { return p.deferred, p.deferred.enabled }
+func (p Prop) mergeable() (mergeable, bool)   { return p.merge, p.merge.enabled }
+func (p Prop) scrollable() (scrollable, bool) { return p.scroll, p.scroll.enabled }
+func (p Prop) onceable() (onceable, bool)     { return p.once, p.once.enabled }
+
+func (p Prop) isConcurrent() bool { return p.concurrent }
+
+func (p Prop) resolveConcurrently() bool { return p.isConcurrent() }
+
+func (p Prop) resolveValue(ctx context.Context) (any, error) { return p.value(ctx) }
 
 // Proper represents a collection of props that can be attached to a render context.
 type Proper interface {

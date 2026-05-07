@@ -97,8 +97,8 @@ Consider adding these upstream v3 parity outputs during or after the split:
 
 `props.go` stores all behavior flags and metadata on one exported `Prop` struct:
 
-- value resolution: `val`, `valFn`, `concurrent`
-- identity: `key`
+- value resolution: `val`, `fn`, `concurrent`
+- identity: `propKey`
 - deferred: `deferred`, `group`
 - optional/deferred initial exclusion: `lazy`
 - partial reload filtering: `ignorable`
@@ -123,16 +123,20 @@ The split should preserve those outputs first, then improve naming and compositi
 
 Keep the public `Proper` and `Props` collection model, and keep `Prop` as a value type. Internally, group related fields into capability structs and expose capability-style methods on `Prop`.
 
-Do not store an internal implementation interface like `impl propImpl` on `Prop`. That design better models polymorphism, but it risks one heap allocation per prop from interface boxing or pointer-backed implementations. The current API stores props as `[]Prop`, so a grouped-field value struct preserves the allocation profile while still making the renderer depend on behavior methods instead of raw fields.
+Do not store an internal implementation interface like `impl propImpl` on `Prop`. That design better models polymorphism, but it risks one heap allocation per prop from interface boxing or pointer-backed implementations. The current API stores props as `[]Prop`, so a value struct with inline hot fields and grouped metadata preserves the allocation profile while still making the renderer depend on behavior methods instead of raw fields.
 
 ```go
 type Prop struct {
-	value    value
+	fn       Lazy
+	val      any
+	propKey  string
 	scroll   scrollable
 	once     onceable
 	deferred deferrable
 	merge    mergeable
-	partial  partial
+	concurrent bool
+	ignorable bool
+	lazy      bool
 }
 ```
 
@@ -201,12 +205,16 @@ Preferred shape:
 
 ```go
 type Prop struct {
-	value    value
+	fn       Lazy
+	val      any
+	propKey  string
 	scroll   scrollable
 	once     onceable
 	deferred deferrable
 	merge    mergeable
-	partial  partial
+	concurrent bool
+	ignorable bool
+	lazy      bool
 }
 ```
 
@@ -226,22 +234,26 @@ Tradeoff:
 
 Use small embedded structs for capabilities that are reused across prop types.
 
-### Value
+### Inline Value And Filtering Fields
 
-Required by every prop group.
+Required by every prop group and stored directly on `Prop` instead of behind a nested capability struct.
 
 Fields:
 
-- `key string`
+- `propKey string`
 - `val any`
-- `valFn Lazy`
+- `fn Lazy`
 - `concurrent bool`
+- `lazy bool`
+- `ignorable bool`
 
 Behavior:
 
-- Resolve `valFn` when present.
+- Resolve `fn` when present.
 - Return `val` otherwise.
 - Mark resolution as concurrent independently of whether the prop is deferred or onceable.
+- Control initial-response exclusion with `lazy`.
+- Control partial reload filtering with `ignorable`.
 
 ### Merge Metadata
 
@@ -270,7 +282,7 @@ Fields:
 - `onceKey string`
 - `expiresAt *int64`
 - `fresh bool`
-- `concurrent bool` in `OnceOptions`, stored on the value capability.
+- `concurrent bool` in `OnceOptions`, stored directly on `Prop`.
 
 Behavior:
 
@@ -314,7 +326,7 @@ Capabilities:
 
 - Merge metadata.
 - Once metadata.
-- Concurrent resolution through the shared value capability, preserving the current Go-specific option.
+- Concurrent resolution through the inline `Prop` field, preserving the current Go-specific option.
 - Future rescue metadata.
 
 Constructor mapping:
@@ -452,7 +464,7 @@ Each step should be independently reviewable and committed before starting the n
    Commit this proposal and the deliverable breakdown before changing runtime code.
 
 2. Introduce grouped capability fields on `Prop`.
-   Add `value`, `partial`, `deferrable`, `mergeable`, `scrollable`, and `onceable` structs. Move existing fields into those groups without changing renderer behavior.
+   Keep value/filtering fields inline on `Prop`, add `deferrable`, `mergeable`, `scrollable`, and `onceable` structs, and move metadata into those groups without changing renderer behavior.
 
 3. Add capability-style methods on `Prop`.
    Add methods such as `deferrable()`, `mergeable()`, `scrollable()`, and `onceable()` that return metadata plus enabled status. Keep direct field reads in the renderer until the methods are in place and tested.
