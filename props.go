@@ -5,7 +5,15 @@ import (
 	"context"
 )
 
-var _ Proper = (Props)(nil)
+var (
+	_ Prop   = (*alwaysProp)(nil)
+	_ Prop   = (*deferredProp)(nil)
+	_ Prop   = (*onceProp)(nil)
+	_ Prop   = (*optionalProp)(nil)
+	_ Prop   = (*scrollProp)(nil)
+	_ Prop   = (*standardProp)(nil)
+	_ Proper = (Props)(nil)
+)
 
 const DefaultDeferredGroup = "default"
 
@@ -24,21 +32,26 @@ type Prop interface {
 	Value(context.Context) (any, error)
 	IgnoreFirstLoad() bool
 	BypassPartialFilters() bool
-	Deferrable() (deferrable, bool)
-	Mergeable() (mergeable, bool)
-	Scrollable() (scrollable, bool)
-	Onceable() (onceable, bool)
+	Deferrable() (*deferrable, bool)
+	Mergeable() (*mergeable, bool)
+	Scrollable() (*scrollable, bool)
+	Onceable() (*onceable, bool)
 	Concurrent() bool
 }
 
-type baseProp struct {
+type standardProp struct {
 	valFn Lazy
 	val   any
+	once  *onceable
+	merge *mergeable
 	key   string
+
+	concurrent bool
 }
 
-func (p baseProp) Key() string { return p.key }
-func (p baseProp) Value(ctx context.Context) (any, error) {
+func (p *standardProp) Key() string { return p.key }
+
+func (p *standardProp) Value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
 		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
@@ -46,109 +59,150 @@ func (p baseProp) Value(ctx context.Context) (any, error) {
 	return p.val, nil
 }
 
-func (p baseProp) IgnoreFirstLoad() bool      { return false }
-func (p baseProp) BypassPartialFilters() bool { return false }
-
-func (p baseProp) Deferrable() (deferrable, bool) {
-	return deferrable{group: ""}, false
-}
-
-func (p baseProp) Mergeable() (mergeable, bool) {
-	return mergeable{
-		matchOn:   nil,
-		deepMerge: false,
-		prepend:   false,
-	}, false
-}
-
-func (p baseProp) Scrollable() (scrollable, bool) {
-	return scrollable{
-		PreviousPage: nil,
-		NextPage:     nil,
-		CurrentPage:  nil,
-		PageName:     "",
-		path:         "",
-	}, false
-}
-
-func (p baseProp) Onceable() (onceable, bool) {
-	return onceable{
-		expiresAt: nil,
-		key:       "",
-		fresh:     false,
-	}, false
-}
-
-func (p baseProp) Concurrent() bool { return false }
-
-type standardProp struct {
-	baseProp
-
-	once       onceable
-	merge      mergeable
-	concurrent bool
-	mergeable  bool
-	onceable   bool
-}
-
-func (p standardProp) Mergeable() (mergeable, bool) { return p.merge, p.mergeable }
-func (p standardProp) Onceable() (onceable, bool)   { return p.once, p.onceable }
-func (p standardProp) Concurrent() bool             { return p.concurrent }
+func (p *standardProp) IgnoreFirstLoad() bool           { return false }
+func (p *standardProp) BypassPartialFilters() bool      { return false }
+func (p *standardProp) Deferrable() (*deferrable, bool) { return nil, false }
+func (p *standardProp) Mergeable() (*mergeable, bool)   { return p.merge, p.merge != nil }
+func (p *standardProp) Scrollable() (*scrollable, bool) { return nil, false }
+func (p *standardProp) Onceable() (*onceable, bool)     { return p.once, p.once != nil }
+func (p *standardProp) Concurrent() bool                { return p.concurrent }
 
 type deferredProp struct {
-	baseProp
+	valFn    Lazy
+	val      any
+	once     *onceable
+	deferred *deferrable
+	merge    *mergeable
+	key      string
 
-	once       onceable
-	deferred   deferrable
-	merge      mergeable
 	concurrent bool
-	mergeable  bool
-	onceable   bool
 }
 
-func (p deferredProp) IgnoreFirstLoad() bool          { return true }
-func (p deferredProp) Deferrable() (deferrable, bool) { return p.deferred, true }
-func (p deferredProp) Mergeable() (mergeable, bool)   { return p.merge, p.mergeable }
-func (p deferredProp) Onceable() (onceable, bool)     { return p.once, p.onceable }
-func (p deferredProp) Concurrent() bool               { return p.concurrent }
+func (p *deferredProp) Key() string { return p.key }
+
+func (p *deferredProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+func (p *deferredProp) IgnoreFirstLoad() bool      { return true }
+func (p *deferredProp) BypassPartialFilters() bool { return false }
+func (p *deferredProp) Deferrable() (*deferrable, bool) {
+	return p.deferred, p.deferred != nil
+}
+func (p *deferredProp) Mergeable() (*mergeable, bool)   { return p.merge, p.merge != nil }
+func (p *deferredProp) Scrollable() (*scrollable, bool) { return nil, false }
+func (p *deferredProp) Onceable() (*onceable, bool)     { return p.once, p.once != nil }
+func (p *deferredProp) Concurrent() bool                { return p.concurrent }
 
 type scrollProp struct {
-	baseProp
-
-	scroll scrollable
-	merge  mergeable
+	valFn  Lazy
+	val    any
+	scroll *scrollable
+	merge  *mergeable
+	key    string
 }
 
-func (p scrollProp) Scrollable() (scrollable, bool) { return p.scroll, true }
-func (p scrollProp) Mergeable() (mergeable, bool)   { return p.merge, true }
+func (p *scrollProp) Key() string { return p.key }
+
+func (p *scrollProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+func (p *scrollProp) IgnoreFirstLoad() bool           { return false }
+func (p *scrollProp) BypassPartialFilters() bool      { return false }
+func (p *scrollProp) Deferrable() (*deferrable, bool) { return nil, false }
+func (p *scrollProp) Mergeable() (*mergeable, bool)   { return p.merge, p.merge != nil }
+func (p *scrollProp) Scrollable() (*scrollable, bool) {
+	return p.scroll, p.scroll != nil
+}
+func (p *scrollProp) Onceable() (*onceable, bool) { return nil, false }
+func (p *scrollProp) Concurrent() bool            { return false }
 
 type alwaysProp struct {
-	baseProp
+	valFn Lazy
+	val   any
+	key   string
 }
 
-func (p alwaysProp) BypassPartialFilters() bool { return true }
+func (p *alwaysProp) Key() string { return p.key }
+
+func (p *alwaysProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+func (p *alwaysProp) IgnoreFirstLoad() bool           { return false }
+func (p *alwaysProp) BypassPartialFilters() bool      { return true }
+func (p *alwaysProp) Deferrable() (*deferrable, bool) { return nil, false }
+func (p *alwaysProp) Mergeable() (*mergeable, bool)   { return nil, false }
+func (p *alwaysProp) Scrollable() (*scrollable, bool) { return nil, false }
+func (p *alwaysProp) Onceable() (*onceable, bool)     { return nil, false }
+func (p *alwaysProp) Concurrent() bool                { return false }
 
 type optionalProp struct {
-	baseProp
+	valFn Lazy
+	val   any
+	once  *onceable
+	key   string
 
-	once       onceable
 	concurrent bool
-	onceable   bool
 }
 
-func (p optionalProp) IgnoreFirstLoad() bool      { return true }
-func (p optionalProp) Onceable() (onceable, bool) { return p.once, p.onceable }
-func (p optionalProp) Concurrent() bool           { return p.concurrent }
+func (p *optionalProp) Key() string { return p.key }
+
+func (p *optionalProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+func (p *optionalProp) IgnoreFirstLoad() bool           { return true }
+func (p *optionalProp) BypassPartialFilters() bool      { return false }
+func (p *optionalProp) Deferrable() (*deferrable, bool) { return nil, false }
+func (p *optionalProp) Mergeable() (*mergeable, bool)   { return nil, false }
+func (p *optionalProp) Scrollable() (*scrollable, bool) { return nil, false }
+func (p *optionalProp) Onceable() (*onceable, bool)     { return p.once, p.once != nil }
+func (p *optionalProp) Concurrent() bool                { return p.concurrent }
 
 type onceProp struct {
-	baseProp
+	valFn Lazy
+	val   any
+	once  *onceable
+	key   string
 
-	once       onceable
 	concurrent bool
 }
 
-func (p onceProp) Onceable() (onceable, bool) { return p.once, true }
-func (p onceProp) Concurrent() bool           { return p.concurrent }
+func (p *onceProp) Key() string { return p.key }
+
+func (p *onceProp) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
+
+func (p *onceProp) IgnoreFirstLoad() bool           { return false }
+func (p *onceProp) BypassPartialFilters() bool      { return false }
+func (p *onceProp) Deferrable() (*deferrable, bool) { return nil, false }
+func (p *onceProp) Mergeable() (*mergeable, bool)   { return nil, false }
+func (p *onceProp) Scrollable() (*scrollable, bool) { return nil, false }
+func (p *onceProp) Onceable() (*onceable, bool)     { return p.once, p.once != nil }
+func (p *onceProp) Concurrent() bool                { return p.concurrent }
 
 type deferrable struct {
 	group string
@@ -210,38 +264,23 @@ func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 // If opts is nil, default options are used (default group, no merging, sequential resolution).
 func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 	prop := &deferredProp{
-		baseProp: baseProp{
-			key:   key,
-			valFn: fn,
-			val:   nil,
-		},
-		deferred: deferrable{
+		valFn: fn,
+		val:   nil,
+		key:   key,
+		once:  nil,
+		deferred: &deferrable{
 			group: DefaultDeferredGroup,
 		},
-		once: onceable{
-			expiresAt: nil,
-			key:       "",
-			fresh:     false,
-		},
-		merge: mergeable{
-			matchOn:   nil,
-			deepMerge: false,
-			prepend:   false,
-		},
+		merge:      nil,
 		concurrent: false,
-		mergeable:  false,
-		onceable:   false,
 	}
 
 	if opts != nil {
 		opts.validate()
 
 		prop.deferred.group = cmp.Or(opts.Group, DefaultDeferredGroup)
-		prop.mergeable = opts.Merge || opts.Prepend || opts.DeepMerge
-		prop.merge.prepend = opts.Prepend
-		prop.merge.deepMerge = opts.DeepMerge
-		prop.merge.matchOn = opts.MatchOn
-		prop.once, prop.onceable, prop.concurrent = onceFromOptions(key, opts.Once)
+		prop.merge = mergeFromOptions(opts.Merge, opts.Prepend, opts.DeepMerge, opts.MatchOn)
+		prop.once, prop.concurrent = onceFromOptions(key, opts.Once)
 		prop.concurrent = opts.Concurrent || prop.concurrent
 	}
 
@@ -255,11 +294,9 @@ func NewDeferred(key string, fn Lazy, opts *DeferredOptions) Prop {
 // such as authentication state or global config.
 func NewAlways(key string, val any) Prop {
 	return &alwaysProp{
-		baseProp: baseProp{
-			key:   key,
-			val:   val,
-			valFn: nil,
-		},
+		valFn: nil,
+		val:   val,
+		key:   key,
 	}
 }
 
@@ -269,18 +306,11 @@ func NewAlways(key string, val any) Prop {
 // The value function is only called when the client specifically requests this prop.
 func NewOptional(key string, fn Lazy) Prop {
 	return &optionalProp{
-		baseProp: baseProp{
-			key:   key,
-			valFn: fn,
-			val:   nil,
-		},
-		once: onceable{
-			expiresAt: nil,
-			key:       "",
-			fresh:     false,
-		},
+		valFn:      fn,
+		val:        nil,
+		key:        key,
+		once:       nil,
 		concurrent: false,
-		onceable:   false,
 	}
 }
 
@@ -298,14 +328,12 @@ func NewOnce(key string, fn Lazy, opts *OnceOptions) Prop {
 		opts = &OnceOptions{} //nolint:exhaustruct
 	}
 
-	once, _, concurrent := onceFromOptions(key, opts)
+	once, concurrent := onceFromOptions(key, opts)
 
 	return &onceProp{
-		baseProp: baseProp{
-			key:   key,
-			valFn: fn,
-			val:   nil,
-		},
+		valFn:      fn,
+		val:        nil,
+		key:        key,
 		once:       once,
 		concurrent: concurrent,
 	}
@@ -326,15 +354,15 @@ type ScrollMetadata[T ScrollPage] struct {
 
 // ScrollOptions configures infinite scroll prop behavior.
 type ScrollOptions struct {
+	Metadata *scrollable
 	Wrapper  string
-	Metadata scrollable
 }
 
 // NewScrollOptions creates type-safe infinite scroll options.
 func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) *ScrollOptions {
 	return &ScrollOptions{
 		Wrapper: wrapper,
-		Metadata: scrollable{
+		Metadata: &scrollable{
 			PageName:     metadata.PageName,
 			PreviousPage: metadata.PreviousPage,
 			NextPage:     metadata.NextPage,
@@ -346,33 +374,34 @@ func NewScrollOptions[T ScrollPage](wrapper string, metadata ScrollMetadata[T]) 
 
 // NewScroll creates an infinite scroll prop with v3 scroll metadata.
 func NewScroll(key string, value any, opts *ScrollOptions) Prop {
-	base := baseProp{
-		key:   key,
-		val:   value,
-		valFn: nil,
-	}
+	val := value
+
+	var valFn Lazy
+
 	if lazy, ok := value.(Lazy); ok {
-		base.val = nil
-		base.valFn = lazy
+		val = nil
+		valFn = lazy
 	}
 
 	prop := &scrollProp{
-		baseProp: base,
-		scroll: scrollable{
+		valFn: valFn,
+		val:   val,
+		key:   key,
+		scroll: &scrollable{
 			PreviousPage: nil,
 			NextPage:     nil,
 			CurrentPage:  nil,
 			PageName:     "",
 			path:         key + ".data",
 		},
-		merge: mergeable{
+		merge: &mergeable{
 			matchOn:   nil,
 			deepMerge: false,
 			prepend:   false,
 		},
 	}
 
-	if opts != nil {
+	if opts != nil && opts.Metadata != nil {
 		prop.scroll.PageName = opts.Metadata.PageName
 		prop.scroll.PreviousPage = opts.Metadata.PreviousPage
 		prop.scroll.NextPage = opts.Metadata.NextPage
@@ -416,34 +445,19 @@ func (opts PropOptions) validate() {
 // If opts is nil, default options are used (no merging).
 func NewProp(key string, val any, opts *PropOptions) Prop {
 	prop := &standardProp{
-		baseProp: baseProp{
-			key:   key,
-			val:   val,
-			valFn: nil,
-		},
-		once: onceable{
-			expiresAt: nil,
-			key:       "",
-			fresh:     false,
-		},
-		merge: mergeable{
-			matchOn:   nil,
-			deepMerge: false,
-			prepend:   false,
-		},
+		valFn:      nil,
+		val:        val,
+		key:        key,
+		once:       nil,
+		merge:      nil,
 		concurrent: false,
-		mergeable:  false,
-		onceable:   false,
 	}
 
 	if opts != nil {
 		opts.validate()
 
-		prop.mergeable = opts.Merge || opts.Prepend || opts.DeepMerge
-		prop.merge.prepend = opts.Prepend
-		prop.merge.deepMerge = opts.DeepMerge
-		prop.merge.matchOn = opts.MatchOn
-		prop.once, prop.onceable, prop.concurrent = onceFromOptions(key, opts.Once)
+		prop.merge = mergeFromOptions(opts.Merge, opts.Prepend, opts.DeepMerge, opts.MatchOn)
+		prop.once, prop.concurrent = onceFromOptions(key, opts.Once)
 	}
 
 	return prop
@@ -468,20 +482,28 @@ func (opts DeferredOptions) validate() {
 	}
 }
 
-func onceFromOptions(defaultKey string, opts *OnceOptions) (onceable, bool, bool) {
-	if opts == nil {
-		return onceable{
-			expiresAt: nil,
-			key:       "",
-			fresh:     false,
-		}, false, false
+func mergeFromOptions(merge, prepend, deepMerge bool, matchOn []string) *mergeable {
+	if !merge && !prepend && !deepMerge {
+		return nil
 	}
 
-	return onceable{
+	return &mergeable{
+		matchOn:   matchOn,
+		deepMerge: deepMerge,
+		prepend:   prepend,
+	}
+}
+
+func onceFromOptions(defaultKey string, opts *OnceOptions) (*onceable, bool) {
+	if opts == nil {
+		return nil, false
+	}
+
+	return &onceable{
 		key:       cmp.Or(opts.Key, defaultKey),
 		expiresAt: opts.ExpiresAt,
 		fresh:     opts.Fresh,
-	}, true, opts.Concurrent
+	}, opts.Concurrent
 }
 
 // Proper represents a collection of props that can be attached to a render context.
