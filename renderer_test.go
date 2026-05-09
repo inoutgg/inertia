@@ -491,7 +491,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 						LazyFunc(
 							func(context.Context) (any, error) { return "Lazy Content", nil },
 						),
-						&DeferredOptions{
+						&DeferredOpts{
 							Group: "group1",
 						},
 					),
@@ -534,7 +534,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			options: []Option{
 				WithProps(Props{
 					NewProp("normalProp", "Normal Value", nil),
-					NewProp("mergeProp", map[string]string{"key": "value"}, &PropOptions{
+					NewProp("mergeProp", map[string]string{"key": "value"}, &PropOpts{
 						Merge: true,
 					}),
 				}),
@@ -579,7 +579,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					NewProp("mergeProp", map[string]string{"key": "value"}, &PropOptions{
+					NewProp("mergeProp", map[string]string{"key": "value"}, &PropOpts{
 						Merge: true,
 					}),
 				}),
@@ -611,18 +611,18 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					NewProp("posts", []string{"one"}, &PropOptions{
+					NewProp("posts", []string{"one"}, &PropOpts{
 						Merge:   true,
 						MatchOn: []string{"id"},
 					}),
-					NewProp("notifications", []string{"one"}, &PropOptions{
+					NewProp("notifications", []string{"one"}, &PropOpts{
 						Prepend: true,
 						MatchOn: []string{"uuid"},
 					}),
 					NewProp(
 						"conversation",
 						map[string]any{"messages": []string{"one"}},
-						&PropOptions{
+						&PropOpts{
 							DeepMerge: true,
 							MatchOn:   []string{"messages.id"},
 						},
@@ -1380,10 +1380,10 @@ func TestRenderer_ConcurrentProps(t *testing.T) {
 		WithProps(Props{
 			NewDeferred("a", LazyFunc(func(context.Context) (any, error) {
 				return "val-a", nil
-			}), &DeferredOptions{Concurrent: true}),
+			}), &DeferredOpts{Concurrent: true}),
 			NewDeferred("b", LazyFunc(func(context.Context) (any, error) {
 				return "val-b", nil
-			}), &DeferredOptions{Concurrent: true}),
+			}), &DeferredOpts{Concurrent: true}),
 			NewProp("c", "val-c", nil),
 		}),
 	)

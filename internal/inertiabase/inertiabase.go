@@ -19,13 +19,13 @@ type Page struct {
 }
 
 type ScrollProp struct {
-	PreviousPage any    `json:"previousPage"`
-	NextPage     any    `json:"nextPage"`
+	PreviousPage any    `json:"previousPage,omitempty"`
+	NextPage     any    `json:"nextPage,omitempty"`
 	CurrentPage  any    `json:"currentPage"`
 	PageName     string `json:"pageName"`
 }
 
 type OnceProp struct {
-	ExpiresAt *int64 `json:"expiresAt"`
+	ExpiresAt *int64 `json:"expiresAt,omitempty"`
 	Prop      string `json:"prop"`
 }

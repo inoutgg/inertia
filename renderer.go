@@ -27,7 +27,9 @@ const (
 	// DefaultRootViewID is the default root HTML element ID to which
 	// the Inertia.js app is mounted.
 	DefaultRootViewID = "app"
+)
 
+const (
 	ScrollMergeIntentAppend  = "append"
 	ScrollMergeIntentPrepend = "prepend"
 )
@@ -59,8 +61,8 @@ type Config struct {
 	// Defaults to "app" if not specified.
 	RootViewID string
 
-	// JSONMarshalOptions configures JSON serialization for page props and data.
-	JSONMarshalOptions []json.Options
+	// JSONMarshalOpts configures JSON serialization for page props and data.
+	JSONMarshalOpts []json.Options
 
 	// Concurrency sets the default maximum number of props that can be resolved concurrently.
 	// It only affects props marked as concurrent.
@@ -81,13 +83,13 @@ func (c *Config) defaults() {
 //
 // Create a Renderer using New or FromFS constructor functions.
 type Renderer struct {
-	ssrClient          SSRClient
-	jsonMarshalOptions []json.Options
-	t                  *template.Template
-	rootViewID         string
-	version            string
-	rootViewAttrs      []pair[[]byte, []byte]
-	concurrency        int
+	ssrClient       SSRClient
+	jsonMarshalOpts []json.Options
+	t               *template.Template
+	rootViewID      string
+	version         string
+	rootViewAttrs   []pair[[]byte, []byte]
+	concurrency     int
 }
 
 // New creates a Renderer with the provided HTML template and configuration.
@@ -109,13 +111,13 @@ func New(t *template.Template, config *Config) *Renderer {
 	}
 
 	r := &Renderer{
-		t:                  t,
-		ssrClient:          config.SSRClient,
-		jsonMarshalOptions: config.JSONMarshalOptions,
-		version:            config.Version,
-		rootViewID:         config.RootViewID,
-		rootViewAttrs:      attrs,
-		concurrency:        config.Concurrency,
+		t:               t,
+		ssrClient:       config.SSRClient,
+		jsonMarshalOpts: config.JSONMarshalOpts,
+		version:         config.Version,
+		rootViewID:      config.RootViewID,
+		rootViewAttrs:   attrs,
+		concurrency:     config.Concurrency,
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -170,7 +172,7 @@ func (r *Renderer) render(
 	if req.IsInertia {
 		d("Received inertia request, sending JSON response: %s", req.URL)
 
-		body, err := json.Marshal(page, r.jsonMarshalOptions...)
+		body, err := json.Marshal(page, r.jsonMarshalOpts...)
 		if err != nil {
 			return response{}, fmt.Errorf("inertia: failed to encode JSON response: %w", err)
 		}
@@ -322,7 +324,7 @@ func (r *Renderer) makePageScript(page *Page) (template.HTML, error) {
 	_ = must.Must(w.WriteString(r.rootViewID))
 	_ = must.Must(w.WriteString(`" type="application/json">`))
 
-	pageBytes, err := json.Marshal(page, r.jsonMarshalOptions...)
+	pageBytes, err := json.Marshal(page, r.jsonMarshalOpts...)
 	if err != nil {
 		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
@@ -371,7 +373,7 @@ func makeProps(
 		}
 
 		// Skip deferred and optional props on the first render.
-		if prop.IgnoreFirstLoad() {
+		if prop.IsFirstLoadIgnorable() {
 			continue
 		}
 
