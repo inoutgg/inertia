@@ -32,7 +32,7 @@ func TestProps(t *testing.T) {
 			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, prop.IgnoreFirstLoad())
+			assert.True(t, prop.IsFirstLoadIgnorable())
 			assert.False(t, prop.BypassPartialFilters())
 			assert.False(t, prop.Concurrent())
 
@@ -45,7 +45,7 @@ func TestProps(t *testing.T) {
 
 			prop := NewDeferred("key", LazyFunc(func(context.Context) (any, error) {
 				return "deferred-val", nil
-			}), &DeferredOptions{
+			}), &DeferredOpts{
 				Group: "custom",
 			})
 
@@ -57,7 +57,7 @@ func TestProps(t *testing.T) {
 			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "custom", deferred.group)
-			assert.True(t, prop.IgnoreFirstLoad())
+			assert.True(t, prop.IsFirstLoadIgnorable())
 			assert.False(t, prop.BypassPartialFilters())
 
 			_, ok = prop.Mergeable()
@@ -70,7 +70,7 @@ func TestProps(t *testing.T) {
 			prop := NewDeferred(
 				"key",
 				LazyFunc(func(context.Context) (any, error) { return "val", nil }),
-				&DeferredOptions{
+				&DeferredOpts{
 					Merge: true,
 				},
 			)
@@ -83,7 +83,7 @@ func TestProps(t *testing.T) {
 			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, prop.IgnoreFirstLoad())
+			assert.True(t, prop.IsFirstLoadIgnorable())
 
 			_, ok = prop.Mergeable()
 			assert.True(t, ok)
@@ -95,7 +95,7 @@ func TestProps(t *testing.T) {
 			prop := NewDeferred(
 				"key",
 				LazyFunc(func(context.Context) (any, error) { return "val", nil }),
-				&DeferredOptions{
+				&DeferredOpts{
 					Concurrent: true,
 				},
 			)
@@ -108,7 +108,7 @@ func TestProps(t *testing.T) {
 			deferred, ok := prop.Deferrable()
 			require.True(t, ok)
 			assert.Equal(t, "default", deferred.group)
-			assert.True(t, prop.IgnoreFirstLoad())
+			assert.True(t, prop.IsFirstLoadIgnorable())
 			assert.True(t, prop.Concurrent())
 
 			_, ok = prop.Mergeable()
@@ -119,21 +119,42 @@ func TestProps(t *testing.T) {
 	t.Run("NewAlways", func(t *testing.T) {
 		t.Parallel()
 
-		prop := NewAlways("key", "val")
+		t.Run("eager value", func(t *testing.T) {
+			t.Parallel()
 
-		assert.Equal(t, "key", prop.Key())
-		val, err := prop.Value(t.Context())
-		require.NoError(t, err)
-		assert.Equal(t, "val", val)
+			prop := NewAlways("key", "val")
 
-		assert.False(t, prop.IgnoreFirstLoad())
-		assert.True(t, prop.BypassPartialFilters())
-		assert.False(t, prop.Concurrent())
+			assert.Equal(t, "key", prop.Key())
+			val, err := prop.Value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "val", val)
 
-		_, ok := prop.Deferrable()
-		assert.False(t, ok)
-		_, ok = prop.Mergeable()
-		assert.False(t, ok)
+			assert.False(t, prop.IsFirstLoadIgnorable())
+			assert.True(t, prop.BypassPartialFilters())
+			assert.False(t, prop.Concurrent())
+
+			_, ok := prop.Deferrable()
+			assert.False(t, ok)
+			_, ok = prop.Mergeable()
+			assert.False(t, ok)
+		})
+
+		t.Run("lazy value", func(t *testing.T) {
+			t.Parallel()
+
+			prop := NewAlways("key", LazyFunc(func(context.Context) (any, error) {
+				return "lazy-val", nil
+			}))
+
+			assert.Equal(t, "key", prop.Key())
+			val, err := prop.Value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "lazy-val", val)
+
+			assert.False(t, prop.IsFirstLoadIgnorable())
+			assert.True(t, prop.BypassPartialFilters())
+			assert.False(t, prop.Concurrent())
+		})
 	})
 
 	t.Run("NewOptional", func(t *testing.T) {
@@ -146,7 +167,7 @@ func TestProps(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "val", val)
 
-		assert.True(t, prop.IgnoreFirstLoad())
+		assert.True(t, prop.IsFirstLoadIgnorable())
 		assert.False(t, prop.BypassPartialFilters())
 		assert.False(t, prop.Concurrent())
 
@@ -160,7 +181,7 @@ func TestProps(t *testing.T) {
 		t.Parallel()
 
 		expiresAt := int64(123)
-		prop := NewOnce("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }), &OnceOptions{
+		prop := NewOnce("key", LazyFunc(func(context.Context) (any, error) { return "val", nil }), &OnceOpts{
 			Key:        "remembered-key",
 			ExpiresAt:  &expiresAt,
 			Fresh:      true,
@@ -244,7 +265,7 @@ func TestProps(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
 
-			assert.False(t, prop.IgnoreFirstLoad())
+			assert.False(t, prop.IsFirstLoadIgnorable())
 			assert.False(t, prop.BypassPartialFilters())
 			_, ok := prop.Deferrable()
 			assert.False(t, ok)
@@ -252,17 +273,33 @@ func TestProps(t *testing.T) {
 			assert.False(t, ok)
 		})
 
+		t.Run("Lazy value", func(t *testing.T) {
+			t.Parallel()
+
+			prop := NewProp("key", LazyFunc(func(context.Context) (any, error) {
+				return "lazy-val", nil
+			}), nil)
+
+			assert.Equal(t, "key", prop.Key())
+			val, err := prop.Value(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, "lazy-val", val)
+
+			assert.False(t, prop.IsFirstLoadIgnorable())
+			assert.False(t, prop.BypassPartialFilters())
+		})
+
 		t.Run("With options", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewProp("key", "val", &PropOptions{Merge: true})
+			prop := NewProp("key", "val", &PropOpts{Merge: true})
 
 			val, err := prop.Value(t.Context())
 
 			assert.Equal(t, "key", prop.Key())
 			require.NoError(t, err)
 			assert.Equal(t, "val", val)
-			assert.False(t, prop.IgnoreFirstLoad())
+			assert.False(t, prop.IsFirstLoadIgnorable())
 			_, ok := prop.Deferrable()
 			assert.False(t, ok)
 			_, ok = prop.Mergeable()
@@ -273,7 +310,7 @@ func TestProps(t *testing.T) {
 		t.Run("With v3 prepend options", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewProp("key", "val", &PropOptions{
+			prop := NewProp("key", "val", &PropOpts{
 				Prepend: true,
 				MatchOn: []string{"id"},
 			})
@@ -293,7 +330,7 @@ func TestProps(t *testing.T) {
 		t.Run("With v3 deep merge options", func(t *testing.T) {
 			t.Parallel()
 
-			prop := NewProp("key", "val", &PropOptions{
+			prop := NewProp("key", "val", &PropOpts{
 				DeepMerge: true,
 				MatchOn:   []string{"messages.id"},
 			})
@@ -309,7 +346,7 @@ func TestProps(t *testing.T) {
 			t.Parallel()
 
 			assert.Panics(t, func() {
-				NewProp("key", "val", &PropOptions{
+				NewProp("key", "val", &PropOpts{
 					Merge:     true,
 					DeepMerge: true,
 				})
@@ -352,8 +389,8 @@ func TestPropCapabilities(t *testing.T) {
 		expiresAt := int64(123)
 		prop := NewDeferred("users", LazyFunc(func(context.Context) (any, error) {
 			return []string{"one"}, nil
-		}), &DeferredOptions{
-			Once: &OnceOptions{
+		}), &DeferredOpts{
+			Once: &OnceOpts{
 				Key:        "remembered-users",
 				ExpiresAt:  &expiresAt,
 				Fresh:      true,
@@ -368,7 +405,7 @@ func TestPropCapabilities(t *testing.T) {
 		deferred, ok := prop.Deferrable()
 		require.True(t, ok)
 		assert.Equal(t, "attributes", deferred.group)
-		assert.True(t, prop.IgnoreFirstLoad())
+		assert.True(t, prop.IsFirstLoadIgnorable())
 		assert.False(t, prop.BypassPartialFilters())
 		assert.True(t, prop.Concurrent())
 
@@ -391,7 +428,7 @@ func TestPropCapabilities(t *testing.T) {
 		assert.Panics(t, func() {
 			NewDeferred("users", LazyFunc(func(context.Context) (any, error) {
 				return []string{"one"}, nil
-			}), &DeferredOptions{
+			}), &DeferredOpts{
 				Merge:   true,
 				Prepend: true,
 			})
@@ -404,7 +441,7 @@ func TestPropCapabilities(t *testing.T) {
 		prop := NewAlways("auth", map[string]string{"name": "Roman"})
 
 		assert.Equal(t, "auth", prop.Key())
-		assert.False(t, prop.IgnoreFirstLoad())
+		assert.False(t, prop.IsFirstLoadIgnorable())
 		assert.True(t, prop.BypassPartialFilters())
 
 		_, ok := prop.Deferrable()

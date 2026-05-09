@@ -21,5 +21,6 @@ const (
 const (
 	ContentTypeHTML = "text/html"
 	ContentTypeJSON = "application/json"
-	HeaderValueTrue = "true"
 )
+
+const HeaderValueTrue = "true"

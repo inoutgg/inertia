@@ -168,7 +168,7 @@ func ParseStruct(v any) (Props, error) {
 			prop = NewDeferred(
 				fieldName,
 				fn,
-				&DeferredOptions{
+				&DeferredOpts{
 					Once:       nil,
 					Merge:      mergeable,
 					Group:      cmp.Or(inertiaGroup, DefaultDeferredGroup),
@@ -184,7 +184,7 @@ func ParseStruct(v any) (Props, error) {
 			prop = NewProp(
 				fieldName,
 				fieldVal.Interface(),
-				&PropOptions{
+				&PropOpts{
 					Once:      nil,
 					MatchOn:   nil,
 					Merge:     mergeable,
