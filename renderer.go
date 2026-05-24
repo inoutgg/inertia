@@ -18,6 +18,7 @@ import (
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 
+	"go.segfaultmedaddy.com/inertia/inertiaalways"
 	"go.segfaultmedaddy.com/inertia/internal/inertiabase"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
@@ -478,11 +479,11 @@ func makeDeferredProps(req request, componentName string, props []Prop) map[stri
 			continue
 		}
 
-		if _, ok := m[deferred.group]; !ok {
-			m[deferred.group] = []string{}
+		if _, ok := m[deferred.Group]; !ok {
+			m[deferred.Group] = []string{}
 		}
 
-		m[deferred.group] = append(m[deferred.group], prop.Key())
+		m[deferred.Group] = append(m[deferred.Group], prop.Key())
 	}
 
 	return m
@@ -497,9 +498,9 @@ func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 			continue
 		}
 
-		m[once.key] = inertiabase.OnceProp{
+		m[once.Key] = inertiabase.OnceProp{
 			Prop:      prop.Key(),
-			ExpiresAt: once.expiresAt,
+			ExpiresAt: once.ExpiresAt,
 		}
 	}
 
@@ -512,7 +513,7 @@ func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
 
 func shouldSkipOnceProp(prop Prop, exceptOnceProps, whitelist []string) bool {
 	once, ok := prop.Onceable()
-	if !ok || once.fresh || !slices.Contains(exceptOnceProps, once.key) {
+	if !ok || once.Fresh || !slices.Contains(exceptOnceProps, once.Key) {
 		return false
 	}
 
@@ -545,29 +546,40 @@ func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) 
 
 		if scroll, ok := prop.Scrollable(); ok {
 			if scrollMergeIntent == ScrollMergeIntentPrepend {
-				m.prepend = append(m.prepend, scroll.path)
+				m.prepend = append(m.prepend, scroll.Path)
 			} else {
-				m.append = append(m.append, scroll.path)
+				m.append = append(m.append, scroll.Path)
 			}
 
 			continue
 		}
 
 		switch {
-		case merge.deepMerge:
-			m.deepMerge = append(m.deepMerge, prop.Key())
-		case merge.prepend:
+		case merge.Prepend:
 			m.prepend = append(m.prepend, prop.Key())
-		default:
+		case merge.Append:
 			m.append = append(m.append, prop.Key())
 		}
 
-		for _, matchOn := range merge.matchOn {
-			m.matchOn = append(m.matchOn, qualifyPropPath(prop.Key(), matchOn))
-		}
+		m.addMergeKeys(prop.Key(), merge.AppendKeys, &m.append)
+		m.addMergeKeys(prop.Key(), merge.PrependKeys, &m.prepend)
 	}
 
 	return m
+}
+
+func (m *mergeProps) addMergeKeys(propKey string, keys []MergeKey, props *[]string) {
+	for _, key := range keys {
+		path := propKey
+		if key.Key != "" {
+			path = qualifyPropPath(propKey, key.Key)
+		}
+
+		*props = append(*props, path)
+		if key.MatchOn != "" {
+			m.matchOn = append(m.matchOn, qualifyPropPath(path, key.MatchOn))
+		}
+	}
 }
 
 func makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
@@ -613,10 +625,10 @@ func makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
 	}
 
 	if errorBag != DefaultErrorBag {
-		return NewAlways(errorBag, map[string]map[string]string{"errors": m})
+		return inertiaalways.New(errorBag, map[string]map[string]string{"errors": m})
 	}
 
-	return NewAlways("errors", m)
+	return inertiaalways.New("errors", m)
 }
 
 // TemplateData contains the data passed to the HTML template during rendering.
