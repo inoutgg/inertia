@@ -154,28 +154,6 @@ type Response interface {
 	Proper() inertia.Proper
 }
 
-// NewStructResponse creates a Response by parsing inertia struct tags on m.
-// See inertia.ParseStruct for tag documentation.
-// Returns an error if the struct tags are invalid.
-func NewStructResponse(component string, m any, opts ...ResponseOption) (Response, error) {
-	proper, err := inertia.ParseStruct(m)
-	if err != nil {
-		return nil, fmt.Errorf("inertiaframe: failed to parse props: %w", err)
-	}
-
-	var options ResponseOptions
-
-	if len(opts) > 0 {
-		for _, opt := range opts {
-			opt(&options)
-		}
-	}
-
-	options.defaults()
-
-	return &resp{proper, component, options}, nil
-}
-
 // NewResponse creates a Response with the specified component and props.
 // Optional ResponseOption functions can customize history and concurrency behavior.
 func NewResponse(component string, proper inertia.Proper, opts ...ResponseOption) Response {
