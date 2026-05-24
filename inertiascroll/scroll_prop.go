@@ -1,15 +1,13 @@
 package inertiascroll
 
 import (
-	"cmp"
 	"context"
 	"strings"
 
-	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
-var _ inertia.Prop = (*Prop)(nil)
+var _ inertiaprop.Prop = (*Prop)(nil)
 
 type Page interface {
 	~int | ~int64 | ~string
@@ -46,63 +44,49 @@ func WithPageName(pageName string) Option {
 }
 
 type Prop struct {
-	valFn  inertia.Lazy
+	lval   inertiaprop.Lazy
 	val    any
-	scroll *inertiaprop.Scrollable
 	merge  *inertiaprop.Mergeable
+	scroll *inertiaprop.Scrollable
 	key    string
 }
 
 func New(key string, value any, opts ...Option) *Prop {
-	config := &Config{previousPage: nil, nextPage: nil, currentPage: nil, pageName: "", wrapper: ""}
+	var config Config
 	for _, opt := range opts {
-		opt(config)
+		opt(&config)
 	}
 
-	val := value
+	var prop Prop
 
-	var valFn inertia.Lazy
-
-	if lazy, ok := value.(inertia.Lazy); ok {
-		val = nil
-		valFn = lazy
+	if lval, ok := value.(inertiaprop.Lazy); ok {
+		prop.lval = lval
+	} else {
+		prop.val = value
 	}
 
-	prop := &Prop{
-		valFn: valFn,
-		val:   val,
-		scroll: &inertiaprop.Scrollable{
-			PreviousPage: nil,
-			NextPage:     nil,
-			CurrentPage:  nil,
-			PageName:     "",
-			Path:         key + ".data",
-		},
-		merge: &inertiaprop.Mergeable{
-			AppendKeys:  nil,
-			PrependKeys: nil,
-			Append:      true,
-			Prepend:     false,
-		},
-		key:   key,
+	prop.scroll = &inertiaprop.Scrollable{
+		Path:         qualifyPropPath(key, "data"),
+		PageName:     config.pageName,
+		PreviousPage: config.previousPage,
+		NextPage:     config.nextPage,
+		CurrentPage:  config.currentPage,
+	}
+	if config.wrapper != "" {
+		prop.scroll.Path = qualifyPropPath(key, config.wrapper)
 	}
 
-	if config.previousPage != nil || config.nextPage != nil || config.currentPage != nil || config.pageName != "" {
-		prop.scroll.PageName = config.pageName
-		prop.scroll.PreviousPage = config.previousPage
-		prop.scroll.NextPage = config.nextPage
-		prop.scroll.CurrentPage = config.currentPage
-		prop.scroll.Path = qualifyPropPath(key, cmp.Or(config.wrapper, "data"))
-	}
+	prop.merge = &inertiaprop.Mergeable{Append: true}
+	prop.key = key
 
-	return prop
+	return &prop
 }
 
 func (p *Prop) Key() string { return p.key }
 
 func (p *Prop) Value(ctx context.Context) (any, error) {
-	if p.valFn != nil {
-		return p.valFn.Value(ctx) //nolint:wrapcheck
+	if p.lval != nil {
+		return p.lval.Value(ctx) //nolint:wrapcheck
 	}
 
 	return p.val, nil

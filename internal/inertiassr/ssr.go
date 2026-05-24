@@ -9,8 +9,8 @@ import (
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
 
-	"go.segfaultmedaddy.com/inertia/internal/inertiabase"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
 
 var _ SSRClient = (*ssr)(nil)
@@ -23,7 +23,7 @@ type SSRTemplateData struct {
 //go:generate mockgen -destination ssr_mock.go -package inertiassr . SSRClient
 type SSRClient interface {
 	// Render makes a request to the server-side rendering service with the given page data.
-	Render(context.Context, *inertiabase.Page) (*SSRTemplateData, error)
+	Render(context.Context, *inertiaprotocol.Page) (*SSRTemplateData, error)
 }
 
 // ssr is an HTTP client that makes requests to a server-side rendering service.
@@ -39,7 +39,7 @@ func NewHTTPSsrClient(url string, client *http.Client) SSRClient {
 	return &ssr{client, url}
 }
 
-func (s *ssr) Render(ctx context.Context, p *inertiabase.Page) (*SSRTemplateData, error) {
+func (s *ssr) Render(ctx context.Context, p *inertiaprotocol.Page) (*SSRTemplateData, error) {
 	debug.Assert(p != nil, "page must be set")
 
 	b, err := json.Marshal(p)

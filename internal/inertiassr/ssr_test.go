@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.segfaultmedaddy.com/inertia/internal/inertiabase"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
 
 //nolint:gochecknoglobals
@@ -20,7 +20,7 @@ func TestSsrRender(t *testing.T) {
 	t.Parallel()
 
 	// arrange
-	page := &inertiabase.Page{
+	page := &inertiaprotocol.Page{
 		Component: "Test",
 		Props:     map[string]any{"foo": "bar"},
 	}
@@ -44,7 +44,7 @@ func TestSsrRender(t *testing.T) {
 			buf, err := io.ReadAll(body)
 			assert.NoError(t, err)
 
-			var requestPage inertiabase.Page
+			var requestPage inertiaprotocol.Page
 			assert.NoError(t, json.Unmarshal(buf, &requestPage))
 
 			assert.Equal(t, page.Component, requestPage.Component)

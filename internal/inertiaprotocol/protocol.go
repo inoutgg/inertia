@@ -1,4 +1,4 @@
-package inertiabase
+package inertiaprotocol
 
 type Page struct {
 	Props            map[string]any        `json:"props"`
@@ -10,7 +10,6 @@ type Page struct {
 	Version          string                `json:"version"`
 	MergeProps       []string              `json:"mergeProps,omitempty"`
 	PrependProps     []string              `json:"prependProps,omitempty"`
-	DeepMergeProps   []string              `json:"deepMergeProps,omitempty"`
 	MatchPropsOn     []string              `json:"matchPropsOn,omitempty"`
 	SharedProps      []string              `json:"sharedProps,omitempty"`
 	PreserveFragment bool                  `json:"preserveFragment,omitempty"`

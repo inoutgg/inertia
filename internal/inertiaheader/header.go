@@ -23,4 +23,7 @@ const (
 	ContentTypeJSON = "application/json"
 )
 
-const HeaderValueTrue = "true"
+const (
+	HeaderValueScrollMergeIntentPrepend = "prepend"
+	HeaderValueTrue                     = "true"
+)
