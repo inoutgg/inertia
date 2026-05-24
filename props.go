@@ -8,7 +8,7 @@ var _ Proper = (Props)(nil)
 // Props control data visibility, lazy loading, merging behavior, and resolution timing.
 //
 // To create a prop, use the specialized prop packages:
-// inertiastandard, inertiaalways, inertiaoptional, inertiadeferred, and inertiascroll.
+// inertiaprop, inertiaalways, inertiaoptional, inertiadeferred, and inertiascroll.
 //
 // Attach props to a page using WithProps option.
 type (

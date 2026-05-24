@@ -10,17 +10,15 @@ import (
 	"io/fs"
 	"net/http"
 	"runtime"
-	"slices"
 	"strings"
 
-	"github.com/alitto/pond/v2"
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 
 	"go.segfaultmedaddy.com/inertia/inertiaalways"
-	"go.segfaultmedaddy.com/inertia/internal/inertiabase"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
 )
 
@@ -42,7 +40,7 @@ var ErrInvalidScrollMergeIntent = errors.New("inertia: invalid infinite scroll m
 var DefaultConcurrency = runtime.GOMAXPROCS(0) //nolint:gochecknoglobals
 
 // Page represents an Inertia.js page that is sent to the client.
-type Page = inertiabase.Page
+type Page = inertiaprotocol.Page
 
 // Config configures the Renderer behavior and capabilities.
 type Config struct {
@@ -165,9 +163,31 @@ func (r *Renderer) render(
 ) (response, error) {
 	renderCtx.Concurrency = max(cmp.Or(renderCtx.Concurrency, r.concurrency), 0)
 
-	page, err := r.newPage(ctx, req, name, renderCtx)
+	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
+	rawProps = append(rawProps, renderCtx.SharedProps...)
+	rawProps = append(rawProps, renderCtx.Props...)
+	rawProps = append(rawProps, makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
+
+	page, err := inertiaprotocol.Render(ctx, inertiaprotocol.Request{
+		URL:               req.URL,
+		PartialComponent:  req.PartialComponent,
+		ScrollMergeIntent: req.ScrollMergeIntent,
+		PartialData:       req.PartialData,
+		PartialExcept:     req.PartialExcept,
+		ResetProps:        req.ResetProps,
+		ExceptOnceProps:   req.ExceptOnceProps,
+	}, inertiaprotocol.Context{
+		Component:        name,
+		Version:          r.version,
+		Props:            rawProps,
+		SharedProps:      renderCtx.SharedProps,
+		PreserveFragment: renderCtx.PreserveFragment,
+		ClearHistory:     renderCtx.ClearHistory,
+		EncryptHistory:   renderCtx.EncryptHistory,
+		Concurrency:      renderCtx.Concurrency,
+	})
 	if err != nil {
-		return response{}, err
+		return response{}, fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
 
 	if req.IsInertia {
@@ -236,50 +256,6 @@ func (r *Renderer) render(
 	}, nil
 }
 
-func (r *Renderer) newPage(
-	ctx context.Context,
-	req request,
-	componentName string,
-	renderCtx RenderContext,
-) (*Page, error) {
-	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
-	rawProps = append(rawProps, renderCtx.SharedProps...)
-	rawProps = append(rawProps, renderCtx.Props...)
-	rawProps = append(rawProps, makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
-
-	props, err := makeProps(ctx, req, componentName, rawProps, renderCtx.Concurrency)
-	if err != nil {
-		return nil, err
-	}
-
-	deferredProps := makeDeferredProps(req, componentName, rawProps)
-	onceProps := makeOnceProps(rawProps)
-	scrollProps := makeScrollProps(rawProps)
-	mergeProps := makeMergeProps(
-		rawProps,
-		req.ResetProps,
-		req.ScrollMergeIntent,
-	)
-
-	return &Page{
-		Component:        componentName,
-		Props:            props,
-		DeferredProps:    deferredProps,
-		ScrollProps:      scrollProps,
-		OnceProps:        onceProps,
-		MergeProps:       mergeProps.append,
-		PrependProps:     mergeProps.prepend,
-		DeepMergeProps:   mergeProps.deepMerge,
-		MatchPropsOn:     mergeProps.matchOn,
-		SharedProps:      makeSharedProps(renderCtx.SharedProps),
-		URL:              req.URL,
-		Version:          r.version,
-		PreserveFragment: renderCtx.PreserveFragment,
-		ClearHistory:     renderCtx.ClearHistory,
-		EncryptHistory:   renderCtx.EncryptHistory,
-	}, nil
-}
-
 // makeRootView creates a root view element with the given page data.
 func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 	pageScript, err := r.makePageScript(page)
@@ -322,296 +298,24 @@ func (r *Renderer) makePageScript(page *Page) (template.HTML, error) {
 	var w strings.Builder
 
 	_ = must.Must(w.WriteString(`<script data-page="`))
-	_ = must.Must(w.WriteString(r.rootViewID))
+	_ = must.Must(w.WriteString(strings.TrimSpace(r.rootViewID)))
 	_ = must.Must(w.WriteString(`" type="application/json">`))
 
-	pageBytes, err := json.Marshal(page, r.jsonMarshalOpts...)
+	b, err := json.Marshal(page, r.jsonMarshalOpts...)
 	if err != nil {
 		return "", fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
 
-	_ = must.Must(w.WriteString(escapeScriptJSON(pageBytes)))
+	b = bytes.ReplaceAll(b, []byte("&"), []byte(`\u0026`))
+	b = bytes.ReplaceAll(b, []byte("<"), []byte(`\u003c`))
+	b = bytes.ReplaceAll(b, []byte(">"), []byte(`\u003e`))
+	b = bytes.ReplaceAll(b, []byte("\u2028"), []byte(`\u2028`))
+	b = bytes.ReplaceAll(b, []byte("\u2029"), []byte(`\u2029`))
+
+	_ = must.Must(w.Write(b))
 	_ = must.Must(w.WriteString(`</script>`))
 
 	return template.HTML(w.String()), nil //nolint:gosec
-}
-
-func escapeScriptJSON(b []byte) string {
-	s := string(b)
-	s = strings.ReplaceAll(s, "&", `\u0026`)
-	s = strings.ReplaceAll(s, "<", `\u003c`)
-	s = strings.ReplaceAll(s, ">", `\u003e`)
-	s = strings.ReplaceAll(s, "\u2028", `\u2028`)
-	s = strings.ReplaceAll(s, "\u2029", `\u2029`)
-
-	return s
-}
-
-func makeProps(
-	ctx context.Context,
-	req request,
-	componentName string,
-	props []Prop,
-	concurrency int,
-) (map[string]any, error) {
-	// If the request is a partial, we need to filter the props.
-	if req.PartialComponent == componentName {
-		return resolvePartialComponentRequest(
-			ctx,
-			props,
-			req.PartialData,
-			req.PartialExcept,
-			req.ExceptOnceProps,
-			concurrency,
-		)
-	}
-
-	m := make(map[string]any, len(props))
-
-	for _, prop := range props {
-		if shouldSkipOnceProp(prop, req.ExceptOnceProps, nil) {
-			continue
-		}
-
-		// Skip deferred and optional props on the first render.
-		if prop.IsFirstLoadIgnorable() {
-			continue
-		}
-
-		val, err := prop.Value(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
-		}
-
-		m[prop.Key()] = val
-	}
-
-	return m, nil
-}
-
-func resolvePartialComponentRequest(
-	ctx context.Context,
-	props []Prop,
-	whitelist, blacklist, exceptOnceProps []string,
-	concurrency int,
-) (map[string]any, error) {
-	m := make(map[string]any, len(props))
-	concurrentProps := make([]Prop, 0, len(props))
-
-	for _, prop := range props {
-		key := prop.Key()
-		if shouldSkipOnceProp(prop, exceptOnceProps, whitelist) {
-			continue
-		}
-
-		if !prop.BypassPartialFilters() {
-			// It should be fine to go through slices here, as the number of props is expected to be small.
-			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
-				len(blacklist) > 0 && slices.Contains(blacklist, key) {
-				continue
-			}
-		}
-
-		if prop.Concurrent() {
-			concurrentProps = append(concurrentProps, prop)
-		} else {
-			val, err := prop.Value(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
-			}
-
-			m[key] = val
-		}
-	}
-
-	if len(concurrentProps) > 0 {
-		pool := pond.NewResultPool[pair[string, any]](concurrency)
-		group := pool.NewGroupContext(ctx)
-
-		for _, prop := range concurrentProps {
-			group.SubmitErr(func() (pair[string, any], error) {
-				var kv pair[string, any]
-
-				val, err := prop.Value(ctx)
-				if err != nil {
-					return kv, fmt.Errorf(
-						"inertia: failed to resolve prop %s: %w",
-						prop.Key(),
-						err,
-					)
-				}
-
-				kv.key = prop.Key()
-				kv.value = val
-
-				return kv, nil
-			})
-		}
-
-		result, err := group.Wait()
-		if err != nil {
-			return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
-		}
-
-		for i, prop := range concurrentProps {
-			m[prop.Key()] = result[i].value
-		}
-	}
-
-	return m, nil
-}
-
-// makeDeferredProps creates a map of deferred props that should be resolved
-// on the client side.
-func makeDeferredProps(req request, componentName string, props []Prop) map[string][]string {
-	// If the request is partial, then the client already got information
-	// about the deferred props in the initial request so we don't need to
-	// send them again.
-	if req.PartialComponent == componentName {
-		return nil
-	}
-
-	m := make(map[string][]string, len(props))
-
-	for _, prop := range props {
-		deferred, ok := prop.Deferrable()
-		if !ok {
-			continue
-		}
-
-		if _, ok := m[deferred.Group]; !ok {
-			m[deferred.Group] = []string{}
-		}
-
-		m[deferred.Group] = append(m[deferred.Group], prop.Key())
-	}
-
-	return m
-}
-
-func makeOnceProps(props []Prop) map[string]inertiabase.OnceProp {
-	m := make(map[string]inertiabase.OnceProp)
-
-	for _, prop := range props {
-		once, ok := prop.Onceable()
-		if !ok {
-			continue
-		}
-
-		m[once.Key] = inertiabase.OnceProp{
-			Prop:      prop.Key(),
-			ExpiresAt: once.ExpiresAt,
-		}
-	}
-
-	if len(m) == 0 {
-		return nil
-	}
-
-	return m
-}
-
-func shouldSkipOnceProp(prop Prop, exceptOnceProps, whitelist []string) bool {
-	once, ok := prop.Onceable()
-	if !ok || once.Fresh || !slices.Contains(exceptOnceProps, once.Key) {
-		return false
-	}
-
-	return !slices.Contains(whitelist, prop.Key())
-}
-
-func makeSharedProps(props []Prop) []string {
-	if len(props) == 0 {
-		return nil
-	}
-
-	sharedProps := make([]string, 0, len(props))
-	for _, prop := range props {
-		sharedProps = append(sharedProps, prop.Key())
-	}
-
-	return sharedProps
-}
-
-// makeMergeProps creates a list of props that should be merged instead of
-// being replaced on the client side.
-func makeMergeProps(props []Prop, blacklist []string, scrollMergeIntent string) mergeProps {
-	var m mergeProps
-
-	for _, prop := range props {
-		merge, ok := prop.Mergeable()
-		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) || !ok {
-			continue
-		}
-
-		if scroll, ok := prop.Scrollable(); ok {
-			if scrollMergeIntent == ScrollMergeIntentPrepend {
-				m.prepend = append(m.prepend, scroll.Path)
-			} else {
-				m.append = append(m.append, scroll.Path)
-			}
-
-			continue
-		}
-
-		switch {
-		case merge.Prepend:
-			m.prepend = append(m.prepend, prop.Key())
-		case merge.Append:
-			m.append = append(m.append, prop.Key())
-		}
-
-		m.addMergeKeys(prop.Key(), merge.AppendKeys, &m.append)
-		m.addMergeKeys(prop.Key(), merge.PrependKeys, &m.prepend)
-	}
-
-	return m
-}
-
-func (m *mergeProps) addMergeKeys(propKey string, keys []MergeKey, props *[]string) {
-	for _, key := range keys {
-		path := propKey
-		if key.Key != "" {
-			path = qualifyPropPath(propKey, key.Key)
-		}
-
-		*props = append(*props, path)
-		if key.MatchOn != "" {
-			m.matchOn = append(m.matchOn, qualifyPropPath(path, key.MatchOn))
-		}
-	}
-}
-
-func makeScrollProps(props []Prop) map[string]inertiabase.ScrollProp {
-	m := make(map[string]inertiabase.ScrollProp)
-
-	for _, prop := range props {
-		scroll, ok := prop.Scrollable()
-		if !ok {
-			continue
-		}
-
-		m[prop.Key()] = inertiabase.ScrollProp{
-			PageName:     scroll.PageName,
-			PreviousPage: scroll.PreviousPage,
-			NextPage:     scroll.NextPage,
-			CurrentPage:  scroll.CurrentPage,
-		}
-	}
-
-	if len(m) == 0 {
-		return nil
-	}
-
-	return m
-}
-
-func qualifyPropPath(propKey, path string) string {
-	if path == "" || strings.HasPrefix(path, propKey+".") || path == propKey {
-		return path
-	}
-
-	return propKey + "." + path
 }
 
 func makeValidationErrors(errorers []ValidationErrorer, errorBag string) Prop {
@@ -700,11 +404,4 @@ func ErrorBagFromRequest(r *http.Request) string {
 type pair[K any, V any] struct {
 	key   K
 	value V
-}
-
-type mergeProps struct {
-	append    []string
-	prepend   []string
-	deepMerge []string
-	matchOn   []string
 }

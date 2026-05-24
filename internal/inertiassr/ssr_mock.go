@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	inertiabase "go.segfaultmedaddy.com/inertia/internal/inertiabase"
+	inertiaprotocol "go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,7 +42,7 @@ func (m *MockSSRClient) EXPECT() *MockSSRClientMockRecorder {
 }
 
 // Render mocks base method.
-func (m *MockSSRClient) Render(arg0 context.Context, arg1 *inertiabase.Page) (*SSRTemplateData, error) {
+func (m *MockSSRClient) Render(arg0 context.Context, arg1 *inertiaprotocol.Page) (*SSRTemplateData, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Render", arg0, arg1)
 	ret0, _ := ret[0].(*SSRTemplateData)

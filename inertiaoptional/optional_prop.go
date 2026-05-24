@@ -3,11 +3,10 @@ package inertiaoptional
 import (
 	"context"
 
-	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
-var _ inertia.Prop = (*Prop)(nil)
+var _ inertiaprop.Prop = (*Prop)(nil)
 
 type Config struct {
 	concurrent bool
@@ -19,7 +18,7 @@ func WithConcurrent(config *Config) { config.concurrent = true }
 
 // Prop is a lazily-evaluated prop included only during partial reloads when explicitly requested.
 type Prop struct {
-	val        inertia.Lazy
+	val        inertiaprop.Lazy
 	key        string
 	concurrent bool
 }
@@ -29,7 +28,7 @@ type Prop struct {
 // It is useful for expensive computations that aren't needed on every render.
 //
 // The value function is only called when the client specifically requests this prop.
-func New(key string, val inertia.Lazy, opts ...Option) *Prop {
+func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
 	var cfg Config
 	for _, opt := range opts {
 		opt(&cfg)

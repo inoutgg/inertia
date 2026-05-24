@@ -14,8 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"go.segfaultmedaddy.com/inertia/inertiadeferred"
+	"go.segfaultmedaddy.com/inertia/inertiaprop"
+	"go.segfaultmedaddy.com/inertia/inertiascroll"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
-	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiassr"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
 )
@@ -407,9 +409,9 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("title", "Test Title"),
-					testStandardProp("content", "Test Content"),
-					testStandardProp("hidden", "Should Not Be Included"),
+					inertiaprop.New("title", "Test Title"),
+					inertiaprop.New("content", "Test Content"),
+					inertiaprop.New("hidden", "Should Not Be Included"),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -451,9 +453,9 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("title", "Test Title"),
-					testStandardProp("content", "Test Content"),
-					testStandardProp("hidden", "Should Not Be Included"),
+					inertiaprop.New("title", "Test Title"),
+					inertiaprop.New("content", "Test Content"),
+					inertiaprop.New("hidden", "Should Not Be Included"),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -486,13 +488,13 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("visible", "Visible Content"),
-					testDeferredProp(
+					inertiaprop.New("visible", "Visible Content"),
+					inertiadeferred.New(
 						"deferred",
 						LazyFunc(
 							func(context.Context) (any, error) { return "Lazy Content", nil },
 						),
-						testDeferredGroup("group1"),
+						inertiadeferred.WithGroup("group1"),
 					),
 				}),
 			},
@@ -532,8 +534,12 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("normalProp", "Normal Value"),
-					testStandardProp("mergeProp", map[string]string{"key": "value"}, testMergeAppend()),
+					inertiaprop.New("normalProp", "Normal Value"),
+					inertiaprop.New(
+						"mergeProp",
+						map[string]string{"key": "value"},
+						inertiaprop.WithMerge(NewMergeOpts()),
+					),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -576,7 +582,11 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("mergeProp", map[string]string{"key": "value"}, testMergeAppend()),
+					inertiaprop.New(
+						"mergeProp",
+						map[string]string{"key": "value"},
+						inertiaprop.WithMerge(NewMergeOpts()),
+					),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -606,12 +616,17 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testStandardProp("posts", []string{"one"}, testMergeAppend(MergeKey{MatchOn: "id"})),
-					testStandardProp("notifications", []string{"one"}, testMergePrepend(MergeKey{MatchOn: "uuid"})),
-					testStandardProp(
+					inertiaprop.New(
+						"posts",
+						[]string{"one"},
+						inertiaprop.WithMerge(NewMergeOpts().Append(MergeKey{MatchOn: "id"})),
+					),
+					inertiaprop.New("notifications", []string{"one"},
+						inertiaprop.WithMerge(NewMergeOpts().Prepend(MergeKey{MatchOn: "uuid"}))),
+					inertiaprop.New(
 						"conversation",
 						map[string]any{"messages": []string{"one"}},
-						testMergeAppend(MergeKey{Key: "messages", MatchOn: "id"}),
+						inertiaprop.WithMerge(NewMergeOpts().Append(MergeKey{Key: "messages", MatchOn: "id"})),
 					),
 				}),
 			},
@@ -653,11 +668,11 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 
 				return []Option{
 					WithProps(Props{
-						testScrollProp(
+						inertiascroll.New(
 							"users",
 							map[string]any{"data": []string{"one"}},
-							testScrollPagination(nil, &nextPage, &currentPage),
-							testScrollPageName("page"),
+							inertiascroll.WithPagination(nil, &nextPage, &currentPage),
+							inertiascroll.WithPageName("page"),
 						),
 					}),
 				}
@@ -702,7 +717,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testScrollProp("users", map[string]any{"data": []string{"one"}}),
+					inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -736,7 +751,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testScrollProp("users", map[string]any{"data": []string{"one"}}),
+					inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -770,7 +785,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithProps(Props{
-					testScrollProp("users", map[string]any{"data": []string{"one"}}),
+					inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
 				}),
 			},
 			expectError:   true,
@@ -789,10 +804,10 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			componentName: "TestComponent",
 			options: []Option{
 				WithSharedProps(Props{
-					testStandardProp("auth", "shared"),
+					inertiaprop.New("auth", "shared"),
 				}),
 				WithProps(Props{
-					testStandardProp("auth", "response"),
+					inertiaprop.New("auth", "response"),
 				}),
 			},
 			expectedStatusCode: http.StatusOK,
@@ -1021,7 +1036,7 @@ func TestRenderer_render(t *testing.T) {
 			IsInertia: true,
 			Version:   "1.0.0",
 		}
-		rCtx := NewRenderContext(WithProps(Props{testStandardProp("name", "Roman")}))
+		rCtx := NewRenderContext(WithProps(Props{inertiaprop.New("name", "Roman")}))
 
 		// act
 		resp, err := renderer.render(t.Context(), req, "Users/Index", rCtx)
@@ -1238,13 +1253,13 @@ func TestRenderer_ConcurrentProps(t *testing.T) {
 
 	rCtx := NewRenderContext(
 		WithProps(Props{
-			testDeferredProp("a", LazyFunc(func(context.Context) (any, error) {
+			inertiadeferred.New("a", LazyFunc(func(context.Context) (any, error) {
 				return "val-a", nil
-			}), testDeferredConcurrent),
-			testDeferredProp("b", LazyFunc(func(context.Context) (any, error) {
+			}), inertiadeferred.WithConcurrent),
+			inertiadeferred.New("b", LazyFunc(func(context.Context) (any, error) {
 				return "val-b", nil
-			}), testDeferredConcurrent),
-			testStandardProp("c", "val-c"),
+			}), inertiadeferred.WithConcurrent),
+			inertiaprop.New("c", "val-c"),
 		}),
 	)
 
@@ -1266,141 +1281,3 @@ func TestRenderer_ConcurrentProps(t *testing.T) {
 	assert.Equal(t, "val-b", props["b"])
 	assert.Equal(t, "val-c", props["c"])
 }
-
-type testPropConfig struct {
-	deferred   *inertiaprop.Deferrable
-	merge      *inertiaprop.Mergeable
-	scroll     *inertiaprop.Scrollable
-	concurrent bool
-}
-
-type testPropOption func(*testPropConfig)
-
-type testPropValue struct {
-	key string
-	val any
-	fn  Lazy
-
-	config testPropConfig
-}
-
-func testStandardProp(key string, val any, opts ...testPropOption) Prop {
-	return newTestProp(key, val, nil, opts...)
-}
-
-func testDeferredProp(key string, val Lazy, opts ...testPropOption) Prop {
-	return newTestProp(key, nil, val, append([]testPropOption{func(config *testPropConfig) {
-		config.deferred = &inertiaprop.Deferrable{Group: "default"}
-	}}, opts...)...)
-}
-
-func testScrollProp(key string, val any, opts ...testPropOption) Prop {
-	return newTestProp(key, val, nil, append([]testPropOption{func(config *testPropConfig) {
-		config.scroll = &inertiaprop.Scrollable{Path: key + ".data"}
-		config.merge = &inertiaprop.Mergeable{Append: true}
-	}}, opts...)...)
-}
-
-func newTestProp(key string, val any, fn Lazy, opts ...testPropOption) Prop {
-	prop := &testPropValue{key: key, val: val, fn: fn}
-	if lazy, ok := val.(Lazy); ok {
-		prop.val = nil
-		prop.fn = lazy
-	}
-	for _, opt := range opts {
-		opt(&prop.config)
-	}
-	return prop
-}
-
-func testDeferredGroup(group string) testPropOption {
-	return func(config *testPropConfig) {
-		if config.deferred == nil {
-			config.deferred = &inertiaprop.Deferrable{}
-		}
-		config.deferred.Group = group
-	}
-}
-
-func testDeferredConcurrent(config *testPropConfig) { config.concurrent = true }
-
-func testMergeAppend(keys ...MergeKey) testPropOption {
-	return func(config *testPropConfig) {
-		if config.merge == nil {
-			config.merge = &inertiaprop.Mergeable{}
-		}
-		if len(keys) == 0 {
-			config.merge.Append = true
-			config.merge.Prepend = false
-			return
-		}
-		config.merge.AppendKeys = append(config.merge.AppendKeys, keys...)
-	}
-}
-
-func testMergePrepend(keys ...MergeKey) testPropOption {
-	return func(config *testPropConfig) {
-		if config.merge == nil {
-			config.merge = &inertiaprop.Mergeable{}
-		}
-		if len(keys) == 0 {
-			config.merge.Append = false
-			config.merge.Prepend = true
-			return
-		}
-		config.merge.PrependKeys = append(config.merge.PrependKeys, keys...)
-	}
-}
-
-type testScrollPage interface{ ~int | ~int64 | ~string }
-
-func testScrollPagination[T testScrollPage](previousPage, nextPage, currentPage *T) testPropOption {
-	return func(config *testPropConfig) {
-		if config.scroll == nil {
-			config.scroll = &inertiaprop.Scrollable{}
-		}
-		config.scroll.PreviousPage = previousPage
-		config.scroll.NextPage = nextPage
-		config.scroll.CurrentPage = currentPage
-		config.scroll.Path = qualifyPropPath(testScrollKey(config.scroll.Path), "data")
-	}
-}
-
-func testScrollKey(path string) string {
-	if len(path) > len(".data") && path[len(path)-len(".data"):] == ".data" {
-		return path[:len(path)-len(".data")]
-	}
-	return path
-}
-
-func testScrollPageName(pageName string) testPropOption {
-	return func(config *testPropConfig) {
-		if config.scroll == nil {
-			config.scroll = &inertiaprop.Scrollable{}
-		}
-		config.scroll.PageName = pageName
-	}
-}
-
-func (p *testPropValue) Key() string { return p.key }
-
-func (p *testPropValue) Value(ctx context.Context) (any, error) {
-	if p.fn != nil {
-		return p.fn.Value(ctx) //nolint:wrapcheck
-	}
-	return p.val, nil
-}
-
-func (p *testPropValue) IsFirstLoadIgnorable() bool { return p.config.deferred != nil }
-func (p *testPropValue) BypassPartialFilters() bool { return false }
-func (p *testPropValue) Deferrable() (*inertiaprop.Deferrable, bool) {
-	return p.config.deferred, p.config.deferred != nil
-}
-func (p *testPropValue) Mergeable() (*inertiaprop.Mergeable, bool) {
-	return p.config.merge, p.config.merge != nil
-}
-func (p *testPropValue) Scrollable() (*inertiaprop.Scrollable, bool) {
-	return p.config.scroll, p.config.scroll != nil
-}
-func (p *testPropValue) Onceable() (*inertiaprop.Onceable, bool) { return nil, false }
-func (p *testPropValue) Concurrent() bool                        { return p.config.concurrent }

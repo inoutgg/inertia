@@ -55,7 +55,8 @@ type MergeOpts struct {
 
 // NewMergeOpts creates a default MergeOpts instance with append behavior enabled.
 func NewMergeOpts() *MergeOpts {
-	return &MergeOpts{appendKeys: nil, prependKeys: nil, append: true, prepend: false}
+	//nolint:exhaustruct
+	return &MergeOpts{append: true}
 }
 
 // Append configures the merge prop to append keys to the existing prop value.
