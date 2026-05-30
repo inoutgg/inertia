@@ -87,7 +87,7 @@ func makeProps(
 	}
 
 	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
-		return !shouldSkipOnceProp(p, req.ExceptOnceProps, nil)
+		return !shouldSkipOnceProp(p, req.ExceptOnceProps)
 	})
 
 	m := make(map[string]any, len(props))
@@ -124,7 +124,11 @@ func resolvePartialComponentRequest(
 	concurrency int,
 ) (map[string]any, []string, error) {
 	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
-		return !shouldSkipOnceProp(p, exceptOnceProps, whitelist)
+		if shouldSkipOnceProp(p, exceptOnceProps) {
+			return len(whitelist) > 0 && slices.Contains(whitelist, p.Key())
+		}
+
+		return true
 	})
 
 	m := make(map[string]any, len(props))
@@ -202,13 +206,13 @@ func resolvePartialComponentRequest(
 	return m, rescuedProps, nil
 }
 
-func shouldSkipOnceProp(prop inertiaprop.Prop, exceptOnceProps, whitelist []string) bool {
+func shouldSkipOnceProp(prop inertiaprop.Prop, exceptOnceProps []string) bool {
 	once, ok := prop.Onceable()
 	if !ok || once.Fresh || !slices.Contains(exceptOnceProps, once.Key) {
 		return false
 	}
 
-	return !slices.Contains(whitelist, prop.Key())
+	return true
 }
 
 // makeDeferredProps creates a map of deferred props that should be resolved
