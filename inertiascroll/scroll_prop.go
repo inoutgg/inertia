@@ -2,9 +2,9 @@ package inertiascroll
 
 import (
 	"context"
-	"strings"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
 
 var _ inertiaprop.Prop = (*Prop)(nil)
@@ -32,15 +32,11 @@ func WithPagination[T Page](previousPage, nextPage, currentPage *T) Option {
 }
 
 func WithWrapper(wrapper string) Option {
-	return func(config *Config) {
-		config.wrapper = wrapper
-	}
+	return func(config *Config) { config.wrapper = wrapper }
 }
 
 func WithPageName(pageName string) Option {
-	return func(config *Config) {
-		config.pageName = pageName
-	}
+	return func(config *Config) { config.pageName = pageName }
 }
 
 type Prop struct {
@@ -66,17 +62,17 @@ func New(key string, value any, opts ...Option) *Prop {
 	}
 
 	prop.scroll = &inertiaprop.Scrollable{
-		Path:         qualifyPropPath(key, "data"),
+		Path:         inertiaprotocol.QualifyPath(key, "data"),
 		PageName:     config.pageName,
 		PreviousPage: config.previousPage,
 		NextPage:     config.nextPage,
 		CurrentPage:  config.currentPage,
 	}
 	if config.wrapper != "" {
-		prop.scroll.Path = qualifyPropPath(key, config.wrapper)
+		prop.scroll.Path = inertiaprotocol.QualifyPath(key, config.wrapper)
 	}
 
-	prop.merge = &inertiaprop.Mergeable{Append: true}
+	prop.merge = &inertiaprop.Mergeable{Append: true, Prepend: false, AppendKeys: nil, PrependKeys: nil}
 	prop.key = key
 
 	return &prop
@@ -99,11 +95,3 @@ func (p *Prop) Mergeable() (*inertiaprop.Mergeable, bool)   { return p.merge, p.
 func (p *Prop) Scrollable() (*inertiaprop.Scrollable, bool) { return p.scroll, p.scroll != nil }
 func (p *Prop) Onceable() (*inertiaprop.Onceable, bool)     { return nil, false }
 func (p *Prop) Concurrent() bool                            { return false }
-
-func qualifyPropPath(propKey, path string) string {
-	if path == "" || strings.HasPrefix(path, propKey+".") || path == propKey {
-		return path
-	}
-
-	return propKey + "." + path
-}

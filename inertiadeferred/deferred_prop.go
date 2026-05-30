@@ -15,12 +15,15 @@ type Config struct {
 	merge      *inertiaprop.MergeOpts
 	once       *inertiaprop.OnceOpts
 	group      string
+	rescue     bool
 	concurrent bool
 }
 
 type Option func(*Config)
 
 func WithGroup(group string) Option { return func(config *Config) { config.group = group } }
+
+func WithRescue(rescue bool) Option { return func(config *Config) { config.rescue = rescue } }
 
 func WithConcurrent(config *Config) { config.concurrent = true }
 
@@ -43,7 +46,7 @@ type Prop struct {
 }
 
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
-	config := &Config{merge: nil, once: nil, group: DefaultGroup, concurrent: false}
+	config := &Config{merge: nil, once: nil, group: DefaultGroup, rescue: false, concurrent: false}
 	for _, opt := range opts {
 		opt(config)
 	}
@@ -51,7 +54,7 @@ func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
 	return &Prop{
 		val:        val,
 		once:       config.once.Onceable(),
-		deferred:   &inertiaprop.Deferrable{Group: cmp.Or(config.group, DefaultGroup)},
+		deferred:   &inertiaprop.Deferrable{Group: cmp.Or(config.group, DefaultGroup), Rescue: config.rescue},
 		merge:      config.merge.Mergeable(),
 		key:        key,
 		concurrent: config.concurrent,

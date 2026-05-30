@@ -36,7 +36,8 @@ type LazyFunc func(context.Context) (any, error)
 func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 
 type Deferrable struct {
-	Group string
+	Group  string
+	Rescue bool
 }
 
 type MergeKey struct {
