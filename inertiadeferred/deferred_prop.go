@@ -61,8 +61,15 @@ func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
 	}
 }
 
-func (p *Prop) Key() string                            { return p.key }
-func (p *Prop) Value(ctx context.Context) (any, error) { return p.val.Value(ctx) } //nolint:wrapcheck
+func (p *Prop) Key() string { return p.key }
+func (p *Prop) Value(ctx context.Context) (any, error) {
+	val, err := p.val.Value(ctx)
+	if err != nil && p.deferred != nil && p.deferred.Rescue {
+		return nil, &inertiaprop.RescueError{Key: p.key, Err: err}
+	}
+
+	return val, err //nolint:wrapcheck
+}
 
 func (p *Prop) IsFirstLoadIgnorable() bool                  { return true }
 func (p *Prop) BypassPartialFilters() bool                  { return false }
