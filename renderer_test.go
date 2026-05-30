@@ -621,12 +621,19 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 						[]string{"one"},
 						inertiaprop.WithMerge(NewMergeOpts().Append(MergeKey{MatchOn: "id"})),
 					),
-					inertiaprop.New("notifications", []string{"one"},
-						inertiaprop.WithMerge(NewMergeOpts().Prepend(MergeKey{MatchOn: "uuid"}))),
+					inertiaprop.New(
+						"notifications",
+						[]string{"one"},
+						inertiaprop.WithMerge(
+							NewMergeOpts().Prepend(MergeKey{MatchOn: "uuid"}),
+						),
+					),
 					inertiaprop.New(
 						"conversation",
 						map[string]any{"messages": []string{"one"}},
-						inertiaprop.WithMerge(NewMergeOpts().Append(MergeKey{Key: "messages", MatchOn: "id"})),
+						inertiaprop.WithMerge(
+							NewMergeOpts().Append(MergeKey{Key: "messages", MatchOn: "id"}),
+						),
 					),
 				}),
 			},

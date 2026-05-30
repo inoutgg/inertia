@@ -10,6 +10,7 @@ import (
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
+	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
 
 type Request struct {
@@ -34,7 +35,7 @@ type Context struct {
 }
 
 func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
-	props, err := makeProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.Concurrency)
+	props, rescuedProps, err := makeProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.Concurrency)
 	if err != nil {
 		return nil, err
 	}
@@ -46,15 +47,17 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 	)
 
 	return &Page{
-		Component:        renderCtx.Component,
-		Props:            props,
-		DeferredProps:    makeDeferredProps(req, renderCtx.Component, renderCtx.Props),
-		ScrollProps:      makeScrollProps(renderCtx.Props),
-		OnceProps:        makeOnceProps(renderCtx.Props),
-		MergeProps:       mergeProps.append,
-		PrependProps:     mergeProps.prepend,
-		MatchPropsOn:     mergeProps.matchOn,
-		SharedProps:      makeSharedProps(renderCtx.SharedProps),
+		Component:     renderCtx.Component,
+		Props:         props,
+		DeferredProps: makeDeferredProps(req, renderCtx.Component, renderCtx.Props),
+		ScrollProps:   makeScrollProps(renderCtx.Props),
+		OnceProps:     makeOnceProps(renderCtx.Props),
+		MergeProps:    mergeProps.append,
+		PrependProps:  mergeProps.prepend,
+		MatchPropsOn:  mergeProps.matchOn,
+		SharedProps: sliceutil.Map(renderCtx.SharedProps,
+			func(p inertiaprop.Prop) string { return p.Key() }),
+		RescuedProps:     rescuedProps,
 		URL:              req.URL,
 		Version:          renderCtx.Version,
 		PreserveFragment: renderCtx.PreserveFragment,
@@ -69,7 +72,7 @@ func makeProps(
 	componentName string,
 	props []inertiaprop.Prop,
 	concurrency int,
-) (map[string]any, error) {
+) (map[string]any, []string, error) {
 	// If the request is a partial, we need to filter the props.
 	if req.PartialComponent == componentName {
 		return resolvePartialComponentRequest(
@@ -82,13 +85,15 @@ func makeProps(
 		)
 	}
 
+	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
+		return !shouldSkipOnceProp(p, req.ExceptOnceProps, nil)
+	})
+
 	m := make(map[string]any, len(props))
 
-	for _, prop := range props {
-		if shouldSkipOnceProp(prop, req.ExceptOnceProps, nil) {
-			continue
-		}
+	var rescuedProps []string
 
+	for _, prop := range props {
 		// Skip deferred and optional props on the first render.
 		if prop.IsFirstLoadIgnorable() {
 			continue
@@ -96,13 +101,18 @@ func makeProps(
 
 		val, err := prop.Value(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
+			if d, ok := prop.Deferrable(); ok && d.Rescue {
+				rescuedProps = append(rescuedProps, prop.Key())
+				continue
+			}
+
+			return nil, nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
 		}
 
 		m[prop.Key()] = val
 	}
 
-	return m, nil
+	return m, rescuedProps, nil
 }
 
 func resolvePartialComponentRequest(
@@ -110,15 +120,18 @@ func resolvePartialComponentRequest(
 	props []inertiaprop.Prop,
 	whitelist, blacklist, exceptOnceProps []string,
 	concurrency int,
-) (map[string]any, error) {
+) (map[string]any, []string, error) {
+	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
+		return !shouldSkipOnceProp(p, exceptOnceProps, whitelist)
+	})
+
 	m := make(map[string]any, len(props))
 	concurrentProps := make([]inertiaprop.Prop, 0, len(props))
 
+	var rescuedProps []string
+
 	for _, prop := range props {
 		key := prop.Key()
-		if shouldSkipOnceProp(prop, exceptOnceProps, whitelist) {
-			continue
-		}
 
 		if !prop.BypassPartialFilters() {
 			// It should be fine to go through slices here, as the number of props is expected to be small.
@@ -133,7 +146,12 @@ func resolvePartialComponentRequest(
 		} else {
 			val, err := prop.Value(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
+				if d, ok := prop.Deferrable(); ok && d.Rescue {
+					rescuedProps = append(rescuedProps, prop.Key())
+					continue
+				}
+
+				return nil, nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
 			}
 
 			m[key] = val
@@ -141,40 +159,52 @@ func resolvePartialComponentRequest(
 	}
 
 	if len(concurrentProps) > 0 {
-		pool := pond.NewResultPool[pair[string, any]](concurrency)
+		pool := pond.NewResultPool[propResult](concurrency)
 		group := pool.NewGroupContext(ctx)
 
 		for _, prop := range concurrentProps {
-			group.SubmitErr(func() (pair[string, any], error) {
-				var kv pair[string, any]
-
+			group.SubmitErr(func() (propResult, error) {
 				val, err := prop.Value(ctx)
 				if err != nil {
-					return kv, fmt.Errorf(
+					if d, ok := prop.Deferrable(); ok && d.Rescue {
+						return propResult{key: prop.Key(), value: nil, rescued: true}, nil
+					}
+
+					return propResult{}, fmt.Errorf(
 						"inertia: failed to resolve prop %s: %w",
 						prop.Key(),
 						err,
 					)
 				}
 
-				kv.key = prop.Key()
-				kv.value = val
-
-				return kv, nil
+				return propResult{key: prop.Key(), value: val, rescued: false}, nil
 			})
 		}
 
 		result, err := group.Wait()
 		if err != nil {
-			return nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
+			return nil, nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
 		}
 
-		for i, prop := range concurrentProps {
-			m[prop.Key()] = result[i].value
+		for _, r := range result {
+			if r.rescued {
+				rescuedProps = append(rescuedProps, r.key)
+			} else {
+				m[r.key] = r.value
+			}
 		}
 	}
 
-	return m, nil
+	return m, rescuedProps, nil
+}
+
+func shouldSkipOnceProp(prop inertiaprop.Prop, exceptOnceProps, whitelist []string) bool {
+	once, ok := prop.Onceable()
+	if !ok || once.Fresh || !slices.Contains(exceptOnceProps, once.Key) {
+		return false
+	}
+
+	return !slices.Contains(whitelist, prop.Key())
 }
 
 // makeDeferredProps creates a map of deferred props that should be resolved
@@ -227,28 +257,6 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 	return m
 }
 
-func shouldSkipOnceProp(prop inertiaprop.Prop, exceptOnceProps, whitelist []string) bool {
-	once, ok := prop.Onceable()
-	if !ok || once.Fresh || !slices.Contains(exceptOnceProps, once.Key) {
-		return false
-	}
-
-	return !slices.Contains(whitelist, prop.Key())
-}
-
-func makeSharedProps(props []inertiaprop.Prop) []string {
-	if len(props) == 0 {
-		return nil
-	}
-
-	sharedProps := make([]string, 0, len(props))
-	for _, prop := range props {
-		sharedProps = append(sharedProps, prop.Key())
-	}
-
-	return sharedProps
-}
-
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
 func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeIntent string) mergeProps {
@@ -288,12 +296,12 @@ func (m *mergeProps) addMergeKeys(propKey string, keys []inertiaprop.MergeKey, p
 	for _, key := range keys {
 		path := propKey
 		if key.Key != "" {
-			path = qualifyPropPath(propKey, key.Key)
+			path = QualifyPath(propKey, key.Key)
 		}
 
 		*props = append(*props, path)
 		if key.MatchOn != "" {
-			m.matchOn = append(m.matchOn, qualifyPropPath(path, key.MatchOn))
+			m.matchOn = append(m.matchOn, QualifyPath(path, key.MatchOn))
 		}
 	}
 }
@@ -319,7 +327,9 @@ func makeScrollProps(props []inertiaprop.Prop) map[string]ScrollProp {
 	return m
 }
 
-func qualifyPropPath(propKey, path string) string {
+// QualifyPath prefixes path with propKey if path is non-empty, not already equal to propKey,
+// and does not already start with propKey+".".
+func QualifyPath(propKey, path string) string {
 	if path == "" || strings.HasPrefix(path, propKey+".") || path == propKey {
 		return path
 	}
@@ -327,10 +337,13 @@ func qualifyPropPath(propKey, path string) string {
 	return propKey + "." + path
 }
 
-// pair is a key-value pair.
-type pair[K any, V any] struct {
-	key   K
-	value V
+// propResult is a key-value pair for concurrent prop resolution that also
+// tracks whether the prop was rescued (i.e. failed to resolve but had
+// rescue enabled).
+type propResult struct {
+	value   any
+	key     string
+	rescued bool
 }
 
 type mergeProps struct {

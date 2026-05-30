@@ -12,6 +12,7 @@ type Page struct {
 	PrependProps     []string              `json:"prependProps,omitempty"`
 	MatchPropsOn     []string              `json:"matchPropsOn,omitempty"`
 	SharedProps      []string              `json:"sharedProps,omitempty"`
+	RescuedProps     []string              `json:"rescuedProps,omitempty"`
 	PreserveFragment bool                  `json:"preserveFragment,omitempty"`
 	EncryptHistory   bool                  `json:"encryptHistory,omitempty"`
 	ClearHistory     bool                  `json:"clearHistory,omitempty"`
