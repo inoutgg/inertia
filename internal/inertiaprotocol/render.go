@@ -9,7 +9,6 @@ import (
 
 	"github.com/alitto/pond/v2"
 
-	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
@@ -41,11 +40,14 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 		return nil, err
 	}
 
-	mergeProps := makeMergeProps(
+	mergeProps, err := makeMergeProps(
 		renderCtx.Props,
 		req.ResetProps,
 		req.ScrollMergeIntent,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Page{
 		Component:     renderCtx.Component,
@@ -169,11 +171,12 @@ func resolvePartialComponentRequest(
 		pool := pond.NewResultPool[result[any, error]](concurrency)
 		group := pool.NewGroupContext(ctx)
 
+		// Resolve the rest of concurrent props in pool. Each prop resolution
+		// may return an error. If the error is of a special type - *inertiaprop.RescueError,
+		// the prop is rescued and the error is ignored.
 		for _, prop := range concurrentProps {
 			group.SubmitErr(func() (result[any, error], error) {
-				val, err := prop.Value(ctx)
-
-				return result[any, error]{value: val, err: err}, nil
+				return newResult(prop.Value(ctx)), nil
 			})
 		}
 
@@ -228,35 +231,29 @@ func makeDeferredProps(req Request, componentName string, props []inertiaprop.Pr
 	m := make(map[string][]string, len(props))
 
 	for _, prop := range props {
-		deferred, ok := prop.Deferrable()
-		if !ok {
-			continue
-		}
+		if deferred, ok := prop.Deferrable(); ok {
+			if _, ok := m[deferred.Group]; !ok {
+				m[deferred.Group] = []string{}
+			}
 
-		if _, ok := m[deferred.Group]; !ok {
-			m[deferred.Group] = []string{}
+			m[deferred.Group] = append(m[deferred.Group], prop.Key())
 		}
-
-		m[deferred.Group] = append(m[deferred.Group], prop.Key())
 	}
 
 	return m
 }
 
 func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
-	m := make(map[string]OnceProp)
-
-	for _, prop := range props {
-		once, ok := prop.Onceable()
-		if !ok {
-			continue
+	m := sliceutil.Reduce(props, func(prop inertiaprop.Prop, m map[string]OnceProp) map[string]OnceProp {
+		if once, ok := prop.Onceable(); ok {
+			m[once.Key] = OnceProp{
+				Prop:      prop.Key(),
+				ExpiresAt: once.ExpiresAt,
+			}
 		}
 
-		m[once.Key] = OnceProp{
-			Prop:      prop.Key(),
-			ExpiresAt: once.ExpiresAt,
-		}
-	}
+		return m
+	}, make(map[string]OnceProp))
 
 	if len(m) == 0 {
 		return nil
@@ -267,51 +264,66 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeIntent string) mergeProps {
+func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeIntent string) (mergeProps, error) {
 	var m mergeProps
 
 	for _, prop := range props {
-		merge, ok := prop.Mergeable()
-		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) || !ok {
+		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) {
 			continue
 		}
 
+		// Scrollable is a special case since it is a combination of merge props
+		// with a custom handling.
+		// The Scrollable prop check must be performed before the Mergeable prop check
+		// since the inertiascoll.Prop has no Mergeable capability.
 		if scroll, ok := prop.Scrollable(); ok {
-			if scrollMergeIntent == inertiaheader.HeaderValueScrollMergeIntentPrepend {
+			switch scrollMergeIntent {
+			case inertiaprop.ScrollIntentPrepend:
 				m.prepend = append(m.prepend, scroll.Path)
-			} else {
+			case "", inertiaprop.ScrollIntentAppend:
 				m.append = append(m.append, scroll.Path)
+			default:
+				return mergeProps{}, fmt.Errorf("invalid scroll merge intent: %s", scrollMergeIntent)
 			}
 
 			continue
 		}
 
-		switch {
-		case merge.Prepend:
-			m.prepend = append(m.prepend, prop.Key())
-		case merge.Append:
-			m.append = append(m.append, prop.Key())
-		}
+		if merge, ok := prop.Mergeable(); ok {
+			key := prop.Key()
 
-		m.addMergeKeys(prop.Key(), merge.AppendKeys, &m.append)
-		m.addMergeKeys(prop.Key(), merge.PrependKeys, &m.prepend)
+			switch {
+			case merge.Prepend:
+				m.prepend = append(m.prepend, key)
+			case merge.Append:
+				m.append = append(m.append, key)
+			}
+
+			m.append = append(m.append, m.addMergeKeys(key, merge.AppendKeys)...)
+			m.prepend = append(m.prepend, m.addMergeKeys(key, merge.PrependKeys)...)
+		}
 	}
 
-	return m
+	return m, nil
 }
 
-func (m *mergeProps) addMergeKeys(propKey string, keys []inertiaprop.MergeKey, props *[]string) {
+func (m *mergeProps) addMergeKeys(propKey string, keys []inertiaprop.MergeKey) []string {
+	paths := make([]string, 0, len(keys))
+
 	for _, key := range keys {
 		path := propKey
 		if key.Key != "" {
 			path = QualifyPath(propKey, key.Key)
 		}
 
-		*props = append(*props, path)
 		if key.MatchOn != "" {
 			m.matchOn = append(m.matchOn, QualifyPath(path, key.MatchOn))
 		}
+
+		paths = append(paths, path)
 	}
+
+	return paths
 }
 
 func makeScrollProps(props []inertiaprop.Prop) map[string]ScrollProp {
@@ -351,6 +363,13 @@ func QualifyPath(propKey, path string) string {
 type result[R any, E error] struct {
 	value R
 	err   E
+}
+
+func newResult[R any, E error](value R, err E) result[R, E] {
+	return result[R, E]{
+		value: value,
+		err:   err,
+	}
 }
 
 type mergeProps struct {

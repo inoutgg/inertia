@@ -120,6 +120,11 @@ type Scrollable struct {
 	Path         string
 }
 
+const (
+	ScrollIntentAppend  = "append"
+	ScrollIntentPrepend = "prepend"
+)
+
 type Onceable struct {
 	ExpiresAt *int64
 	Key       string
