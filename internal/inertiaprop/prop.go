@@ -2,6 +2,7 @@ package inertiaprop
 
 import (
 	"context"
+	"fmt"
 	"slices"
 )
 
@@ -123,6 +124,21 @@ type Onceable struct {
 	ExpiresAt *int64
 	Key       string
 	Fresh     bool
+}
+
+// RescueError is returned by a deferred prop's Value method when the prop
+// is configured with rescue and fails to resolve.
+type RescueError struct {
+	Err error
+	Key string
+}
+
+func (e *RescueError) Error() string {
+	return fmt.Sprintf("inertia: rescued deferred prop %s: %v", e.Key, e.Err)
+}
+
+func (e *RescueError) Unwrap() error {
+	return e.Err
 }
 
 // OnceOpts configures once prop behavior.

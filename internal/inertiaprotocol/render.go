@@ -2,9 +2,11 @@ package inertiaprotocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/alitto/pond/v2"
 
@@ -101,8 +103,9 @@ func makeProps(
 
 		val, err := prop.Value(ctx)
 		if err != nil {
-			if d, ok := prop.Deferrable(); ok && d.Rescue {
-				rescuedProps = append(rescuedProps, prop.Key())
+			var re *inertiaprop.RescueError
+			if errors.As(err, &re) {
+				rescuedProps = append(rescuedProps, re.Key)
 				continue
 			}
 
@@ -146,8 +149,9 @@ func resolvePartialComponentRequest(
 		} else {
 			val, err := prop.Value(ctx)
 			if err != nil {
-				if d, ok := prop.Deferrable(); ok && d.Rescue {
-					rescuedProps = append(rescuedProps, prop.Key())
+				var re *inertiaprop.RescueError
+				if errors.As(err, &re) {
+					rescuedProps = append(rescuedProps, re.Key)
 					continue
 				}
 
@@ -159,39 +163,52 @@ func resolvePartialComponentRequest(
 	}
 
 	if len(concurrentProps) > 0 {
-		pool := pond.NewResultPool[propResult](concurrency)
+		pool := pond.NewPool(concurrency)
 		group := pool.NewGroupContext(ctx)
 
+		var (
+			mu       sync.Mutex
+			firstErr error
+			errOnce  sync.Once
+		)
+
 		for _, prop := range concurrentProps {
-			group.SubmitErr(func() (propResult, error) {
+			group.Submit(func() {
 				val, err := prop.Value(ctx)
 				if err != nil {
-					if d, ok := prop.Deferrable(); ok && d.Rescue {
-						return propResult{key: prop.Key(), value: nil, rescued: true}, nil
+					var re *inertiaprop.RescueError
+					if errors.As(err, &re) {
+						mu.Lock()
+
+						rescuedProps = append(rescuedProps, re.Key)
+						mu.Unlock()
+
+						return
 					}
 
-					return propResult{}, fmt.Errorf(
-						"inertia: failed to resolve prop %s: %w",
-						prop.Key(),
-						err,
-					)
+					errOnce.Do(func() {
+						firstErr = fmt.Errorf(
+							"inertia: failed to resolve prop %s: %w",
+							prop.Key(),
+							err,
+						)
+					})
+
+					return
 				}
 
-				return propResult{key: prop.Key(), value: val, rescued: false}, nil
+				mu.Lock()
+				m[prop.Key()] = val
+				mu.Unlock()
 			})
 		}
 
-		result, err := group.Wait()
-		if err != nil {
+		if err := group.Wait(); err != nil {
 			return nil, nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
 		}
 
-		for _, r := range result {
-			if r.rescued {
-				rescuedProps = append(rescuedProps, r.key)
-			} else {
-				m[r.key] = r.value
-			}
+		if firstErr != nil {
+			return nil, nil, firstErr
 		}
 	}
 
@@ -335,15 +352,6 @@ func QualifyPath(propKey, path string) string {
 	}
 
 	return propKey + "." + path
-}
-
-// propResult is a key-value pair for concurrent prop resolution that also
-// tracks whether the prop was rescued (i.e. failed to resolve but had
-// rescue enabled).
-type propResult struct {
-	value   any
-	key     string
-	rescued bool
 }
 
 type mergeProps struct {
