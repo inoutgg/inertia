@@ -162,44 +162,40 @@ func resolvePartialComponentRequest(
 	}
 
 	if len(concurrentProps) > 0 {
-		pool := pond.NewResultPool[concurrentPropResult](concurrency)
+		pool := pond.NewResultPool[result[any, error]](concurrency)
 		group := pool.NewGroupContext(ctx)
 
 		for _, prop := range concurrentProps {
-			group.SubmitErr(func() (concurrentPropResult, error) {
+			group.SubmitErr(func() (result[any, error], error) {
 				val, err := prop.Value(ctx)
-				if err != nil {
-					var re *inertiaprop.RescueError
-					if errors.As(err, &re) {
-						return concurrentPropResult{
-							key:     prop.Key(),
-							value:   nil,
-							rescued: true,
-						}, nil
-					}
 
-					return concurrentPropResult{}, fmt.Errorf(
-						"inertia: failed to resolve prop %s: %w",
-						prop.Key(),
-						err,
-					)
-				}
-
-				return concurrentPropResult{key: prop.Key(), value: val, rescued: false}, nil
+				return result[any, error]{value: val, err: err}, nil
 			})
 		}
 
-		result, err := group.Wait()
+		results, err := group.Wait()
 		if err != nil {
 			return nil, nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
 		}
 
-		for _, r := range result {
-			if r.rescued {
-				rescuedProps = append(rescuedProps, r.key)
-			} else {
-				m[r.key] = r.value
+		for i, r := range results {
+			prop := concurrentProps[i]
+
+			if r.err != nil {
+				var re *inertiaprop.RescueError
+				if errors.As(r.err, &re) {
+					rescuedProps = append(rescuedProps, re.Key)
+					continue
+				}
+
+				return nil, nil, fmt.Errorf(
+					"inertia: failed to resolve prop %s: %w",
+					prop.Key(),
+					r.err,
+				)
 			}
+
+			m[prop.Key()] = r.value
 		}
 	}
 
@@ -345,13 +341,12 @@ func QualifyPath(propKey, path string) string {
 	return propKey + "." + path
 }
 
-// concurrentPropResult is the result of resolving a single concurrent prop.
-// If rescued is true, the prop failed but was rescued and should be omitted
-// from props and added to rescuedProps.
-type concurrentPropResult struct {
-	value   any
-	key     string
-	rescued bool
+// result is a generic value-or-error container. It is used with pond's
+// ResultPool so that every worker's outcome is collected as data rather
+// than aborting the group on the first error.
+type result[R any, E error] struct {
+	value R
+	err   E
 }
 
 type mergeProps struct {
