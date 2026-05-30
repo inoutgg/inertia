@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/alitto/pond/v2"
 
@@ -163,52 +162,44 @@ func resolvePartialComponentRequest(
 	}
 
 	if len(concurrentProps) > 0 {
-		pool := pond.NewPool(concurrency)
+		pool := pond.NewResultPool[concurrentPropResult](concurrency)
 		group := pool.NewGroupContext(ctx)
 
-		var (
-			mu       sync.Mutex
-			firstErr error
-			errOnce  sync.Once
-		)
-
 		for _, prop := range concurrentProps {
-			group.Submit(func() {
+			group.SubmitErr(func() (concurrentPropResult, error) {
 				val, err := prop.Value(ctx)
 				if err != nil {
 					var re *inertiaprop.RescueError
 					if errors.As(err, &re) {
-						mu.Lock()
-
-						rescuedProps = append(rescuedProps, re.Key)
-						mu.Unlock()
-
-						return
+						return concurrentPropResult{
+							key:     prop.Key(),
+							value:   nil,
+							rescued: true,
+						}, nil
 					}
 
-					errOnce.Do(func() {
-						firstErr = fmt.Errorf(
-							"inertia: failed to resolve prop %s: %w",
-							prop.Key(),
-							err,
-						)
-					})
-
-					return
+					return concurrentPropResult{}, fmt.Errorf(
+						"inertia: failed to resolve prop %s: %w",
+						prop.Key(),
+						err,
+					)
 				}
 
-				mu.Lock()
-				m[prop.Key()] = val
-				mu.Unlock()
+				return concurrentPropResult{key: prop.Key(), value: val, rescued: false}, nil
 			})
 		}
 
-		if err := group.Wait(); err != nil {
+		result, err := group.Wait()
+		if err != nil {
 			return nil, nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
 		}
 
-		if firstErr != nil {
-			return nil, nil, firstErr
+		for _, r := range result {
+			if r.rescued {
+				rescuedProps = append(rescuedProps, r.key)
+			} else {
+				m[r.key] = r.value
+			}
 		}
 	}
 
@@ -352,6 +343,15 @@ func QualifyPath(propKey, path string) string {
 	}
 
 	return propKey + "." + path
+}
+
+// concurrentPropResult is the result of resolving a single concurrent prop.
+// If rescued is true, the prop failed but was rescued and should be omitted
+// from props and added to rescuedProps.
+type concurrentPropResult struct {
+	value   any
+	key     string
+	rescued bool
 }
 
 type mergeProps struct {
