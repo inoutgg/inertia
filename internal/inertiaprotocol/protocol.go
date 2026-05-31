@@ -1,5 +1,8 @@
 package inertiaprotocol
 
+// Page contains the page state for the given Inertia.js request.
+//
+// It is rendered by the Render function.
 type Page struct {
 	Props            map[string]any        `json:"props"`
 	DeferredProps    map[string][]string   `json:"deferredProps,omitempty"`
