@@ -280,7 +280,7 @@ func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeInt
 			switch scrollMergeIntent {
 			case inertiaprop.ScrollIntentPrepend:
 				m.prepend = append(m.prepend, scroll.Path)
-			case "", inertiaprop.ScrollIntentAppend:
+			case inertiaprop.ScrollIntentAppend:
 				m.append = append(m.append, scroll.Path)
 			default:
 				return mergeProps{}, fmt.Errorf("invalid scroll merge intent: %s", scrollMergeIntent)
@@ -327,22 +327,25 @@ func (m *mergeProps) addMergeKeys(propKey string, keys []inertiaprop.MergeKey) [
 }
 
 func makeScrollProps(props []inertiaprop.Prop) map[string]ScrollProp {
-	m := make(map[string]ScrollProp)
-
-	for _, prop := range props {
-		if scroll, ok := prop.Scrollable(); ok {
-			m[prop.Key()] = ScrollProp{
-				PageName:     scroll.PageName,
-				PreviousPage: scroll.PreviousPage,
-				NextPage:     scroll.NextPage,
-				CurrentPage:  scroll.CurrentPage,
-			}
-		}
-	}
-
-	if len(m) == 0 {
+	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
+		_, ok := prop.Scrollable()
+		return ok
+	})
+	if len(props) == 0 {
 		return nil
 	}
+
+	m := sliceutil.Reduce(props, func(prop inertiaprop.Prop, m map[string]ScrollProp) map[string]ScrollProp {
+		scroll, _ := prop.Scrollable()
+		m[prop.Key()] = ScrollProp{
+			PageName:     scroll.PageName,
+			PreviousPage: scroll.PreviousPage,
+			NextPage:     scroll.NextPage,
+			CurrentPage:  scroll.CurrentPage,
+		}
+
+		return m
+	}, make(map[string]ScrollProp))
 
 	return m
 }

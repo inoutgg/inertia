@@ -9,17 +9,12 @@ import (
 var _ inertiaprop.Prop = (*Prop)(nil)
 
 // Config holds the configuration for a Prop.
-//
-// Use Options to configure the behavior of the Prop.
 type Config struct {
 	merge *inertiaprop.MergeOpts
 	once  *inertiaprop.OnceOpts
 }
 
 // Option is a function that configures a Prop.
-//
-// Use specialized options to configure the behavior of the Prop such as:
-// WithOnce, WithMerge, etc.
 type Option func(*Config)
 
 // WithOnce sets the OnceOpts for the property.
@@ -43,6 +38,10 @@ type Prop struct {
 	key   string
 }
 
+// New creates a standard prop.
+//
+// It is included on standard visits and optionally during partial reloads when requested via only/except.
+// Options such as WithMerge and WithOnce customize the prop's behavior.
 func New(key string, val any, opts ...Option) *Prop {
 	var cfg Config
 	for _, opt := range opts {

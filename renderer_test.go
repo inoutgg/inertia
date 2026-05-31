@@ -667,7 +667,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				Version:    "1.0.0",
 				RootViewID: "app",
 			}),
-			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
+			reqConfig:     &inertiatest.RequestConfig{Inertia: true, ScrollMergeIntent: "append"},
 			componentName: "TestComponent",
 			options: func() []Option {
 				nextPage := 2

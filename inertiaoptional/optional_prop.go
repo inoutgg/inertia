@@ -14,6 +14,7 @@ type Config struct {
 
 type Option func(*Config)
 
+// WithConcurrent enables concurrent resolution for the prop.
 func WithConcurrent(config *Config) { config.concurrent = true }
 
 // Prop is a lazily-evaluated prop included only during partial reloads when explicitly requested.
@@ -26,8 +27,8 @@ type Prop struct {
 // New creates a lazily-evaluated prop included only during partial reloads when explicitly requested.
 //
 // It is useful for expensive computations that aren't needed on every render.
-//
 // The value function is only called when the client specifically requests this prop.
+// Options customize the prop's behavior.
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
 	var cfg Config
 	for _, opt := range opts {
