@@ -60,8 +60,8 @@ type Config struct {
 	// Defaults to "app" if not specified.
 	RootViewID string
 
-	// JSONMarshalOpts configures JSON serialization for page props and data.
-	JSONMarshalOpts []json.Options
+	// JSONMarshalOptions configures JSON serialization for page props and data.
+	JSONMarshalOptions []json.Options
 
 	// Concurrency sets the default maximum number of props that can be resolved concurrently.
 	// It only affects props marked as concurrent.
@@ -112,7 +112,7 @@ func New(t *template.Template, config *Config) *Renderer {
 	r := &Renderer{
 		t:               t,
 		ssrClient:       config.SSRClient,
-		jsonMarshalOpts: config.JSONMarshalOpts,
+		jsonMarshalOpts: config.JSONMarshalOptions,
 		version:         config.Version,
 		rootViewID:      config.RootViewID,
 		rootViewAttrs:   attrs,

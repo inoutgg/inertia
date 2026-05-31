@@ -312,8 +312,8 @@ type Mux interface {
 	Handle(pattern string, h http.Handler)
 }
 
-// MountOpts configures endpoint mounting behavior.
-type MountOpts[M any] struct {
+// MountConfig configures endpoint mounting behavior.
+type MountConfig[M any] struct {
 	// Validator validates requests before execution. If nil, no validation is performed.
 	Validator Validator[M]
 
@@ -326,6 +326,8 @@ type MountOpts[M any] struct {
 
 	// JSONUnmarshalOptions customizes JSON parsing (e.g., for protobuf).
 	JSONUnmarshalOptions []json.Options
+
+	Middleware []Middleware
 }
 
 // Mount registers an Endpoint on a Mux, creating an HTTP handler that:
@@ -334,10 +336,10 @@ type MountOpts[M any] struct {
 //   - Executes the endpoint and renders the Response
 //
 // The endpoint's Meta() defines the HTTP method and path pattern.
-func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountOpts[M]) {
+func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 	if opts == nil {
 		//nolint:exhaustruct
-		opts = &MountOpts[M]{}
+		opts = &MountConfig[M]{}
 	}
 
 	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
