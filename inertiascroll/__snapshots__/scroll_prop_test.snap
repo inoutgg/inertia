@@ -1,0 +1,125 @@
+
+[TestScrollProp/should_populate_scrollProps_with_pagination_metadata_on_full_request - 1]
+{
+  "props": {
+    "users": {
+      "data": [
+        "one"
+      ]
+    }
+  },
+  "scrollProps": {
+    "users": {
+      "previousPage": null,
+      "nextPage": 2,
+      "currentPage": 1,
+      "pageName": "page"
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "users.data"
+  ]
+}
+---
+
+[TestScrollProp/should_add_to_mergeProps_when_scroll_merge_intent_is_append - 1]
+{
+  "props": {
+    "users": {
+      "data": [
+        "one"
+      ]
+    }
+  },
+  "scrollProps": {
+    "users": {
+      "currentPage": null,
+      "pageName": ""
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "users.data"
+  ]
+}
+---
+
+[TestScrollProp/should_use_custom_wrapper_path_when_WithWrapper_is_set - 1]
+{
+  "props": {
+    "users": {
+      "items": [
+        "one"
+      ],
+      "meta": {
+        "total": 1
+      }
+    }
+  },
+  "scrollProps": {
+    "users": {
+      "currentPage": null,
+      "pageName": ""
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "users.items"
+  ]
+}
+---
+
+[TestScrollProp/should_add_to_prependProps_when_scroll_merge_intent_is_prepend - 1]
+{
+  "props": {
+    "users": {
+      "data": [
+        "one"
+      ]
+    }
+  },
+  "scrollProps": {
+    "users": {
+      "currentPage": null,
+      "pageName": ""
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "prependProps": [
+    "users.data"
+  ]
+}
+---
+
+[TestScrollProp/should_resolve_value_from_lazy_source_when_prop_value_is_lazy - 1]
+{
+  "props": {
+    "users": {
+      "data": [
+        "lazy-one"
+      ]
+    }
+  },
+  "scrollProps": {
+    "users": {
+      "currentPage": null,
+      "pageName": ""
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "users.data"
+  ]
+}
+---
