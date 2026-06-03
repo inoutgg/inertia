@@ -308,9 +308,9 @@ func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeInt
 		// since the inertiascoll.Prop has no Mergeable capability.
 		if scroll, ok := prop.Scrollable(); ok {
 			switch scrollMergeIntent {
-			case inertiaprop.ScrollIntentPrepend:
+			case inertiaprop.ScrollMergeIntentPrepend:
 				m.prepend = append(m.prepend, scroll.Path)
-			case inertiaprop.ScrollIntentAppend:
+			case inertiaprop.ScrollMergeIntentAppend:
 				m.append = append(m.append, scroll.Path)
 			default:
 				return mergeProps{}, fmt.Errorf("invalid scroll merge intent: %s", scrollMergeIntent)

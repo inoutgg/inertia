@@ -6,6 +6,11 @@ import (
 	"slices"
 )
 
+const (
+	ScrollMergeIntentAppend  = "append"
+	ScrollMergeIntentPrepend = "prepend"
+)
+
 // Prop represents a single property passed to an Inertia page component.
 type Prop interface {
 	Key() string
@@ -65,28 +70,22 @@ func NewMergeOpts() *MergeOpts {
 func (o *MergeOpts) Append(keys ...MergeKey) *MergeOpts {
 	if len(keys) > 0 {
 		o.appendKeys = append(o.appendKeys, keys...)
-		o.append = false
-
-		return o
+	} else {
+		o.append = true
+		o.prepend = false
 	}
-
-	o.append = true
-	o.prepend = false
 
 	return o
 }
 
 // Prepend configures the merge prop to prepend keys to the existing prop value.
 func (o *MergeOpts) Prepend(keys ...MergeKey) *MergeOpts {
-	o.append = false
-
 	if len(keys) > 0 {
 		o.prependKeys = append(o.prependKeys, keys...)
-
-		return o
+	} else {
+		o.prepend = true
+		o.append = false
 	}
-
-	o.prepend = true
 
 	return o
 }
@@ -120,11 +119,6 @@ type Scrollable struct {
 	Path         string
 }
 
-const (
-	ScrollIntentAppend  = "append"
-	ScrollIntentPrepend = "prepend"
-)
-
 type Onceable struct {
 	ExpiresAt *int64
 	Key       string
@@ -153,6 +147,10 @@ type OnceOpts struct {
 	fresh     bool
 }
 
+func NewOnceOpts() *OnceOpts {
+	return &OnceOpts{} //nolint:exhaustruct
+}
+
 func (o *OnceOpts) Key(key string) *OnceOpts {
 	o.key = key
 	return o
@@ -168,6 +166,9 @@ func (o *OnceOpts) Fresh(fresh bool) *OnceOpts {
 	return o
 }
 
+// TODO: Onceable must be a private function. Maybe move it to ToOnceable function.
+//
+//nolint:godoclint
 func (o *OnceOpts) Onceable() *Onceable {
 	if o == nil {
 		return nil
