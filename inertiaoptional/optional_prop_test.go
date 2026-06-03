@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiaoptional"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
@@ -20,7 +19,7 @@ func TestOptionalProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiaoptional.New("expensive", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaoptional.New("expensive", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return expensiveValue, nil
 			}))).
 			ExpectNoProp("expensive").
@@ -54,7 +53,7 @@ func TestOptionalProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"other"},
 		}).
-			With(inertiaoptional.New("expensive", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaoptional.New("expensive", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return expensiveValue, nil
 			}))).
 			ExpectNoProp("expensive").
@@ -70,10 +69,10 @@ func TestOptionalProp(t *testing.T) {
 			PartialData:      []string{"a", "b"},
 		}).
 			With(
-				inertiaoptional.New("a", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiaoptional.New("a", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "val-a", nil
 				}), inertiaoptional.WithConcurrent),
-				inertiaoptional.New("b", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiaoptional.New("b", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "val-b", nil
 				}), inertiaoptional.WithConcurrent),
 			).
@@ -105,7 +104,7 @@ func TestOptionalProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"failing"},
 		}).
-			With(inertiaoptional.New("failing", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaoptional.New("failing", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return nil, errLazyFailure
 			}))).
 			ExpectError(errLazyFailure).
@@ -120,7 +119,7 @@ func TestOptionalProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"flag"},
 		}).
-			With(inertiaoptional.New("flag", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaoptional.New("flag", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return false, nil
 			}))).
 			ExpectProp("flag", false).
@@ -135,7 +134,7 @@ func TestOptionalProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"nullable"},
 		}).
-			With(inertiaoptional.New("nullable", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaoptional.New("nullable", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return nil, nil //nolint:nilnil
 			}))).
 			ExpectPropIsNil("nullable").

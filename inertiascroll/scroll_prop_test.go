@@ -103,7 +103,7 @@ func TestScrollProp(t *testing.T) {
 		}).
 			With(inertiascroll.New(
 				"users",
-				inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return map[string]any{"data": []string{"lazy-one"}}, nil
 				}),
 			)).

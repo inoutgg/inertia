@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiaalways"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
@@ -63,7 +62,7 @@ func TestAlwaysProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiaalways.New("auth", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaalways.New("auth", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"user": "LazyRoman"}, nil
 			}))).
 			ExpectProp("auth", map[string]string{"user": "LazyRoman"}).
