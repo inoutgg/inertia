@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -27,13 +26,6 @@ const (
 	// the Inertia.js app is mounted.
 	DefaultRootViewID = "app"
 )
-
-const (
-	ScrollMergeIntentAppend  = "append"
-	ScrollMergeIntentPrepend = "prepend"
-)
-
-var ErrInvalidScrollMergeIntent = errors.New("inertia: invalid infinite scroll merge intent")
 
 // DefaultConcurrency is the default concurrency level for props resolution
 // marked as concurrently resolvable.

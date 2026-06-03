@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
 var ErrInvalidInertiaRequest = errors.New("inertia: invalid request")
@@ -106,10 +107,11 @@ func parseHeaderValueList(value string, header string) ([]string, error) {
 }
 
 func parseScrollMergeIntent(intent string) (string, error) {
+	intent = strings.TrimSpace(intent)
 	switch intent {
-	case "", ScrollMergeIntentAppend, ScrollMergeIntentPrepend:
+	case inertiaprop.ScrollMergeIntentAppend, inertiaprop.ScrollMergeIntentPrepend:
 		return intent, nil
 	default:
-		return "", fmt.Errorf("%w: %q", ErrInvalidScrollMergeIntent, intent)
+		return "", fmt.Errorf("%w: invalid scroll merge intent: %q", ErrInvalidInertiaRequest, intent)
 	}
 }

@@ -31,6 +31,7 @@ type (
 )
 
 func NewMergeOpts() *MergeOpts { return inertiaprop.NewMergeOpts() }
+func NewOnceOpts() *OnceOpts   { return inertiaprop.NewOnceOpts() }
 
 // Proper represents a collection of props that can be attached to a render context.
 type Proper interface {

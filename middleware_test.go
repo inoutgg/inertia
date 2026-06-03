@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
 )
 
@@ -299,7 +300,7 @@ func TestMiddleware(t *testing.T) {
 			Blacklist:         []string{"companies"},
 			ResetProps:        []string{"users"},
 			OnceProps:         []string{"plans"},
-			ScrollMergeIntent: ScrollMergeIntentPrepend,
+			ScrollMergeIntent: inertiaprop.ScrollMergeIntentPrepend,
 		})
 
 		// act
