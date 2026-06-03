@@ -1,0 +1,104 @@
+
+[TestProp/should_include_value_in_props_on_full_request - 1]
+{
+  "props": {
+    "age": 30,
+    "name": "Roman"
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0"
+}
+---
+
+[TestProp/should_emit_merge_match-on_metadata_when_MergeKey_is_configured - 1]
+{
+  "props": {
+    "conversation": {
+      "messages": [
+        "one"
+      ]
+    },
+    "notifications": [
+      "one"
+    ],
+    "posts": [
+      "one"
+    ]
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "posts",
+    "posts",
+    "notifications",
+    "conversation",
+    "conversation.messages"
+  ],
+  "prependProps": [
+    "notifications"
+  ],
+  "matchPropsOn": [
+    "posts.id",
+    "notifications.uuid",
+    "conversation.messages.id"
+  ]
+}
+---
+
+[TestProp/should_populate_mergeProps_when_WithMerge_is_set - 1]
+{
+  "props": {
+    "mergeable": {
+      "key": "val"
+    },
+    "normal": "value"
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0",
+  "mergeProps": [
+    "mergeable"
+  ]
+}
+---
+
+[TestProp/should_respect_partial_blacklist_when_partial_component_matches - 1]
+{
+  "props": {
+    "name": "Roman"
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0"
+}
+---
+
+[TestProp/should_respect_partial_whitelist_when_partial_component_matches - 1]
+{
+  "props": {
+    "name": "Roman"
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0"
+}
+---
+
+[TestProp/should_populate_onceProps_when_WithOnce_is_set - 1]
+{
+  "props": {
+    "onceable": "secret",
+    "regular": "value"
+  },
+  "onceProps": {
+    "once_key": {
+      "prop": "onceable"
+    }
+  },
+  "component": "TestComponent",
+  "url": "/users",
+  "version": "1.0.0"
+}
+---

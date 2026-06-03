@@ -832,4 +832,3 @@ func TestRedirectPreserveFragment(t *testing.T) {
 		assert.Equal(t, "/target", w.Header().Get("Location"))
 	})
 }
-
