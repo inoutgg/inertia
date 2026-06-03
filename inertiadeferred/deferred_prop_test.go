@@ -18,7 +18,7 @@ func TestDeferredProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiadeferred.New("deferred", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("deferred", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "Deferred Content", nil
 			}))).
 			ExpectNoProp("deferred").
@@ -34,7 +34,7 @@ func TestDeferredProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"deferred"},
 		}).
-			With(inertiadeferred.New("deferred", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("deferred", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "Deferred Content", nil
 			}))).
 			ExpectProp("deferred", "Deferred Content").
@@ -47,13 +47,13 @@ func TestDeferredProp(t *testing.T) {
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
-				inertiadeferred.New("a", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiadeferred.New("a", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "a-value", nil
 				}), inertiadeferred.WithGroup("group1")),
-				inertiadeferred.New("b", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiadeferred.New("b", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "b-value", nil
 				}), inertiadeferred.WithGroup("group1")),
-				inertiadeferred.New("c", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+				inertiadeferred.New("c", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "c-value", nil
 				}), inertiadeferred.WithGroup("group2")),
 			).
@@ -70,7 +70,7 @@ func TestDeferredProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"rescued"},
 		}).
-			With(inertiadeferred.New("rescued", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("rescued", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return nil, errors.New("deferred error")
 			}), inertiadeferred.WithRescue(true))).
 			ExpectPropIsNil("rescued").
@@ -82,7 +82,7 @@ func TestDeferredProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiadeferred.New("merged", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("merged", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"key": "value"}, nil
 			}), inertiadeferred.WithMerge(inertia.NewMergeOpts()))).
 			ExpectNoProp("merged").
@@ -95,7 +95,7 @@ func TestDeferredProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiadeferred.New("locale", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("locale", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "en", nil
 			}), inertiadeferred.WithOnce(inertia.NewOnceOpts().Key("locale_key")))).
 			ExpectNoProp("locale").
@@ -112,7 +112,7 @@ func TestDeferredProp(t *testing.T) {
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"nullable"},
 		}).
-			With(inertiadeferred.New("nullable", inertia.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiadeferred.New("nullable", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return nil, nil //nolint:nilnil
 			}))).
 			ExpectPropIsNil("nullable").
