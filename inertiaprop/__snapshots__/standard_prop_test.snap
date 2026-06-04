@@ -21,9 +21,6 @@
  ],
  "mergeProps": [
   "posts",
-  "posts",
-  "notifications",
-  "conversation",
   "conversation.messages"
  ],
  "prependProps": [
@@ -110,6 +107,25 @@
   "name": "Roman",
   "posts": [
    "fresh"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_treat_MergeKey_with_only_matchOn_as_a_matchOn-only_directive_at_root - 1]
+{
+ "component": "TestComponent",
+ "matchPropsOn": [
+  "posts.id"
+ ],
+ "mergeProps": [
+  "posts"
+ ],
+ "props": {
+  "posts": [
+   "one"
   ]
  },
  "url": "/users",

@@ -301,6 +301,11 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 // while the prop value itself is still returned to the client. Scroll props
 // are an exception: their scrollProps metadata (including the reset flag) is
 // always emitted by makeScrollProps.
+//
+// The root-level append/prepend flag is mutually exclusive with path-based
+// MergeKeys: when a prop has any MergeKey with a non-empty Key, the
+// root-level entry is suppressed and only the per-path entries are emitted.
+// This matches Laravel's MergesProps::mergesAtRoot semantics.
 func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeIntent string) (mergeProps, error) {
 	var m mergeProps
 
@@ -335,10 +340,13 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		if merge, ok := prop.Mergeable(); ok {
 			key := prop.Key()
 
-			if merge.Prepend {
-				m.prepend = append(m.prepend, key)
-			} else if merge.Append {
-				m.append = append(m.append, key)
+			hasExplicitPaths := hasPathKey(merge.AppendKeys) || hasPathKey(merge.PrependKeys)
+			if !hasExplicitPaths {
+				if merge.Prepend {
+					m.prepend = append(m.prepend, key)
+				} else if merge.Append {
+					m.append = append(m.append, key)
+				}
 			}
 
 			for _, k := range merge.AppendKeys {
@@ -354,11 +362,28 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 	return m, nil
 }
 
-func (m *mergeProps) addMergeKey(propKey string, key inertiaprop.MergeKey, prepend bool) {
-	path := propKey
-	if key.Key != "" {
-		path = QualifyPath(propKey, key.Key)
+func hasPathKey(keys []inertiaprop.MergeKey) bool {
+	for _, k := range keys {
+		if k.Key != "" {
+			return true
+		}
 	}
+
+	return false
+}
+
+func (m *mergeProps) addMergeKey(propKey string, key inertiaprop.MergeKey, prepend bool) {
+	// A MergeKey with an empty Key is a matchOn-only directive: it contributes
+	// only to matchPropsOn and must not produce a duplicate path entry.
+	if key.Key == "" {
+		if key.MatchOn != "" {
+			m.matchOn = append(m.matchOn, QualifyPath(propKey, key.MatchOn))
+		}
+
+		return
+	}
+
+	path := QualifyPath(propKey, key.Key)
 
 	if key.MatchOn != "" {
 		m.matchOn = append(m.matchOn, QualifyPath(path, key.MatchOn))
