@@ -15,20 +15,20 @@ func TestProp(t *testing.T) {
 	t.Run("should include value in props on full request", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("name", "Roman"),
 				inertiaprop.New("age", 30),
 			).
 			ExpectProp("name", "Roman").
 			ExpectProp("age", 30).
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should respect partial whitelist when partial component matches", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"name"},
@@ -39,13 +39,13 @@ func TestProp(t *testing.T) {
 			).
 			ExpectProp("name", "Roman").
 			ExpectNoProp("email").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should respect partial blacklist when partial component matches", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialExcept:    []string{"email"},
@@ -56,13 +56,13 @@ func TestProp(t *testing.T) {
 			).
 			ExpectProp("name", "Roman").
 			ExpectNoProp("email").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should populate mergeProps when WithMerge is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("normal", "value"),
 				inertiaprop.New("mergeable", map[string]string{"key": "val"},
@@ -71,13 +71,13 @@ func TestProp(t *testing.T) {
 			).
 			ExpectMergeProps("mergeable").
 			ExpectProp("normal", "value").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should populate onceProps when WithOnce is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("regular", "value"),
 				inertiaprop.New("onceable", "secret",
@@ -86,13 +86,13 @@ func TestProp(t *testing.T) {
 			).
 			ExpectOnceProps("once_key", "onceable").
 			ExpectProp("regular", "value").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should emit merge match-on metadata when MergeKey is configured", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New(
 					"posts",
@@ -118,6 +118,6 @@ func TestProp(t *testing.T) {
 			ExpectMergeProps("posts", "conversation.messages").
 			ExpectPrependProps("notifications").
 			ExpectMatchPropsOn("posts.id", "notifications.uuid", "conversation.messages.id").
-			Run(t.Context())
+			Run()
 	})
 }

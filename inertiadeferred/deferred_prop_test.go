@@ -17,19 +17,19 @@ func TestDeferredProp(t *testing.T) {
 	t.Run("should exclude value from props and add to deferredProps on full request", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("deferred", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "Deferred Content", nil
 			}))).
 			ExpectNoProp("deferred").
 			ExpectDeferredGroup("default", "deferred").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should include value in props on partial request and omit deferredProps", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"deferred"},
@@ -39,13 +39,13 @@ func TestDeferredProp(t *testing.T) {
 			}))).
 			ExpectProp("deferred", "Deferred Content").
 			ExpectNoDeferredProps().
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should group props in deferredProps when WithGroup is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiadeferred.New("a", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 					return "a-value", nil
@@ -59,13 +59,13 @@ func TestDeferredProp(t *testing.T) {
 			).
 			ExpectDeferredGroup("group1", "a", "b").
 			ExpectDeferredGroup("group2", "c").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should rescue failed prop and report it in rescuedProps when WithRescue is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"rescued"},
@@ -75,39 +75,39 @@ func TestDeferredProp(t *testing.T) {
 			}), inertiadeferred.WithRescue(true))).
 			ExpectPropIsNil("rescued").
 			ExpectRescuedProps("rescued").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should populate mergeProps when WithMerge is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("merged", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"key": "value"}, nil
 			}), inertiadeferred.WithMerge(inertia.NewMergeOpts()))).
 			ExpectNoProp("merged").
 			ExpectDeferredGroup("default", "merged").
 			ExpectMergeProps("merged").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should populate both deferredProps and onceProps when WithOnce is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("locale", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "en", nil
 			}), inertiadeferred.WithOnce(inertia.NewOnceOpts().Key("locale_key")))).
 			ExpectNoProp("locale").
 			ExpectDeferredGroup("default", "locale").
 			ExpectOnceProps("locale_key", "locale").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should pass through nil value when prop returns nil", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"nullable"},
@@ -116,6 +116,6 @@ func TestDeferredProp(t *testing.T) {
 				return nil, nil //nolint:nilnil
 			}))).
 			ExpectPropIsNil("nullable").
-			Run(t.Context())
+			Run()
 	})
 }

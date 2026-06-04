@@ -23,7 +23,7 @@ func TestScrollProp(t *testing.T) {
 		nextPage := 2
 		currentPage := 1
 
-		page := inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
 		}).
@@ -34,7 +34,7 @@ func TestScrollProp(t *testing.T) {
 				inertiascroll.WithPageName("page"),
 			)).
 			ExpectProp("users", map[string]any{"data": []string{"one"}}).
-			Run(t.Context())
+			Run()
 
 		scrollProps, ok := page.ScrollProps["users"]
 		require.True(t, ok)
@@ -53,27 +53,27 @@ func TestScrollProp(t *testing.T) {
 	t.Run("should add to mergeProps when scroll merge intent is append", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
 		}).
 			With(inertiascroll.New("users", map[string]any{"data": []string{"one"}})).
 			ExpectMergeProps("users.data").
 			ExpectNoPrependProps().
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should add to prependProps when scroll merge intent is prepend", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: inertiaprop.ScrollMergeIntentPrepend,
 		}).
 			With(inertiascroll.New("users", map[string]any{"data": []string{"one"}})).
 			ExpectPrependProps("users.data").
 			ExpectNoMergeProps().
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should return error when scroll merge intent is invalid", func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestScrollProp(t *testing.T) {
 	t.Run("should resolve value from lazy source when prop value is lazy", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
 		}).
@@ -109,13 +109,13 @@ func TestScrollProp(t *testing.T) {
 			)).
 			ExpectProp("users", map[string]any{"data": []string{"lazy-one"}}).
 			ExpectMergeProps("users.data").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should use custom wrapper path when WithWrapper is set", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
 		}).
@@ -129,6 +129,6 @@ func TestScrollProp(t *testing.T) {
 				"meta":  map[string]int{"total": 1},
 			}).
 			ExpectMergeProps("users.items").
-			Run(t.Context())
+			Run()
 	})
 }

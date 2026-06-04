@@ -1,8 +1,6 @@
 package inertiatest
 
 import (
-	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -19,8 +17,8 @@ const DefaultComponent = "TestComponent"
 // DefaultVersion is the default version used in test renders.
 const DefaultVersion = "1.0.0"
 
-// Assertion is a function that asserts expectations on a rendered page.
-type Assertion func(t *testing.T, page *inertiaprotocol.Page)
+// PropAssert is a function that asserts expectations on a rendered page.
+type PropAssert func(t *testing.T, page *inertiaprotocol.Page)
 
 // PropTestBuilder is a fluent test builder that encapsulates rendering, assertion, and snapshotting.
 //
@@ -31,11 +29,11 @@ type PropTestBuilder struct {
 	t          *testing.T
 	request    inertiaprotocol.Request
 	props      []inertiaprop.Prop
-	assertions []Assertion
+	assertions []PropAssert
 }
 
-// NewTestBuilder creates a new test builder for the given request.
-func NewTestBuilder(t *testing.T, request inertiaprotocol.Request) *PropTestBuilder {
+// NewPropTestBuilder creates a new test builder for the given request.
+func NewPropTestBuilder(t *testing.T, request inertiaprotocol.Request) *PropTestBuilder {
 	t.Helper()
 
 	return &PropTestBuilder{ //nolint:exhaustruct
@@ -209,10 +207,10 @@ func (b *PropTestBuilder) ExpectRescuedProps(keys ...string) *PropTestBuilder {
 // skips page assertions and snapshotting, and returns nil.
 //
 // Otherwise, Run returns the rendered page so callers can perform additional assertions.
-func (b *PropTestBuilder) Run(ctx context.Context) *inertiaprotocol.Page {
+func (b *PropTestBuilder) Run() *inertiaprotocol.Page {
 	b.t.Helper()
 
-	page, err := inertiaprotocol.Render(ctx, b.request, inertiaprotocol.Context{ //nolint:exhaustruct
+	page, err := inertiaprotocol.Render(b.t.Context(), b.request, inertiaprotocol.Context{ //nolint:exhaustruct
 		Component: DefaultComponent,
 		Version:   DefaultVersion,
 		Props:     b.props,
@@ -231,16 +229,7 @@ func (b *PropTestBuilder) Run(ctx context.Context) *inertiaprotocol.Page {
 		assertFn(b.t, page)
 	}
 
-	snapshotPage(b.t, page)
+	snaps.MatchJSON(b.t, page)
 
 	return page
-}
-
-func snapshotPage(t *testing.T, page *inertiaprotocol.Page) {
-	t.Helper()
-
-	b, err := json.MarshalIndent(page, "", "  ")
-	require.NoError(t, err)
-
-	snaps.MatchSnapshot(t, string(b))
 }

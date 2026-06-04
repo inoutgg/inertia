@@ -1,52 +1,52 @@
 
 [TestAlwaysProp/should_include_value_in_props_on_full_request - 1]
 {
-  "props": {
-    "auth": {
-      "user": "Roman"
-    }
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "auth": {
+   "user": "Roman"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestAlwaysProp/should_resolve_value_from_lazy_source_when_prop_value_is_lazy - 1]
 {
-  "props": {
-    "auth": {
-      "user": "LazyRoman"
-    }
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "auth": {
+   "user": "LazyRoman"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestAlwaysProp/should_bypass_partial_filters_when_included_in_partial_request/blacklist_excludes_it - 1]
 {
-  "props": {
-    "auth": {
-      "user": "Roman"
-    }
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "auth": {
+   "user": "Roman"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestAlwaysProp/should_bypass_partial_filters_when_included_in_partial_request/whitelist_does_not_include_it - 1]
 {
-  "props": {
-    "auth": {
-      "user": "Roman"
-    }
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "auth": {
+   "user": "Roman"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
