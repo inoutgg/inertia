@@ -123,3 +123,53 @@
  "version": "1.0.0"
 }
 ---
+
+[TestScrollProp/should_mark_scroll_prop_as_reset_when_its_key_is_in_reset_list,_still_returning_the_value_and_scroll_metadata - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "users": {
+   "data": [
+    "fresh"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "",
+   "previousPage": null,
+   "reset": true
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestScrollProp/should_not_mark_scroll_prop_as_reset_when_its_key_is_absent_from_reset_list - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data"
+ ],
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "",
+   "previousPage": null
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

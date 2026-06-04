@@ -63,7 +63,7 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 		Component:     renderCtx.Component,
 		Props:         props,
 		DeferredProps: makeDeferredProps(req, renderCtx.Component, renderCtx.Props),
-		ScrollProps:   makeScrollProps(renderCtx.Props),
+		ScrollProps:   makeScrollProps(renderCtx.Props, req.ResetProps),
 		OnceProps:     makeOnceProps(renderCtx.Props),
 		MergeProps:    mergeProps.append,
 		PrependProps:  mergeProps.prepend,
@@ -294,19 +294,28 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 
 // makeMergeProps creates a list of props that should be merged instead of
 // being replaced on the client side.
-func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeIntent string) (mergeProps, error) {
+//
+// resetKeys contains the prop keys requested to be reset via the
+// X-Inertia-Reset header. For props matching a reset key, the merge
+// instruction (and any per-path append/prepend/match entries) is suppressed
+// while the prop value itself is still returned to the client. Scroll props
+// are an exception: their scrollProps metadata (including the reset flag) is
+// always emitted by makeScrollProps.
+func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeIntent string) (mergeProps, error) {
 	var m mergeProps
 
 	for _, prop := range props {
-		if len(blacklist) > 0 && slices.Contains(blacklist, prop.Key()) {
-			continue
-		}
+		resetting := len(resetKeys) > 0 && slices.Contains(resetKeys, prop.Key())
 
 		// Scrollable is a special case since it is a combination of merge props
 		// with a custom handling.
 		// The Scrollable prop check must be performed before the Mergeable prop check
 		// since the inertiascoll.Prop has no Mergeable capability.
 		if scroll, ok := prop.Scrollable(); ok {
+			if resetting {
+				continue
+			}
+
 			switch scrollMergeIntent {
 			case inertiaprop.ScrollMergeIntentPrepend:
 				m.prepend = append(m.prepend, scroll.Path)
@@ -316,6 +325,10 @@ func makeMergeProps(props []inertiaprop.Prop, blacklist []string, scrollMergeInt
 				return mergeProps{}, fmt.Errorf("invalid scroll merge intent: %s", scrollMergeIntent)
 			}
 
+			continue
+		}
+
+		if resetting {
 			continue
 		}
 
@@ -358,7 +371,7 @@ func (m *mergeProps) addMergeKey(propKey string, key inertiaprop.MergeKey, prepe
 	}
 }
 
-func makeScrollProps(props []inertiaprop.Prop) map[string]ScrollProp {
+func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]ScrollProp {
 	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
 		_, ok := prop.Scrollable()
 		return ok
@@ -374,6 +387,7 @@ func makeScrollProps(props []inertiaprop.Prop) map[string]ScrollProp {
 			PreviousPage: scroll.PreviousPage,
 			NextPage:     scroll.NextPage,
 			CurrentPage:  scroll.CurrentPage,
+			Reset:        len(resetKeys) > 0 && slices.Contains(resetKeys, prop.Key()),
 		}
 
 		return m

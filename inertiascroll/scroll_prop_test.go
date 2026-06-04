@@ -131,4 +131,57 @@ func TestScrollProp(t *testing.T) {
 			ExpectMergeProps("users.items").
 			Run()
 	})
+
+	t.Run(
+		"should mark scroll prop as reset when its key is in reset list, still returning the value and scroll metadata",
+		func(t *testing.T) {
+			t.Parallel()
+
+			nextPage := 2
+			currentPage := 1
+
+			page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+				URL:               "/users",
+				ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+				ResetProps:        []string{"users"},
+			}).
+				With(inertiascroll.New(
+					"users",
+					map[string]any{"data": []string{"fresh"}},
+					inertiascroll.WithPagination(nil, &nextPage, &currentPage),
+				)).
+				ExpectProp("users", map[string]any{"data": []string{"fresh"}}).
+				ExpectNoMergeProps().
+				ExpectNoPrependProps().
+				Run()
+
+			scrollProps, ok := page.ScrollProps["users"]
+			require.True(t, ok)
+			assert.True(t, scrollProps.Reset, "expected scroll prop reset flag to be set")
+		},
+	)
+
+	t.Run("should not mark scroll prop as reset when its key is absent from reset list", func(t *testing.T) {
+		t.Parallel()
+
+		nextPage := 2
+		currentPage := 1
+
+		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+			URL:               "/users",
+			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ResetProps:        []string{"other"},
+		}).
+			With(inertiascroll.New(
+				"users",
+				map[string]any{"data": []string{"one"}},
+				inertiascroll.WithPagination(nil, &nextPage, &currentPage),
+			)).
+			ExpectMergeProps("users.data").
+			Run()
+
+		scrollProps, ok := page.ScrollProps["users"]
+		require.True(t, ok)
+		assert.False(t, scrollProps.Reset, "expected scroll prop reset flag to be false")
+	})
 }

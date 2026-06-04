@@ -102,3 +102,17 @@
  "version": "1.0.0"
 }
 ---
+
+[TestProp/should_suppress_mergeProps_and_matchPropsOn_for_reset_keys_while_still_returning_the_value - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman",
+  "posts": [
+   "fresh"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

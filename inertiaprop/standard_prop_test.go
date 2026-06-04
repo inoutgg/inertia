@@ -3,6 +3,8 @@ package inertiaprop_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
@@ -120,4 +122,33 @@ func TestProp(t *testing.T) {
 			ExpectMatchPropsOn("posts.id", "notifications.uuid", "conversation.messages.id").
 			Run()
 	})
+
+	t.Run(
+		"should suppress mergeProps and matchPropsOn for reset keys while still returning the value",
+		func(t *testing.T) {
+			t.Parallel()
+
+			page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+				URL:        "/users",
+				ResetProps: []string{"posts"},
+			}).
+				With(
+					inertiaprop.New(
+						"posts",
+						[]string{"fresh"},
+						inertiaprop.WithMerge(
+							inertia.NewMergeOpts().Append(inertia.MergeKey{MatchOn: "id"}),
+						),
+					),
+					inertiaprop.New("name", "Roman"),
+				).
+				ExpectProp("posts", []string{"fresh"}).
+				ExpectProp("name", "Roman").
+				ExpectNoMergeProps().
+				ExpectNoPrependProps().
+				Run()
+
+			assert.Empty(t, page.MatchPropsOn)
+		},
+	)
 }

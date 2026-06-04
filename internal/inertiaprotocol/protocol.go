@@ -26,6 +26,11 @@ type ScrollProp struct {
 	NextPage     any    `json:"nextPage,omitempty"`
 	CurrentPage  any    `json:"currentPage"`
 	PageName     string `json:"pageName"`
+
+	// Reset instructs the client to clear the scroll container before applying
+	// this page's data. It is set when the prop key appears in the
+	// X-Inertia-Reset request header.
+	Reset bool `json:"reset,omitempty"`
 }
 
 type OnceProp struct {
