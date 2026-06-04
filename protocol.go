@@ -107,6 +107,10 @@ func parseHeaderValueList(value string, header string) ([]string, error) {
 }
 
 func parseScrollMergeIntent(intent string) (string, error) {
+	if intent == "" {
+		return "", nil
+	}
+
 	intent = strings.TrimSpace(intent)
 	switch intent {
 	case inertiaprop.ScrollMergeIntentAppend, inertiaprop.ScrollMergeIntentPrepend:

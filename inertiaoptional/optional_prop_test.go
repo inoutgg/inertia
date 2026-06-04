@@ -18,12 +18,12 @@ func TestOptionalProp(t *testing.T) {
 	t.Run("should exclude value from props on full request", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiaoptional.New("expensive", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return expensiveValue, nil
 			}))).
 			ExpectNoProp("expensive").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should compute value on demand when prop is requested by client", func(t *testing.T) {
@@ -33,14 +33,14 @@ func TestOptionalProp(t *testing.T) {
 			return expensiveValue, nil
 		})
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"expensive"},
 		}).
 			With(inertiaoptional.New("expensive", lazy)).
 			ExpectProp("expensive", expensiveValue).
-			Run(t.Context())
+			Run()
 
 		lazy.ExpectCalledOnce(t)
 	})
@@ -48,7 +48,7 @@ func TestOptionalProp(t *testing.T) {
 	t.Run("should exclude value from props when partial request does not whitelist it", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"other"},
@@ -57,13 +57,13 @@ func TestOptionalProp(t *testing.T) {
 				return expensiveValue, nil
 			}))).
 			ExpectNoProp("expensive").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should compute multiple props in parallel when prop is marked concurrent", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"a", "b"},
@@ -78,7 +78,7 @@ func TestOptionalProp(t *testing.T) {
 			).
 			ExpectProp("a", "val-a").
 			ExpectProp("b", "val-b").
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should skip value computation on initial page load", func(t *testing.T) {
@@ -88,10 +88,10 @@ func TestOptionalProp(t *testing.T) {
 			return "lazy-value", nil
 		})
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiaoptional.New("lazy", lazy)).
 			ExpectNoProp("lazy").
-			Run(t.Context())
+			Run()
 
 		lazy.ExpectNotCalled(t)
 	})
@@ -99,7 +99,7 @@ func TestOptionalProp(t *testing.T) {
 	t.Run("should return error when value resolution fails", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"failing"},
@@ -108,13 +108,13 @@ func TestOptionalProp(t *testing.T) {
 				return nil, errLazyFailure
 			}))).
 			ExpectError(errLazyFailure).
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should pass through false value when prop returns false", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"flag"},
@@ -123,13 +123,13 @@ func TestOptionalProp(t *testing.T) {
 				return false, nil
 			}))).
 			ExpectProp("flag", false).
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should pass through nil value when prop returns nil", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:              "/users",
 			PartialComponent: "TestComponent",
 			PartialData:      []string{"nullable"},
@@ -138,7 +138,7 @@ func TestOptionalProp(t *testing.T) {
 				return nil, nil //nolint:nilnil
 			}))).
 			ExpectPropIsNil("nullable").
-			Run(t.Context())
+			Run()
 	})
 }
 

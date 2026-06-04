@@ -15,10 +15,10 @@ func TestAlwaysProp(t *testing.T) {
 	t.Run("should include value in props on full request", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiaalways.New("auth", map[string]string{"user": "Roman"})).
 			ExpectProp("auth", map[string]string{"user": "Roman"}).
-			Run(t.Context())
+			Run()
 	})
 
 	t.Run("should bypass partial filters when included in partial request", func(t *testing.T) {
@@ -50,10 +50,10 @@ func TestAlwaysProp(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				inertiatest.NewTestBuilder(t, tc.request).
+				inertiatest.NewPropTestBuilder(t, tc.request).
 					With(inertiaalways.New("auth", map[string]string{"user": "Roman"})).
 					ExpectProp("auth", map[string]string{"user": "Roman"}).
-					Run(t.Context())
+					Run()
 			})
 		}
 	})
@@ -61,11 +61,11 @@ func TestAlwaysProp(t *testing.T) {
 	t.Run("should resolve value from lazy source when prop value is lazy", func(t *testing.T) {
 		t.Parallel()
 
-		inertiatest.NewTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiaalways.New("auth", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"user": "LazyRoman"}, nil
 			}))).
 			ExpectProp("auth", map[string]string{"user": "LazyRoman"}).
-			Run(t.Context())
+			Run()
 	})
 }

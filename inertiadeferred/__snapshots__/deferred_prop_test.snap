@@ -1,104 +1,104 @@
 
 [TestDeferredProp/should_exclude_value_from_props_and_add_to_deferredProps_on_full_request - 1]
 {
-  "props": {},
-  "deferredProps": {
-    "default": [
-      "deferred"
-    ]
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "deferred"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_pass_through_nil_value_when_prop_returns_nil - 1]
 {
-  "props": {
-    "nullable": null
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "nullable": null
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_rescue_failed_prop_and_report_it_in_rescuedProps_when_WithRescue_is_set - 1]
 {
-  "props": {
-    "rescued": null
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0",
-  "rescuedProps": [
-    "rescued"
-  ]
+ "component": "TestComponent",
+ "props": {
+  "rescued": null
+ },
+ "rescuedProps": [
+  "rescued"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_include_value_in_props_on_partial_request_and_omit_deferredProps - 1]
 {
-  "props": {
-    "deferred": "Deferred Content"
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "props": {
+  "deferred": "Deferred Content"
+ },
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_populate_mergeProps_when_WithMerge_is_set - 1]
 {
-  "props": {},
-  "deferredProps": {
-    "default": [
-      "merged"
-    ]
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0",
-  "mergeProps": [
-    "merged"
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "merged"
   ]
+ },
+ "mergeProps": [
+  "merged"
+ ],
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_group_props_in_deferredProps_when_WithGroup_is_set - 1]
 {
-  "props": {},
-  "deferredProps": {
-    "group1": [
-      "a",
-      "b"
-    ],
-    "group2": [
-      "c"
-    ]
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "deferredProps": {
+  "group1": [
+   "a",
+   "b"
+  ],
+  "group2": [
+   "c"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
 
 [TestDeferredProp/should_populate_both_deferredProps_and_onceProps_when_WithOnce_is_set - 1]
 {
-  "props": {},
-  "deferredProps": {
-    "default": [
-      "locale"
-    ]
-  },
-  "onceProps": {
-    "locale_key": {
-      "prop": "locale"
-    }
-  },
-  "component": "TestComponent",
-  "url": "/users",
-  "version": "1.0.0"
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "locale"
+  ]
+ },
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
 }
 ---
