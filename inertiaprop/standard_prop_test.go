@@ -107,7 +107,9 @@ func TestProp(t *testing.T) {
 					"notifications",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertia.NewMergeOpts().Prepend(inertia.MergeKey{MatchOn: "uuid"}),
+						inertia.NewMergeOpts().
+							Prepend().
+							Prepend(inertia.MergeKey{MatchOn: "uuid"}),
 					),
 				),
 				inertiaprop.New("conversation", map[string]any{"messages": []string{"one"}},
@@ -122,6 +124,28 @@ func TestProp(t *testing.T) {
 			ExpectMatchPropsOn("posts.id", "notifications.uuid", "conversation.messages.id").
 			Run()
 	})
+
+	t.Run(
+		"should treat MergeKey with only matchOn as a matchOn-only directive at root",
+		func(t *testing.T) {
+			t.Parallel()
+
+			inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+				With(
+					inertiaprop.New(
+						"posts",
+						[]string{"one"},
+						inertiaprop.WithMerge(
+							inertia.NewMergeOpts().Append(inertia.MergeKey{MatchOn: "id"}),
+						),
+					),
+				).
+				ExpectMergeProps("posts").
+				ExpectNoPrependProps().
+				ExpectMatchPropsOn("posts.id").
+				Run()
+		},
+	)
 
 	t.Run(
 		"should suppress mergeProps and matchPropsOn for reset keys while still returning the value",
