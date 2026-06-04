@@ -106,6 +106,14 @@ func parseHeaderValueList(value string, header string) ([]string, error) {
 	return fields, nil
 }
 
+// parseScrollMergeIntent validates the X-Inertia-Infinite-Scroll-Merge-Intent
+// header value.
+//
+// An empty header is treated as "no intent" and is not an error. Any non-empty
+// value that is not exactly "append" or "prepend" is rejected. We intentionally
+// do not fall back to a default for unknown values; the Inertia.js contract
+// is strict, and silently coercing a typo to one of the two known intents
+// would mask client bugs.
 func parseScrollMergeIntent(intent string) (string, error) {
 	if intent == "" {
 		return "", nil
