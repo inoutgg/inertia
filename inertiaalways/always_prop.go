@@ -10,11 +10,25 @@ import (
 
 var _ inertiaprop.Prop = (*Prop)(nil)
 
+// Config holds the configuration for a Prop.
+type Config struct {
+	concurrent bool
+}
+
+// Option is a function that configures a Prop.
+type Option func(*Config)
+
+// WithConcurrent enables concurrent resolution for the prop.
+//
+// Non-lazy prop is still resolved sequencially.
+func WithConcurrent(config *Config) { config.concurrent = true }
+
 // Prop is always included in responses, regardless of partial reload filters.
 type Prop struct {
-	val   any
-	valFn inertiaprop.Lazy
-	key   string
+	val        any
+	valFn      inertiaprop.Lazy
+	key        string
+	concurrent bool
 }
 
 // New creates a prop that is always included in responses.
@@ -26,15 +40,27 @@ func New(key string, val any) *Prop {
 }
 
 // NewLazy is like New but accepts a lazy value.
-func NewLazy(key string, valFn inertiaprop.Lazy) *Prop {
+func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
 	debug.Assert(valFn != nil, "valFn must not be nil")
 
-	return &Prop{key: key, valFn: valFn} //nolint:exhaustruct
+	var cfg Config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	//nolint:exhaustruct
+	return &Prop{
+		key:        key,
+		valFn:      valFn,
+		concurrent: cfg.concurrent,
+	}
 }
 
 func (p *Prop) Key() string { return p.key }
 
 func (p *Prop) Value(ctx context.Context) (any, error) {
+	debug.Assert(p.valFn != nil, "valFn must not be nil")
+
 	if p.valFn != nil {
 		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
@@ -48,4 +74,4 @@ func (p *Prop) Deferrable() (*inertiaprop.Deferrable, bool) { return nil, false 
 func (p *Prop) Mergeable() (*inertiaprop.Mergeable, bool)   { return nil, false }
 func (p *Prop) Scrollable() (*inertiaprop.Scrollable, bool) { return nil, false }
 func (p *Prop) Onceable() (*inertiaprop.Onceable, bool)     { return nil, false }
-func (p *Prop) Concurrent() bool                            { return false }
+func (p *Prop) Concurrent() bool                            { return p.concurrent }
