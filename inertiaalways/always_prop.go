@@ -12,8 +12,9 @@ var _ inertiaprop.Prop = (*Prop)(nil)
 
 // Prop is always included in responses, regardless of partial reload filters.
 type Prop struct {
-	val any
-	key string
+	val   any
+	valFn inertiaprop.Lazy
+	key   string
 }
 
 // New creates a prop that is always included in responses.
@@ -21,16 +22,21 @@ type Prop struct {
 // It bypasses partial reload filters, ensuring the prop is present even when
 // the client requests only specific props via only/except.
 func New(key string, val any) *Prop {
-	return &Prop{val: val, key: key}
+	return &Prop{val: val, key: key} //nolint:exhaustruct
+}
+
+// NewLazy is like New but accepts a lazy value.
+func NewLazy(key string, valFn inertiaprop.Lazy) *Prop {
+	debug.Assert(valFn != nil, "valFn must not be nil")
+
+	return &Prop{key: key, valFn: valFn} //nolint:exhaustruct
 }
 
 func (p *Prop) Key() string { return p.key }
 
 func (p *Prop) Value(ctx context.Context) (any, error) {
-	if lazy, ok := p.val.(inertiaprop.Lazy); ok {
-		debug.Assert(lazy != nil, "p.val must not be nil")
-
-		return lazy.Value(ctx) //nolint:wrapcheck
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
 
 	return p.val, nil
