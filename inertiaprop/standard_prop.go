@@ -10,8 +10,9 @@ var _ inertiaprop.Prop = (*Prop)(nil)
 
 // Config holds the configuration for a Prop.
 type Config struct {
-	merge *inertiaprop.MergeOpts
-	once  *inertiaprop.OnceOpts
+	merge      *inertiaprop.MergeOpts
+	once       *inertiaprop.OnceOpts
+	concurrent bool
 }
 
 // Option is a function that configures a Prop.
@@ -31,12 +32,18 @@ func WithMerge(merge *inertiaprop.MergeOpts) Option {
 	return func(config *Config) { config.merge = merge }
 }
 
+// WithConcurrent enables concurrent resolution for the prop.
+//
+// Non-lazy prop is still resolved sequencially.
+func WithConcurrent(config *Config) { config.concurrent = true }
+
 type Prop struct {
-	val   any
-	valFn inertiaprop.Lazy
-	once  *inertiaprop.Onceable
-	merge *inertiaprop.Mergeable
-	key   string
+	val        any
+	valFn      inertiaprop.Lazy
+	once       *inertiaprop.Onceable
+	merge      *inertiaprop.Mergeable
+	key        string
+	concurrent bool
 }
 
 // New creates a standard prop.
@@ -67,10 +74,11 @@ func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
 
 	//nolint:exhaustruct
 	return &Prop{
-		key:   key,
-		valFn: valFn,
-		once:  inertiaprop.ToOnceable(cfg.once),
-		merge: inertiaprop.ToMergeable(cfg.merge),
+		key:        key,
+		valFn:      valFn,
+		once:       inertiaprop.ToOnceable(cfg.once),
+		merge:      inertiaprop.ToMergeable(cfg.merge),
+		concurrent: cfg.concurrent,
 	}
 }
 
@@ -90,4 +98,4 @@ func (p *Prop) Deferrable() (*inertiaprop.Deferrable, bool) { return nil, false 
 func (p *Prop) Mergeable() (*inertiaprop.Mergeable, bool)   { return p.merge, p.merge != nil }
 func (p *Prop) Scrollable() (*inertiaprop.Scrollable, bool) { return nil, false }
 func (p *Prop) Onceable() (*inertiaprop.Onceable, bool)     { return p.once, p.once != nil }
-func (p *Prop) Concurrent() bool                            { return false }
+func (p *Prop) Concurrent() bool                            { return p.concurrent }
