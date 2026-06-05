@@ -33,6 +33,7 @@ func WithMerge(merge *inertiaprop.MergeOpts) Option {
 
 type Prop struct {
 	val   any
+	valFn inertiaprop.Lazy
 	once  *inertiaprop.Onceable
 	merge *inertiaprop.Mergeable
 	key   string
@@ -48,16 +49,40 @@ func New(key string, val any, opts ...Option) *Prop {
 		opt(&cfg)
 	}
 
+	//nolint:exhaustruct
 	return &Prop{
-		val:   val,
-		once:  cfg.once.Onceable(),
-		merge: cfg.merge.Mergeable(),
 		key:   key,
+		val:   val,
+		once:  inertiaprop.ToOnceable(cfg.once),
+		merge: inertiaprop.ToMergeable(cfg.merge),
 	}
 }
 
-func (p *Prop) Key() string                        { return p.key }
-func (p *Prop) Value(context.Context) (any, error) { return p.val, nil }
+// NewLazy is like New but accepts a lazy value.
+func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
+	var cfg Config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	//nolint:exhaustruct
+	return &Prop{
+		key:   key,
+		valFn: valFn,
+		once:  inertiaprop.ToOnceable(cfg.once),
+		merge: inertiaprop.ToMergeable(cfg.merge),
+	}
+}
+
+func (p *Prop) Key() string { return p.key }
+
+func (p *Prop) Value(ctx context.Context) (any, error) {
+	if p.valFn != nil {
+		return p.valFn.Value(ctx) //nolint:wrapcheck
+	}
+
+	return p.val, nil
+}
 
 func (p *Prop) IsFirstLoadIgnorable() bool                  { return false }
 func (p *Prop) BypassPartialFilters() bool                  { return false }

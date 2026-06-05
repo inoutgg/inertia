@@ -63,18 +63,20 @@ type Prop struct {
 // Deferred props are fetched separately after the initial page loads, improving perceived performance.
 // Options such as WithGroup and WithRescue customize the prop's behavior.
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
-	config := Config{group: DefaultGroup} //nolint:exhaustruct
+	debug.Assert(val != nil, "p.val must not be nil")
+
+	cfg := Config{group: DefaultGroup} //nolint:exhaustruct
 	for _, opt := range opts {
-		opt(&config)
+		opt(&cfg)
 	}
 
 	return &Prop{
-		val:        val,
-		once:       config.once.Onceable(),
-		deferred:   &inertiaprop.Deferrable{Group: cmp.Or(config.group, DefaultGroup), Rescue: config.rescue},
-		merge:      config.merge.Mergeable(),
 		key:        key,
-		concurrent: config.concurrent,
+		val:        val,
+		once:       inertiaprop.ToOnceable(cfg.once),
+		merge:      inertiaprop.ToMergeable(cfg.merge),
+		deferred:   &inertiaprop.Deferrable{Group: cmp.Or(cfg.group, DefaultGroup), Rescue: cfg.rescue},
+		concurrent: cfg.concurrent,
 	}
 }
 

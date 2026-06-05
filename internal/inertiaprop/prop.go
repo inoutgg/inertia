@@ -41,9 +41,19 @@ type LazyFunc func(context.Context) (any, error)
 // Value calls `fn()`.
 func (fn LazyFunc) Value(ctx context.Context) (any, error) { return fn(ctx) }
 
-type Deferrable struct {
-	Group  string
-	Rescue bool
+// RescueError is returned by a deferred prop's Value method when the prop
+// is configured with rescue and fails to resolve.
+type RescueError struct {
+	Err error
+	Key string
+}
+
+func (e *RescueError) Error() string {
+	return fmt.Sprintf("inertia: rescued deferred prop %s: %v", e.Key, e.Err)
+}
+
+func (e *RescueError) Unwrap() error {
+	return e.Err
 }
 
 type MergeKey struct {
@@ -90,56 +100,6 @@ func (o *MergeOpts) Prepend(keys ...MergeKey) *MergeOpts {
 	return o
 }
 
-func (o *MergeOpts) Mergeable() *Mergeable {
-	if o == nil {
-		return nil
-	}
-
-	return &Mergeable{
-		Append:      o.append,
-		Prepend:     o.prepend,
-		AppendKeys:  slices.Clone(o.appendKeys),
-		PrependKeys: slices.Clone(o.prependKeys),
-	}
-}
-
-type Mergeable struct {
-	AppendKeys  []MergeKey
-	PrependKeys []MergeKey
-
-	Append  bool
-	Prepend bool
-}
-
-type Scrollable struct {
-	PreviousPage any
-	NextPage     any
-	CurrentPage  any
-	PageName     string
-	Path         string
-}
-
-type Onceable struct {
-	ExpiresAt *int64
-	Key       string
-	Fresh     bool
-}
-
-// RescueError is returned by a deferred prop's Value method when the prop
-// is configured with rescue and fails to resolve.
-type RescueError struct {
-	Err error
-	Key string
-}
-
-func (e *RescueError) Error() string {
-	return fmt.Sprintf("inertia: rescued deferred prop %s: %v", e.Key, e.Err)
-}
-
-func (e *RescueError) Unwrap() error {
-	return e.Err
-}
-
 // OnceOpts configures once prop behavior.
 type OnceOpts struct {
 	expiresAt *int64
@@ -166,17 +126,56 @@ func (o *OnceOpts) Fresh(fresh bool) *OnceOpts {
 	return o
 }
 
-// TODO: Onceable must be a private function. Maybe move it to ToOnceable function.
-//
-//nolint:godoclint
-func (o *OnceOpts) Onceable() *Onceable {
-	if o == nil {
+type Deferrable struct {
+	Group  string
+	Rescue bool
+}
+
+type Onceable struct {
+	ExpiresAt *int64
+	Key       string
+	Fresh     bool
+}
+
+// ToOnceable converts OnceOpts to Onceable.
+func ToOnceable(opts *OnceOpts) *Onceable {
+	if opts == nil {
 		return nil
 	}
 
 	return &Onceable{
-		ExpiresAt: o.expiresAt,
-		Key:       o.key,
-		Fresh:     o.fresh,
+		ExpiresAt: opts.expiresAt,
+		Key:       opts.key,
+		Fresh:     opts.fresh,
 	}
+}
+
+type Mergeable struct {
+	AppendKeys  []MergeKey
+	PrependKeys []MergeKey
+
+	Append  bool
+	Prepend bool
+}
+
+// ToMergeable converts MergeOpts to Mergeable.
+func ToMergeable(opts *MergeOpts) *Mergeable {
+	if opts == nil {
+		return nil
+	}
+
+	return &Mergeable{
+		Append:      opts.append,
+		Prepend:     opts.prepend,
+		AppendKeys:  slices.Clone(opts.appendKeys),
+		PrependKeys: slices.Clone(opts.prependKeys),
+	}
+}
+
+type Scrollable struct {
+	PreviousPage any
+	NextPage     any
+	CurrentPage  any
+	PageName     string
+	Path         string
 }

@@ -62,7 +62,7 @@ func TestAlwaysProp(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-			With(inertiaalways.New("auth", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
+			With(inertiaalways.NewLazy("auth", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"user": "LazyRoman"}, nil
 			}))).
 			ExpectProp("auth", map[string]string{"user": "LazyRoman"}).

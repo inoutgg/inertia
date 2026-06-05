@@ -3,6 +3,8 @@ package inertiaoptional
 import (
 	"context"
 
+	"go.inout.gg/foundations/debug"
+
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
@@ -30,6 +32,8 @@ type Prop struct {
 // The value function is only called when the client specifically requests this prop.
 // Options customize the prop's behavior.
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
+	debug.Assert(val != nil, "p.val must not be nil")
+
 	var cfg Config
 	for _, opt := range opts {
 		opt(&cfg)
