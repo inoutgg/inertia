@@ -3,6 +3,8 @@ package inertiaprop
 import (
 	"context"
 
+	"go.inout.gg/foundations/debug"
+
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
@@ -37,6 +39,10 @@ func WithMerge(merge *inertiaprop.MergeOpts) Option {
 // Non-lazy prop is still resolved sequencially.
 func WithConcurrent(config *Config) { config.concurrent = true }
 
+// Prop is a standard prop: included on every full-page response and, during
+// partial reloads, only when its key matches the client's only/except filter.
+// Optional merge, once, and concurrent behavior is configured via the inertiaprop
+// options passed to New or NewLazy.
 type Prop struct {
 	val        any
 	valFn      inertiaprop.Lazy
@@ -86,6 +92,8 @@ func (p *Prop) Key() string { return p.key }
 
 func (p *Prop) Value(ctx context.Context) (any, error) {
 	if p.valFn != nil {
+		debug.Assert(p.valFn != nil, "p.valFn must not be nil")
+
 		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
 

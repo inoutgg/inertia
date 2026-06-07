@@ -10,6 +10,10 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
+// ErrInvalidInertiaRequest is the sentinel error returned (or wrapped) when an
+// incoming Inertia request has malformed or invalid protocol headers.
+// Callers can match it with errors.Is to distinguish protocol errors from
+// other parse failures.
 var ErrInvalidInertiaRequest = errors.New("inertia: invalid request")
 
 type request struct {

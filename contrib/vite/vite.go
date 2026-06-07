@@ -11,12 +11,27 @@ import (
 	"go.inout.gg/foundations/must"
 )
 
+// DefaultViteAddress is the Vite dev server address used by Config when
+// ViteAddress is empty.
 const DefaultViteAddress = "http://localhost:5173"
 
+// Config configures Vite integration: the production manifest used to resolve
+// assets, the html/template name to register, and the dev server base URL.
 type Config struct {
-	Manifest     Manifest
+	// Manifest maps entry points to compiled assets and is used in production
+	// builds to resolve viteResource calls; ignored in dev.
+	Manifest Manifest
+
+	// TemplateName is the html/template name given to the parsed template.
+	//
+	// Defaults to "inertia".
 	TemplateName string
-	ViteAddress  string
+
+	// ViteAddress is the base URL of the Vite dev server, used in
+	// non-production builds.
+	//
+	// Defaults to DefaultViteAddress.
+	ViteAddress string
 }
 
 func (c *Config) defaults() {
@@ -52,8 +67,8 @@ func NewTemplate(content string, config *Config) (*template.Template, error) {
 	return t, nil
 }
 
-// Must is like New but panics on error.
-func Must(content string, c *Config) *template.Template {
+// MustTemplate is like NewTemplate but panics on error.
+func MustTemplate(content string, c *Config) *template.Template {
 	return must.Must(NewTemplate(content, c))
 }
 

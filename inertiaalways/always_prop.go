@@ -59,9 +59,9 @@ func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
 func (p *Prop) Key() string { return p.key }
 
 func (p *Prop) Value(ctx context.Context) (any, error) {
-	debug.Assert(p.valFn != nil, "valFn must not be nil")
-
 	if p.valFn != nil {
+		debug.Assert(p.valFn != nil, "valFn must not be nil")
+
 		return p.valFn.Value(ctx) //nolint:wrapcheck
 	}
 

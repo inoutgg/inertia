@@ -10,10 +10,12 @@ import (
 
 var _ inertiaprop.Prop = (*Prop)(nil)
 
+// Config holds the configuration for a Prop.
 type Config struct {
 	concurrent bool
 }
 
+// Option is a function that configures a Prop.
 type Option func(*Config)
 
 // WithConcurrent enables concurrent resolution for the prop.

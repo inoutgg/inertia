@@ -132,9 +132,17 @@ func resolvePartialComponentRequest(
 	whitelist, blacklist, exceptOnceProps []string,
 	concurrency int,
 ) (map[string]any, []string, error) {
-	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
-		if shouldSkipOnceProp(p, exceptOnceProps) {
-			return len(whitelist) > 0 && slices.Contains(whitelist, p.Key())
+	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
+		key := prop.Key()
+		if shouldSkipOnceProp(prop, exceptOnceProps) {
+			return len(whitelist) > 0 && slices.Contains(whitelist, key)
+		}
+
+		if !prop.BypassPartialFilters() {
+			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
+				len(blacklist) > 0 && slices.Contains(blacklist, key) {
+				return false
+			}
 		}
 
 		return true
@@ -151,14 +159,6 @@ func resolvePartialComponentRequest(
 
 	for _, prop := range props {
 		key := prop.Key()
-
-		if !prop.BypassPartialFilters() {
-			// It should be fine to go through slices here, as the number of props is expected to be small.
-			if len(whitelist) > 0 && !slices.Contains(whitelist, key) ||
-				len(blacklist) > 0 && slices.Contains(blacklist, key) {
-				continue
-			}
-		}
 
 		if prop.Concurrent() {
 			concurrentProps = append(concurrentProps, prop)

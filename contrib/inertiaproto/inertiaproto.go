@@ -17,15 +17,29 @@ import (
 	"go.segfaultmedaddy.com/inertia/inertiaframe"
 )
 
+// DefaultErrorHandler is the error handler used by Mount; it routes validation
+// errors back to the previous page and forwards any other error to the standard
+// HTTP error handler.
 var DefaultErrorHandler = inertiaframe.DefaultErrorHandler //nolint:gochecknoglobals
 
 // Endpoint is a inertiaframe.Endpoint that returns a protobuf message as a response.
 type Endpoint[M proto.Message] = inertiaframe.Endpoint[M]
 
+// Config configures the inertiaproto middleware: Vite integration, SSR
+// client, error handler, and the client-visible bundle version.
 type Config struct {
-	SSRClient     inertia.SSRClient
-	ErrorHandler  httphandler.ErrorHandler
-	ViteConfig    *vite.Config
+	// SSRClient enables server-side rendering of Inertia pages; if nil,
+	// pages are rendered client-side only.
+	SSRClient inertia.SSRClient
+
+	// ErrorHandler handles execution errors. Defaults to DefaultErrorHandler.
+	ErrorHandler httphandler.ErrorHandler
+
+	// ViteConfig configures the html/template used for page rendering.
+	ViteConfig *vite.Config
+
+	// BundleVersion is the asset version reported to the client via
+	// X-Inertia-Version for stale-asset detection.
 	BundleVersion string
 }
 

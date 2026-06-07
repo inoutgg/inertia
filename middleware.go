@@ -24,16 +24,29 @@ var kCtxKey = ctxKey{}
 //nolint:gochecknoglobals
 var seeOtherMethods = []string{http.MethodPatch, http.MethodPut, http.MethodDelete}
 
+// DefaultEmptyResponseHandler is invoked by NewMiddleware when an inner
+// handler produced no response body; it writes HTTP 204 No Content with the
+// body "Empty response".
+//
 //nolint:gochecknoglobals
 var DefaultEmptyResponseHandler = func(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "Empty response", http.StatusNoContent)
 }
 
+// DefaultVersionMismatchHandler is invoked by NewMiddleware when a GET
+// request's X-Inertia-Version header does not match the renderer's version;
+// it performs an external redirect back to the request URL so the client
+// reloads the page with fresh assets.
+//
 //nolint:gochecknoglobals
 var DefaultVersionMismatchHandler = func(w http.ResponseWriter, r *http.Request) {
 	Location(w, r, r.RequestURI)
 }
 
+// DefaultInvalidRequestHandler is invoked by NewMiddleware when an Inertia
+// request fails header validation; it writes HTTP 400 Bad Request with the
+// validation error as the body.
+//
 //nolint:gochecknoglobals
 var DefaultInvalidRequestHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 	http.Error(w, err.Error(), http.StatusBadRequest)

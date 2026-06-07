@@ -18,15 +18,32 @@ type Manifest struct {
 // ManifestEntry describes a single asset in the Vite build manifest.
 // It contains the asset's output path, dependencies, and metadata.
 type ManifestEntry struct {
-	Source         string   `json:"src"`
-	File           string   `json:"file"`
-	Name           string   `json:"name"`
-	CSS            []string `json:"css"`
-	Assets         []string `json:"assets"`
-	Imports        []string `json:"imports"`
+	// Source is the project's source path for the entry, as written in code.
+	Source string `json:"src"`
+
+	// File is the compiled output path emitted by Vite for this entry.
+	File string `json:"file"`
+
+	// Name is the manifest key used to look the entry up from Manifest.
+	Name string `json:"name"`
+
+	// CSS lists stylesheet URLs associated with this entry.
+	CSS []string `json:"css"`
+
+	// Assets lists the JS asset URLs produced for this entry.
+	Assets []string `json:"assets"`
+
+	// Imports lists manifest keys of static imports that must load before this entry.
+	Imports []string `json:"imports"`
+
+	// DynamicImports lists manifest keys of dynamic imports reachable from this entry.
 	DynamicImports []string `json:"dynamicImports"`
-	IsEntry        bool     `json:"isEntry"`
-	IsDynamicEntry bool     `json:"isDynamicEntry"`
+
+	// IsEntry reports whether this entry is a build entry point.
+	IsEntry bool `json:"isEntry"`
+
+	// IsDynamicEntry reports whether this entry is reached only via dynamic import.
+	IsDynamicEntry bool `json:"isDynamicEntry"`
 }
 
 // HTML resolves a manifest entry and returns all required CSS and JS tags.
