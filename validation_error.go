@@ -13,9 +13,10 @@ var (
 	_ ValidationErrorer = (*ValidationErrors)(nil)
 )
 
-const (
-	DefaultErrorBag = ""
-)
+// DefaultErrorBag is the error bag name used when the client does not
+// select a specific bag via the X-Inertia-Error-Bag header and no bag is
+// passed to WithValidationErrors.
+const DefaultErrorBag = ""
 
 //nolint:gochecknoinits
 func init() {
@@ -64,6 +65,9 @@ func (err *validationError) Field() string                       { return err.Fi
 func (err *validationError) ValidationErrors() []ValidationError { return []ValidationError{err} }
 func (err *validationError) Len() int                            { return 1 }
 
+// ValidationErrors is a collection of ValidationError values that implements
+// the error and ValidationErrorer interfaces; pass it wherever a
+// ValidationErrorer is expected.
 type ValidationErrors []ValidationError
 
 func (errs ValidationErrors) Error() string                       { return "validation errors" }

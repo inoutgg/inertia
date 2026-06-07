@@ -20,8 +20,12 @@ type sessCtx struct{}
 var kSessCtx = sessCtx{} //nolint:gochecknoglobals
 
 const (
+	// SessionCookieName is the cookie name used to persist flash session
+	// data (validation errors and the last visited path) between requests.
 	SessionCookieName = "_inertiaframe"
-	SessionPath       = "/"
+
+	// SessionPath is the Path attribute applied to the flash session cookie.
+	SessionPath = "/"
 )
 
 //nolint:gochecknoglobals

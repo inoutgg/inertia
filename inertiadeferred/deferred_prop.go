@@ -9,10 +9,14 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
+// DefaultGroup is the deferred-fetch group assigned to a Prop when WithGroup
+// is not used; the client groups all props sharing the same group into a
+// single follow-up request.
 const DefaultGroup = "default"
 
 var _ inertiaprop.Prop = (*Prop)(nil)
 
+// Config holds the configuration for a Prop.
 type Config struct {
 	merge      *inertiaprop.MergeOpts
 	once       *inertiaprop.OnceOpts
@@ -21,6 +25,7 @@ type Config struct {
 	concurrent bool
 }
 
+// Option is a function that configures a Prop.
 type Option func(*Config)
 
 // WithGroup sets the deferred group name.

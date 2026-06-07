@@ -26,8 +26,13 @@ import (
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
 
+// DefaultFormDecoder is the form decoder used by Mount when MountConfig.FormDecoder is nil.
+// It is shared across every endpoint that does not supply its own decoder, so it can be
+// configured once at startup (for example, to register custom type decoders).
 var DefaultFormDecoder = form.NewDecoder() //nolint:gochecknoglobals
 
+// ErrEmptyResponse is produced when an endpoint's Execute method returns a nil Response.
+// It signals that the endpoint finished without producing any output for the client.
 var ErrEmptyResponse = errors.New("inertiaframe: empty response")
 
 type (
@@ -91,6 +96,11 @@ func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, error
 	RedirectBack(w, r)
 }
 
+// DefaultErrorHandler is the error handler used by Mount when MountConfig.ErrorHandler is nil.
+// Validation errors are routed to DefaultValidationErrorHandler, which stores them in the
+// session and redirects the client back; any other error is forwarded to the standard
+// HTTP error handler.
+//
 //nolint:gochecknoglobals
 var DefaultErrorHandler httphandler.ErrorHandler = httphandler.ErrorHandlerFunc(
 	func(w http.ResponseWriter, r *http.Request, err error) {
@@ -314,19 +324,26 @@ type Mux interface {
 
 // MountConfig configures endpoint mounting behavior.
 type MountConfig[M any] struct {
-	// Validator validates requests before execution. If nil, no validation is performed.
+	// Validator validates requests before execution.
+	//
+	// If nil, no validation is performed.
 	Validator Validator[M]
 
 	// FormDecoder parses form-urlencoded and multipart requests.
+	//
 	// Defaults to DefaultFormDecoder if nil.
 	FormDecoder *form.Decoder
 
-	// ErrorHandler handles execution errors. Defaults to DefaultErrorHandler if nil.
+	// ErrorHandler handles execution errors.
+	//
+	// Defaults to DefaultErrorHandler if nil.
 	ErrorHandler httphandler.ErrorHandler
 
 	// JSONUnmarshalOptions customizes JSON parsing (e.g., for protobuf).
 	JSONUnmarshalOptions []json.Options
 
+	// Middleware wraps the endpoint's HTTP handler in cross-cutting behavior (e.g., logging, auth).
+	// Applied in slice order, with the first element being the outermost wrapper.
 	Middleware []Middleware
 }
 
@@ -357,16 +374,17 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 
 	d("Mounting executor on pattern: %s", pattern)
 
-	mux.Handle(
-		pattern,
-		newHandler(
-			endpoint,
-			opts.ErrorHandler,
-			opts.Validator,
-			opts.FormDecoder,
-			opts.JSONUnmarshalOptions,
-		),
+	h := newHandler(
+		endpoint,
+		opts.ErrorHandler,
+		opts.Validator,
+		opts.FormDecoder,
+		opts.JSONUnmarshalOptions,
 	)
+
+	h = httpmiddleware.NewChain(opts.Middleware...).Middleware(h)
+
+	mux.Handle(pattern, h)
 }
 
 // newHandler creates a new http.Handler for the given endpoint.
