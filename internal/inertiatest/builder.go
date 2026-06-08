@@ -142,6 +142,17 @@ func (b *PropTestBuilder) ExpectDeepMergeProps(keys ...string) *PropTestBuilder 
 	return b
 }
 
+// ExpectNoDeepMergeProps asserts that page.DeepMergeProps is empty.
+func (b *PropTestBuilder) ExpectNoDeepMergeProps() *PropTestBuilder {
+	b.assertions = append(b.assertions, func(t *testing.T, page *inertiaprotocol.Page) {
+		t.Helper()
+
+		assert.Empty(t, page.DeepMergeProps)
+	})
+
+	return b
+}
+
 // ExpectNoPrependProps asserts that page.PrependProps is empty.
 func (b *PropTestBuilder) ExpectNoPrependProps() *PropTestBuilder {
 	b.assertions = append(b.assertions, func(t *testing.T, page *inertiaprotocol.Page) {

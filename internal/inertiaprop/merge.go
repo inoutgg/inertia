@@ -45,6 +45,16 @@ func NewMergeOpts() *MergeOpts {
 	return &MergeOpts{isAppend: true} //nolint:exhaustruct
 }
 
+// NewMergeAppend creates a MergeOpts for root-level append merging.
+func NewMergeAppend() *MergeOpts {
+	return NewMergeOpts()
+}
+
+// NewMergePrepend creates a MergeOpts for root-level prepend merging.
+func NewMergePrepend() *MergeOpts {
+	return &MergeOpts{isAppend: false} //nolint:exhaustruct
+}
+
 // Append configures the merge prop to append keys to the existing prop value.
 func (o *MergeOpts) Append(keys ...MergeAt) *MergeOpts {
 	if len(keys) > 0 {
@@ -91,6 +101,10 @@ func (o *MergeOpts) Prepend(keys ...MergeAt) *MergeOpts {
 
 // ToMergeable converts MergeOpts to Mergeable.
 func (o *MergeOpts) toMergeable() *Mergeable {
+	if o == nil {
+		return nil
+	}
+
 	return &Mergeable{
 		DeepMerge:   false,
 		Append:      o.isAppend,

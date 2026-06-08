@@ -11,6 +11,10 @@ func NewDeepMergeOpts(matchOn ...string) *DeepMergeOpts {
 }
 
 func (o *DeepMergeOpts) toMergeable() *Mergeable {
+	if o == nil {
+		return nil
+	}
+
 	//nolint:exhaustruct
 	return &Mergeable{
 		DeepMerge: true,

@@ -132,3 +132,35 @@
  "version": "1.0.0"
 }
 ---
+
+[TestProp/should_populate_mergeProps_with_NewMergeAppend_for_root-only_append - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "posts"
+ ],
+ "props": {
+  "posts": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_populate_prependProps_with_NewMergePrepend_for_root-only_prepend - 1]
+{
+ "component": "TestComponent",
+ "prependProps": [
+  "notifications"
+ ],
+ "props": {
+  "notifications": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
