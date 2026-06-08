@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiadeferred"
+	"go.segfaultmedaddy.com/inertia/inertiamerge"
+	"go.segfaultmedaddy.com/inertia/inertiaonce"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
 )
@@ -84,7 +85,7 @@ func TestDeferredProp(t *testing.T) {
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("merged", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"key": "value"}, nil
-			}), inertiadeferred.WithMerge(inertia.NewMergeOpts()))).
+			}), inertiadeferred.WithMerge(inertiamerge.NewMerge()))).
 			ExpectNoProp("merged").
 			ExpectDeferredGroup("default", "merged").
 			ExpectMergeProps("merged").
@@ -97,7 +98,7 @@ func TestDeferredProp(t *testing.T) {
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("locale", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return "en", nil
-			}), inertiadeferred.WithOnce(inertia.NewOnceOpts().Key("locale_key")))).
+			}), inertiadeferred.WithOnce(inertiaonce.NewOnceOpts().Key("locale_key")))).
 			ExpectNoProp("locale").
 			ExpectDeferredGroup("default", "locale").
 			ExpectOnceProps("locale_key", "locale").

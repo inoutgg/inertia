@@ -129,6 +129,19 @@ func (b *PropTestBuilder) ExpectPrependProps(keys ...string) *PropTestBuilder {
 	return b
 }
 
+// ExpectDeepMergeProps asserts that the given keys are present in page.DeepMergeProps.
+func (b *PropTestBuilder) ExpectDeepMergeProps(keys ...string) *PropTestBuilder {
+	b.assertions = append(b.assertions, func(t *testing.T, page *inertiaprotocol.Page) {
+		t.Helper()
+
+		for _, k := range keys {
+			assert.Contains(t, page.DeepMergeProps, k, "expected %q in deepMergeProps", k)
+		}
+	})
+
+	return b
+}
+
 // ExpectNoPrependProps asserts that page.PrependProps is empty.
 func (b *PropTestBuilder) ExpectNoPrependProps() *PropTestBuilder {
 	b.assertions = append(b.assertions, func(t *testing.T, page *inertiaprotocol.Page) {

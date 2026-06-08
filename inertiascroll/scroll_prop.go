@@ -76,9 +76,9 @@ func New(key string, value any, opts ...Option) *Prop {
 			CurrentPage:  config.currentPage,
 		},
 		key: key,
+		//nolint:exhaustruct
 		merge: &inertiaprop.Mergeable{
 			Append:      true,
-			Prepend:     false,
 			AppendKeys:  nil,
 			PrependKeys: nil,
 		},

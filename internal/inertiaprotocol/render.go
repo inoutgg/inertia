@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/alitto/pond/v2"
 	"go.inout.gg/foundations/debug"
@@ -60,14 +59,15 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 	}
 
 	return &Page{
-		Component:     renderCtx.Component,
-		Props:         props,
-		DeferredProps: makeDeferredProps(req, renderCtx.Component, renderCtx.Props),
-		ScrollProps:   makeScrollProps(renderCtx.Props, req.ResetProps),
-		OnceProps:     makeOnceProps(renderCtx.Props),
-		MergeProps:    mergeProps.append,
-		PrependProps:  mergeProps.prepend,
-		MatchPropsOn:  mergeProps.matchOn,
+		Component:      renderCtx.Component,
+		Props:          props,
+		DeferredProps:  makeDeferredProps(req, renderCtx.Component, renderCtx.Props),
+		ScrollProps:    makeScrollProps(renderCtx.Props, req.ResetProps),
+		OnceProps:      makeOnceProps(renderCtx.Props),
+		MergeProps:     mergeProps.append,
+		PrependProps:   mergeProps.prepend,
+		DeepMergeProps: mergeProps.deepMerge,
+		MatchPropsOn:   mergeProps.matchOn,
 		SharedProps: sliceutil.Map(
 			renderCtx.SharedProps,
 			func(p inertiaprop.Prop) string { return p.Key() },
@@ -303,9 +303,9 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 // always emitted by makeScrollProps.
 //
 // The root-level append/prepend flag is mutually exclusive with path-based
-// MergeKeys: when a prop has any MergeKey with a non-empty Key, the
-// root-level entry is suppressed and only the per-path entries are emitted.
-// This matches Laravel's MergesProps::mergesAtRoot semantics.
+// keys: when a prop has any append or prepend path, the root-level entry is
+// suppressed and only the per-path entries are emitted. This matches Laravel's
+// MergesProps::mergesAtRoot semantics.
 func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeIntent string) (mergeProps, error) {
 	var m mergeProps
 
@@ -338,62 +338,37 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		}
 
 		if merge, ok := prop.Mergeable(); ok {
-			key := prop.Key()
+			rootKey := prop.Key()
 
-			hasExplicitPaths := hasPathKey(merge.AppendKeys) || hasPathKey(merge.PrependKeys)
-			if !hasExplicitPaths {
-				if merge.Prepend {
-					m.prepend = append(m.prepend, key)
-				} else if merge.Append {
-					m.append = append(m.append, key)
+			appendKeys := sliceutil.Filter(merge.AppendKeys, func(k string) bool { return k != "" })
+			prependKeys := sliceutil.Filter(merge.PrependKeys, func(k string) bool { return k != "" })
+
+			switch {
+			case merge.DeepMerge:
+				m.deepMerge = append(m.deepMerge, rootKey)
+			case len(appendKeys) == 0 && len(prependKeys) == 0:
+				if !merge.Append {
+					m.prepend = append(m.prepend, rootKey)
+				} else {
+					m.append = append(m.append, rootKey)
+				}
+			default:
+				for _, key := range appendKeys {
+					m.append = append(m.append, QualifyPath(rootKey, key))
+				}
+
+				for _, key := range prependKeys {
+					m.prepend = append(m.prepend, QualifyPath(rootKey, key))
 				}
 			}
 
-			for _, k := range merge.AppendKeys {
-				m.addMergeKey(key, k, false)
-			}
-
-			for _, k := range merge.PrependKeys {
-				m.addMergeKey(key, k, true)
+			for _, key := range merge.MatchOn {
+				m.matchOn = append(m.matchOn, QualifyPath(rootKey, key))
 			}
 		}
 	}
 
 	return m, nil
-}
-
-func hasPathKey(keys []inertiaprop.MergeKey) bool {
-	for _, k := range keys {
-		if k.Key != "" {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (m *mergeProps) addMergeKey(propKey string, key inertiaprop.MergeKey, prepend bool) {
-	// A MergeKey with an empty Key is a matchOn-only directive: it contributes
-	// only to matchPropsOn and must not produce a duplicate path entry.
-	if key.Key == "" {
-		if key.MatchOn != "" {
-			m.matchOn = append(m.matchOn, QualifyPath(propKey, key.MatchOn))
-		}
-
-		return
-	}
-
-	path := QualifyPath(propKey, key.Key)
-
-	if key.MatchOn != "" {
-		m.matchOn = append(m.matchOn, QualifyPath(path, key.MatchOn))
-	}
-
-	if prepend {
-		m.prepend = append(m.prepend, path)
-	} else {
-		m.append = append(m.append, path)
-	}
 }
 
 func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]ScrollProp {
@@ -421,10 +396,8 @@ func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]Sc
 	return m
 }
 
-// QualifyPath prefixes path with propKey if path is non-empty, not already equal to propKey,
-// and does not already start with propKey+".".
 func QualifyPath(propKey, path string) string {
-	if path == "" || strings.HasPrefix(path, propKey+".") || path == propKey {
+	if path == "" || propKey == "" {
 		return path
 	}
 
@@ -451,7 +424,8 @@ func newResult[R any, E error](value R, err E) result[R, E] {
 
 // mergeProps holds the properties for the mergeable props.
 type mergeProps struct {
-	append  []string
-	prepend []string
-	matchOn []string
+	append    []string
+	prepend   []string
+	deepMerge []string
+	matchOn   []string
 }

@@ -3,7 +3,6 @@ package inertiaprop
 import (
 	"context"
 	"fmt"
-	"slices"
 )
 
 const (
@@ -56,76 +55,6 @@ func (e *RescueError) Unwrap() error {
 	return e.Err
 }
 
-type MergeKey struct {
-	Key     string
-	MatchOn string
-}
-
-// MergeOpts configures merge prop behavior.
-type MergeOpts struct {
-	appendKeys  []MergeKey
-	prependKeys []MergeKey
-
-	append  bool
-	prepend bool
-}
-
-// NewMergeOpts creates a default MergeOpts instance with append behavior enabled.
-func NewMergeOpts() *MergeOpts {
-	//nolint:exhaustruct
-	return &MergeOpts{append: true}
-}
-
-// Append configures the merge prop to append keys to the existing prop value.
-func (o *MergeOpts) Append(keys ...MergeKey) *MergeOpts {
-	if len(keys) > 0 {
-		o.appendKeys = append(o.appendKeys, keys...)
-	} else {
-		o.append = true
-		o.prepend = false
-	}
-
-	return o
-}
-
-// Prepend configures the merge prop to prepend keys to the existing prop value.
-func (o *MergeOpts) Prepend(keys ...MergeKey) *MergeOpts {
-	if len(keys) > 0 {
-		o.prependKeys = append(o.prependKeys, keys...)
-	} else {
-		o.prepend = true
-		o.append = false
-	}
-
-	return o
-}
-
-// OnceOpts configures once prop behavior.
-type OnceOpts struct {
-	expiresAt *int64
-	key       string
-	fresh     bool
-}
-
-func NewOnceOpts() *OnceOpts {
-	return &OnceOpts{} //nolint:exhaustruct
-}
-
-func (o *OnceOpts) Key(key string) *OnceOpts {
-	o.key = key
-	return o
-}
-
-func (o *OnceOpts) ExpiresAt(expiresAt *int64) *OnceOpts {
-	o.expiresAt = expiresAt
-	return o
-}
-
-func (o *OnceOpts) Fresh(fresh bool) *OnceOpts {
-	o.fresh = fresh
-	return o
-}
-
 type Deferrable struct {
 	Group  string
 	Rescue bool
@@ -137,39 +66,13 @@ type Onceable struct {
 	Fresh     bool
 }
 
-// ToOnceable converts OnceOpts to Onceable.
-func ToOnceable(opts *OnceOpts) *Onceable {
-	if opts == nil {
-		return nil
-	}
-
-	return &Onceable{
-		ExpiresAt: opts.expiresAt,
-		Key:       opts.key,
-		Fresh:     opts.fresh,
-	}
-}
-
 type Mergeable struct {
-	AppendKeys  []MergeKey
-	PrependKeys []MergeKey
+	AppendKeys  []string
+	PrependKeys []string
+	MatchOn     []string
 
-	Append  bool
-	Prepend bool
-}
-
-// ToMergeable converts MergeOpts to Mergeable.
-func ToMergeable(opts *MergeOpts) *Mergeable {
-	if opts == nil {
-		return nil
-	}
-
-	return &Mergeable{
-		Append:      opts.append,
-		Prepend:     opts.prepend,
-		AppendKeys:  slices.Clone(opts.appendKeys),
-		PrependKeys: slices.Clone(opts.prependKeys),
-	}
+	DeepMerge bool
+	Append    bool
 }
 
 type Scrollable struct {
