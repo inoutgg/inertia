@@ -13,6 +13,7 @@ type Page struct {
 	Version          string                `json:"version"`
 	MergeProps       []string              `json:"mergeProps,omitempty"`
 	PrependProps     []string              `json:"prependProps,omitempty"`
+	DeepMergeProps   []string              `json:"deepMergeProps,omitempty"`
 	MatchPropsOn     []string              `json:"matchPropsOn,omitempty"`
 	SharedProps      []string              `json:"sharedProps,omitempty"`
 	RescuedProps     []string              `json:"rescuedProps,omitempty"`

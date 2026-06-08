@@ -12,7 +12,7 @@ var _ inertiaprop.Prop = (*Prop)(nil)
 
 // Config holds the configuration for a Prop.
 type Config struct {
-	merge      *inertiaprop.MergeOpts
+	merge      inertiaprop.Merge
 	once       *inertiaprop.OnceOpts
 	concurrent bool
 }

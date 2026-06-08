@@ -5,7 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"go.segfaultmedaddy.com/inertia"
+	"go.segfaultmedaddy.com/inertia/inertiamerge"
+	"go.segfaultmedaddy.com/inertia/inertiaonce"
 	"go.segfaultmedaddy.com/inertia/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
@@ -68,7 +69,7 @@ func TestProp(t *testing.T) {
 			With(
 				inertiaprop.New("normal", "value"),
 				inertiaprop.New("mergeable", map[string]string{"key": "val"},
-					inertiaprop.WithMerge(inertia.NewMergeOpts()),
+					inertiaprop.WithMerge(inertiamerge.NewMerge()),
 				),
 			).
 			ExpectMergeProps("mergeable").
@@ -83,7 +84,7 @@ func TestProp(t *testing.T) {
 			With(
 				inertiaprop.New("regular", "value"),
 				inertiaprop.New("onceable", "secret",
-					inertiaprop.WithOnce(inertia.NewOnceOpts().Key("once_key")),
+					inertiaprop.WithOnce(inertiaonce.NewOnceOpts().Key("once_key")),
 				),
 			).
 			ExpectOnceProps("once_key", "onceable").
@@ -100,22 +101,22 @@ func TestProp(t *testing.T) {
 					"posts",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertia.NewMergeOpts().Append(inertia.MergeKey{MatchOn: "id"}),
+						inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
 					),
 				),
 				inertiaprop.New(
 					"notifications",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertia.NewMergeOpts().
+						inertiamerge.NewMerge().
 							Prepend().
-							Prepend(inertia.MergeKey{MatchOn: "uuid"}),
+							Prepend(inertiamerge.At("").On("uuid")),
 					),
 				),
 				inertiaprop.New("conversation", map[string]any{"messages": []string{"one"}},
 					inertiaprop.WithMerge(
-						inertia.NewMergeOpts().
-							Append(inertia.MergeKey{Key: "messages", MatchOn: "id"}),
+						inertiamerge.NewMerge().
+							Append(inertiamerge.At("messages").On("id")),
 					),
 				),
 			).
@@ -136,7 +137,7 @@ func TestProp(t *testing.T) {
 						"posts",
 						[]string{"one"},
 						inertiaprop.WithMerge(
-							inertia.NewMergeOpts().Append(inertia.MergeKey{MatchOn: "id"}),
+							inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
 						),
 					),
 				).
@@ -161,7 +162,7 @@ func TestProp(t *testing.T) {
 						"posts",
 						[]string{"fresh"},
 						inertiaprop.WithMerge(
-							inertia.NewMergeOpts().Append(inertia.MergeKey{MatchOn: "id"}),
+							inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
 						),
 					),
 					inertiaprop.New("name", "Roman"),

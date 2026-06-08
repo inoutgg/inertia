@@ -22,29 +22,7 @@ type (
 	// It allows using ordinary functions as lazy prop values.
 	// The returned value must be JSON-serializable.
 	LazyFunc = inertiaprop.LazyFunc
-
-	// MergeKey identifies a prop key and an optional secondary match key used by
-	// the client when merging server data into existing client-side state.
-	MergeKey = inertiaprop.MergeKey
-
-	// MergeOpts configures the append/prepend direction and per-key merge
-	// behavior for a prop built with inertiaprop.WithMerge.
-	MergeOpts = inertiaprop.MergeOpts
-
-	// OnceOpts configures the once-fetch behavior for a prop built with
-	// inertiaprop.WithOnce; chain Key, ExpiresAt, and Fresh on the returned
-	// value to set the cache key, expiration timestamp, and force-refresh flag.
-	OnceOpts = inertiaprop.OnceOpts
 )
-
-// NewMergeOpts returns a MergeOpts with append behavior enabled by default;
-// pass the result to inertiaprop.WithMerge to opt a prop into client-side
-// merging.
-func NewMergeOpts() *MergeOpts { return inertiaprop.NewMergeOpts() }
-
-// NewOnceOpts returns a OnceOpts; configure it via the chainable Key,
-// ExpiresAt, and Fresh methods before passing it to inertiaprop.WithOnce.
-func NewOnceOpts() *OnceOpts { return inertiaprop.NewOnceOpts() }
 
 // Proper represents a collection of props that can be attached to a render context.
 type Proper interface {
