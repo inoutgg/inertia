@@ -77,6 +77,36 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
+	t.Run("should populate mergeProps with NewMergeAppend for root-only append", func(t *testing.T) {
+		t.Parallel()
+
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+			With(
+				inertiaprop.New("posts", []string{"one"},
+					inertiaprop.WithMerge(inertiamerge.NewMergeAppend()),
+				),
+			).
+			ExpectMergeProps("posts").
+			ExpectNoPrependProps().
+			ExpectNoDeepMergeProps().
+			Run()
+	})
+
+	t.Run("should populate prependProps with NewMergePrepend for root-only prepend", func(t *testing.T) {
+		t.Parallel()
+
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+			With(
+				inertiaprop.New("notifications", []string{"one"},
+					inertiaprop.WithMerge(inertiamerge.NewMergePrepend()),
+				),
+			).
+			ExpectPrependProps("notifications").
+			ExpectNoMergeProps().
+			ExpectNoDeepMergeProps().
+			Run()
+	})
+
 	t.Run("should populate onceProps when WithOnce is set", func(t *testing.T) {
 		t.Parallel()
 

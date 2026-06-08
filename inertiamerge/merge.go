@@ -26,3 +26,9 @@ func NewDeepMerge(matchOn ...string) *DeepMergeOpts {
 // pass the result to inertiaprop.WithMerge to opt a prop into client-side
 // merging.
 func NewMerge() *MergeOpts { return inertiaprop.NewMergeOpts() }
+
+// NewMergeAppend returns a MergeOpts configured for root-level append merging.
+func NewMergeAppend() *MergeOpts { return inertiaprop.NewMergeAppend() }
+
+// NewMergePrepend returns a MergeOpts configured for root-level prepend merging.
+func NewMergePrepend() *MergeOpts { return inertiaprop.NewMergePrepend() }
