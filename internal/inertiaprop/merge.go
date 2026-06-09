@@ -36,13 +36,14 @@ func (m MergeAt) On(key string) MergeAt {
 }
 
 // AppendRootMergeOpts configures root-level append merging.
-type AppendRootMergeOpts struct {
-	matchOn []string
-}
+//
+// Root-level merging does not support matchOn; use PathMergeOpts or
+// DeepMergeOpts if you need match-on behavior.
+type AppendRootMergeOpts struct{}
 
 // NewAppendRootMergeOpts creates a root-level append merge configuration.
-func NewAppendRootMergeOpts(matchOn ...string) *AppendRootMergeOpts {
-	return &AppendRootMergeOpts{matchOn: matchOn}
+func NewAppendRootMergeOpts() *AppendRootMergeOpts {
+	return &AppendRootMergeOpts{}
 }
 
 func (o *AppendRootMergeOpts) toMergeable() *Mergeable {
@@ -52,19 +53,19 @@ func (o *AppendRootMergeOpts) toMergeable() *Mergeable {
 
 	//nolint:exhaustruct
 	return &Mergeable{
-		Append:  true,
-		MatchOn: o.matchOn,
+		Append: true,
 	}
 }
 
 // PrependRootMergeOpts configures root-level prepend merging.
-type PrependRootMergeOpts struct {
-	matchOn []string
-}
+//
+// Root-level merging does not support matchOn; use PathMergeOpts or
+// DeepMergeOpts if you need match-on behavior.
+type PrependRootMergeOpts struct{}
 
 // NewPrependRootMergeOpts creates a root-level prepend merge configuration.
-func NewPrependRootMergeOpts(matchOn ...string) *PrependRootMergeOpts {
-	return &PrependRootMergeOpts{matchOn: matchOn}
+func NewPrependRootMergeOpts() *PrependRootMergeOpts {
+	return &PrependRootMergeOpts{}
 }
 
 func (o *PrependRootMergeOpts) toMergeable() *Mergeable {
@@ -74,8 +75,7 @@ func (o *PrependRootMergeOpts) toMergeable() *Mergeable {
 
 	//nolint:exhaustruct
 	return &Mergeable{
-		Append:  false,
-		MatchOn: o.matchOn,
+		Append: false,
 	}
 }
 
