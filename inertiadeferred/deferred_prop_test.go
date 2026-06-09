@@ -85,7 +85,7 @@ func TestDeferredProp(t *testing.T) {
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(inertiadeferred.New("merged", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return map[string]string{"key": "value"}, nil
-			}), inertiadeferred.WithMerge(inertiamerge.NewMerge()))).
+			}), inertiadeferred.WithMerge(inertiamerge.NewAppendRoot()))).
 			ExpectNoProp("merged").
 			ExpectDeferredGroup("default", "merged").
 			ExpectMergeProps("merged").

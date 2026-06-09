@@ -62,14 +62,14 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
-	t.Run("should populate mergeProps when WithMerge is set", func(t *testing.T) {
+	t.Run("should populate mergeProps with NewAppendRoot for root-only append", func(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("normal", "value"),
 				inertiaprop.New("mergeable", map[string]string{"key": "val"},
-					inertiaprop.WithMerge(inertiamerge.NewMerge()),
+					inertiaprop.WithMerge(inertiamerge.NewAppendRoot()),
 				),
 			).
 			ExpectMergeProps("mergeable").
@@ -77,13 +77,13 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
-	t.Run("should populate mergeProps with NewMergeAppend for root-only append", func(t *testing.T) {
+	t.Run("should populate mergeProps with NewAppendRoot for root-only append", func(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("posts", []string{"one"},
-					inertiaprop.WithMerge(inertiamerge.NewMergeAppend()),
+					inertiaprop.WithMerge(inertiamerge.NewAppendRoot()),
 				),
 			).
 			ExpectMergeProps("posts").
@@ -92,13 +92,13 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
-	t.Run("should populate prependProps with NewMergePrepend for root-only prepend", func(t *testing.T) {
+	t.Run("should populate prependProps with NewPrependRoot for root-only prepend", func(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
 			With(
 				inertiaprop.New("notifications", []string{"one"},
-					inertiaprop.WithMerge(inertiamerge.NewMergePrepend()),
+					inertiaprop.WithMerge(inertiamerge.NewPrependRoot()),
 				),
 			).
 			ExpectPrependProps("notifications").
@@ -122,7 +122,7 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
-	t.Run("should emit merge match-on metadata when MergeKey is configured", func(t *testing.T) {
+	t.Run("should emit merge match-on metadata for root and path configs", func(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
@@ -131,21 +131,19 @@ func TestProp(t *testing.T) {
 					"posts",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
+						inertiamerge.NewAppendRoot("id"),
 					),
 				),
 				inertiaprop.New(
 					"notifications",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertiamerge.NewMerge().
-							Prepend().
-							Prepend(inertiamerge.At("").On("uuid")),
+						inertiamerge.NewPrependRoot("uuid"),
 					),
 				),
 				inertiaprop.New("conversation", map[string]any{"messages": []string{"one"}},
 					inertiaprop.WithMerge(
-						inertiamerge.NewMerge().
+						inertiamerge.NewPaths().
 							Append(inertiamerge.At("messages").On("id")),
 					),
 				),
@@ -157,7 +155,7 @@ func TestProp(t *testing.T) {
 	})
 
 	t.Run(
-		"should treat MergeKey with only matchOn as a matchOn-only directive at root",
+		"should treat matchOn-only as root-level append with NewAppendRoot",
 		func(t *testing.T) {
 			t.Parallel()
 
@@ -167,7 +165,7 @@ func TestProp(t *testing.T) {
 						"posts",
 						[]string{"one"},
 						inertiaprop.WithMerge(
-							inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
+							inertiamerge.NewAppendRoot("id"),
 						),
 					),
 				).
@@ -192,7 +190,7 @@ func TestProp(t *testing.T) {
 						"posts",
 						[]string{"fresh"},
 						inertiaprop.WithMerge(
-							inertiamerge.NewMerge().Append(inertiamerge.At("").On("id")),
+							inertiamerge.NewAppendRoot("id"),
 						),
 					),
 					inertiaprop.New("name", "Roman"),

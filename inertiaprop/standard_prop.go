@@ -27,10 +27,11 @@ func WithOnce(once *inertiaprop.OnceOpts) Option {
 	return func(config *Config) { config.once = once }
 }
 
-// WithMerge sets the MergeOpts for the property.
+// WithMerge sets the merge configuration for the property.
 //
-// If MergeOpts is not nil, the property will be treated as mergeable.
-func WithMerge(merge *inertiaprop.MergeOpts) Option {
+// Accepts any type that implements Merge, such as AppendRootMergeOpts,
+// PrependRootMergeOpts, PathMergeOpts, or DeepMergeOpts.
+func WithMerge(merge inertiaprop.Merge) Option {
 	return func(config *Config) { config.merge = merge }
 }
 
