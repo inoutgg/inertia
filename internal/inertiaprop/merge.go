@@ -10,8 +10,7 @@ type Merge interface {
 	toMergeable() *Mergeable
 }
 
-// ToMergeable is an internal re-export function for private toMergeable interface member
-// to prevent user-facing API export of internal details.
+// ToMergeable converts a Merge value to its Mergeable representation.
 func ToMergeable(m Merge) *Mergeable {
 	if m == nil {
 		return nil
@@ -35,13 +34,9 @@ func (m MergeAt) On(key string) MergeAt {
 	return m
 }
 
-// AppendRootMergeOpts configures root-level append merging.
-//
-// Root-level merging does not support matchOn; use PathMergeOpts or
-// DeepMergeOpts if you need match-on behavior.
+// AppendRootMergeOpts opts a prop into root-level append merging.
 type AppendRootMergeOpts struct{}
 
-// NewAppendRootMergeOpts creates a root-level append merge configuration.
 func NewAppendRootMergeOpts() *AppendRootMergeOpts {
 	return &AppendRootMergeOpts{}
 }
@@ -57,13 +52,9 @@ func (o *AppendRootMergeOpts) toMergeable() *Mergeable {
 	}
 }
 
-// PrependRootMergeOpts configures root-level prepend merging.
-//
-// Root-level merging does not support matchOn; use PathMergeOpts or
-// DeepMergeOpts if you need match-on behavior.
+// PrependRootMergeOpts opts a prop into root-level prepend merging.
 type PrependRootMergeOpts struct{}
 
-// NewPrependRootMergeOpts creates a root-level prepend merge configuration.
 func NewPrependRootMergeOpts() *PrependRootMergeOpts {
 	return &PrependRootMergeOpts{}
 }
@@ -80,20 +71,17 @@ func (o *PrependRootMergeOpts) toMergeable() *Mergeable {
 }
 
 // PathMergeOpts configures per-path merge behavior for nested keys within a prop.
-// It does not support root-level merging; use AppendRootMergeOpts or PrependRootMergeOpts
-// for that purpose.
 type PathMergeOpts struct {
 	appendKeys  []string
 	prependKeys []string
 	matchOn     []string
 }
 
-// NewPathMergeOpts creates a default PathMergeOpts instance.
 func NewPathMergeOpts() *PathMergeOpts {
 	return &PathMergeOpts{} //nolint:exhaustruct
 }
 
-// Append configures the merge prop to append keys at the specified nested paths.
+// Append registers nested paths to append during client-side merging.
 func (o *PathMergeOpts) Append(keys ...MergeAt) *PathMergeOpts {
 	for _, k := range keys {
 		if k.path == "" {
@@ -107,7 +95,7 @@ func (o *PathMergeOpts) Append(keys ...MergeAt) *PathMergeOpts {
 	return o
 }
 
-// Prepend configures the merge prop to prepend keys at the specified nested paths.
+// Prepend registers nested paths to prepend during client-side merging.
 func (o *PathMergeOpts) Prepend(keys ...MergeAt) *PathMergeOpts {
 	for _, k := range keys {
 		if k.path == "" {
@@ -126,7 +114,6 @@ func (o *PathMergeOpts) toMergeable() *Mergeable {
 		return nil
 	}
 
-	// If no paths are configured, the prop is not meaningfully mergeable.
 	if len(o.appendKeys) == 0 && len(o.prependKeys) == 0 && len(o.matchOn) == 0 {
 		return nil
 	}

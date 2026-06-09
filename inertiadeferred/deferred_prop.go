@@ -16,7 +16,6 @@ const DefaultGroup = "default"
 
 var _ inertiaprop.Prop = (*Prop)(nil)
 
-// Config holds the configuration for a Prop.
 type Config struct {
 	merge      inertiaprop.Merge
 	once       *inertiaprop.OnceOpts
@@ -25,24 +24,18 @@ type Config struct {
 	concurrent bool
 }
 
-// Option is a function that configures a Prop.
 type Option func(*Config)
 
-// WithGroup sets the deferred group name.
-// Props in the same group are fetched together in a single parallel request.
+// WithGroup assigns the prop to a named deferred-fetch group.
 func WithGroup(group string) Option { return func(config *Config) { config.group = group } }
 
-// WithRescue enables or disables rescue mode.
-// When rescue is true, resolution errors are caught and the prop is omitted from the response.
+// WithRescue enables rescue mode so resolution errors are caught and the prop is omitted.
 func WithRescue(rescue bool) Option { return func(config *Config) { config.rescue = rescue } }
 
 // WithConcurrent enables concurrent resolution for the prop.
 func WithConcurrent(config *Config) { config.concurrent = true }
 
-// WithMerge sets the merge configuration for the prop.
-//
-// Accepts any type that implements Merge, such as AppendRootMergeOpts,
-// PrependRootMergeOpts, PathMergeOpts, or DeepMergeOpts.
+// WithMerge opts the prop into client-side merging.
 func WithMerge(merge inertiaprop.Merge) Option {
 	return func(config *Config) { config.merge = merge }
 }

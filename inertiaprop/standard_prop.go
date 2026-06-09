@@ -10,34 +10,25 @@ import (
 
 var _ inertiaprop.Prop = (*Prop)(nil)
 
-// Config holds the configuration for a Prop.
 type Config struct {
 	merge      inertiaprop.Merge
 	once       *inertiaprop.OnceOpts
 	concurrent bool
 }
 
-// Option is a function that configures a Prop.
 type Option func(*Config)
 
-// WithOnce sets the OnceOpts for the property.
-//
-// If OnceOpts is not nil, the property will be treated as onceable.
+// WithOnce opts the prop into once-per-session behavior.
 func WithOnce(once *inertiaprop.OnceOpts) Option {
 	return func(config *Config) { config.once = once }
 }
 
-// WithMerge sets the merge configuration for the property.
-//
-// Accepts any type that implements Merge, such as AppendRootMergeOpts,
-// PrependRootMergeOpts, PathMergeOpts, or DeepMergeOpts.
+// WithMerge opts the prop into client-side merging.
 func WithMerge(merge inertiaprop.Merge) Option {
 	return func(config *Config) { config.merge = merge }
 }
 
 // WithConcurrent enables concurrent resolution for the prop.
-//
-// Non-lazy prop is still resolved sequencially.
 func WithConcurrent(config *Config) { config.concurrent = true }
 
 // Prop is a standard prop: included on every full-page response and, during
