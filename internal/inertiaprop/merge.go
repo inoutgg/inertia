@@ -61,10 +61,6 @@ func NewPrependRootMergeOpts() *PrependRootMergeOpts {
 }
 
 func (o *PrependRootMergeOpts) toMergeable() *Mergeable {
-	if o == nil {
-		return nil
-	}
-
 	//nolint:exhaustruct
 	return &Mergeable{
 		Append: false,
@@ -114,10 +110,6 @@ func (o *PathMergeOpts) Prepend(keys ...MergeAt) *PathMergeOpts {
 // toMergeable returns nil when no paths are registered, treating the prop as
 // non-mergeable.
 func (o *PathMergeOpts) toMergeable() *Mergeable {
-	if o == nil {
-		return nil
-	}
-
 	if len(o.appendKeys) == 0 && len(o.prependKeys) == 0 && len(o.matchOn) == 0 {
 		return nil
 	}
@@ -127,5 +119,27 @@ func (o *PathMergeOpts) toMergeable() *Mergeable {
 		AppendKeys:  o.appendKeys,
 		PrependKeys: o.prependKeys,
 		MatchOn:     o.matchOn,
+	}
+}
+
+var _ Merge = (*DeepMergeOpts)(nil)
+
+type DeepMergeOpts struct {
+	matchOn []string
+}
+
+func NewDeepMergeOpts(matchOn ...string) *DeepMergeOpts {
+	return &DeepMergeOpts{matchOn}
+}
+
+func (o *DeepMergeOpts) toMergeable() *Mergeable {
+	if o == nil {
+		return nil
+	}
+
+	//nolint:exhaustruct
+	return &Mergeable{
+		DeepMerge: true,
+		MatchOn:   o.matchOn,
 	}
 }
