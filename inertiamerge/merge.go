@@ -24,13 +24,13 @@ type (
 func At(path string) MergeAt { return inertiaprop.NewMergeAt(path) }
 
 // NewAppendRoot creates an AppendRootMergeOpts for root-level append merging.
-func NewAppendRoot(matchOn ...string) *AppendRootMergeOpts {
-	return inertiaprop.NewAppendRootMergeOpts(matchOn...)
+func NewAppendRoot() *AppendRootMergeOpts {
+	return inertiaprop.NewAppendRootMergeOpts()
 }
 
 // NewPrependRoot creates a PrependRootMergeOpts for root-level prepend merging.
-func NewPrependRoot(matchOn ...string) *PrependRootMergeOpts {
-	return inertiaprop.NewPrependRootMergeOpts(matchOn...)
+func NewPrependRoot() *PrependRootMergeOpts {
+	return inertiaprop.NewPrependRootMergeOpts()
 }
 
 // NewPaths creates a PathMergeOpts for per-path merge configuration.

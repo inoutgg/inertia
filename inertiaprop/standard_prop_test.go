@@ -122,7 +122,7 @@ func TestProp(t *testing.T) {
 			Run()
 	})
 
-	t.Run("should emit merge match-on metadata for root and path configs", func(t *testing.T) {
+	t.Run("should emit merge metadata for path and deep merge configs", func(t *testing.T) {
 		t.Parallel()
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
@@ -131,14 +131,14 @@ func TestProp(t *testing.T) {
 					"posts",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertiamerge.NewAppendRoot("id"),
+						inertiamerge.NewAppendRoot(),
 					),
 				),
 				inertiaprop.New(
 					"notifications",
 					[]string{"one"},
 					inertiaprop.WithMerge(
-						inertiamerge.NewPrependRoot("uuid"),
+						inertiamerge.NewPrependRoot(),
 					),
 				),
 				inertiaprop.New("conversation", map[string]any{"messages": []string{"one"}},
@@ -147,34 +147,18 @@ func TestProp(t *testing.T) {
 							Append(inertiamerge.At("messages").On("id")),
 					),
 				),
+				inertiaprop.New("settings", map[string]any{"theme": "dark"},
+					inertiaprop.WithMerge(
+						inertiamerge.NewDeepMerge("key"),
+					),
+				),
 			).
 			ExpectMergeProps("posts", "conversation.messages").
 			ExpectPrependProps("notifications").
-			ExpectMatchPropsOn("posts.id", "notifications.uuid", "conversation.messages.id").
+			ExpectDeepMergeProps("settings").
+			ExpectMatchPropsOn("conversation.messages.id", "settings.key").
 			Run()
 	})
-
-	t.Run(
-		"should treat matchOn-only as root-level append with NewAppendRoot",
-		func(t *testing.T) {
-			t.Parallel()
-
-			inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
-				With(
-					inertiaprop.New(
-						"posts",
-						[]string{"one"},
-						inertiaprop.WithMerge(
-							inertiamerge.NewAppendRoot("id"),
-						),
-					),
-				).
-				ExpectMergeProps("posts").
-				ExpectNoPrependProps().
-				ExpectMatchPropsOn("posts.id").
-				Run()
-		},
-	)
 
 	t.Run(
 		"should suppress mergeProps and matchPropsOn for reset keys while still returning the value",
@@ -190,7 +174,7 @@ func TestProp(t *testing.T) {
 						"posts",
 						[]string{"fresh"},
 						inertiaprop.WithMerge(
-							inertiamerge.NewAppendRoot("id"),
+							inertiamerge.NewAppendRoot(),
 						),
 					),
 					inertiaprop.New("name", "Roman"),

@@ -265,3 +265,41 @@
  "version": "1.0.0"
 }
 ---
+
+[TestProp/should_emit_merge_metadata_for_path_and_deep_merge_configs - 1]
+{
+ "component": "TestComponent",
+ "deepMergeProps": [
+  "settings"
+ ],
+ "matchPropsOn": [
+  "conversation.messages.id",
+  "settings.key"
+ ],
+ "mergeProps": [
+  "posts",
+  "conversation.messages"
+ ],
+ "prependProps": [
+  "notifications"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  },
+  "notifications": [
+   "one"
+  ],
+  "posts": [
+   "one"
+  ],
+  "settings": {
+   "theme": "dark"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
