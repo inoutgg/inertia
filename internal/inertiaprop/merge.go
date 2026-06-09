@@ -4,6 +4,7 @@ var (
 	_ Merge = (*AppendRootMergeOpts)(nil)
 	_ Merge = (*PrependRootMergeOpts)(nil)
 	_ Merge = (*PathMergeOpts)(nil)
+	_ Merge = (*DeepMergeOpts)(nil)
 )
 
 type Merge interface {
@@ -122,8 +123,8 @@ func (o *PathMergeOpts) toMergeable() *Mergeable {
 	}
 }
 
-var _ Merge = (*DeepMergeOpts)(nil)
-
+// DeepMergeOpts opts a prop into deep merging. Unlike regular merge, the
+// client recursively merges nested objects rather than replacing them.
 type DeepMergeOpts struct {
 	matchOn []string
 }
@@ -133,10 +134,6 @@ func NewDeepMergeOpts(matchOn ...string) *DeepMergeOpts {
 }
 
 func (o *DeepMergeOpts) toMergeable() *Mergeable {
-	if o == nil {
-		return nil
-	}
-
 	//nolint:exhaustruct
 	return &Mergeable{
 		DeepMerge: true,
