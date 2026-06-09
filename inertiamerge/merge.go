@@ -9,26 +9,34 @@ type (
 	// the client when merging server data into existing client-side state.
 	MergeAt = inertiaprop.MergeAt
 
-	// MergeOpts configures the append/prepend direction and per-key merge
-	// behavior for a prop built with inertiaprop.WithMerge.
-	MergeOpts = inertiaprop.MergeOpts
+	// AppendRootMergeOpts configures root-level append merging.
+	AppendRootMergeOpts = inertiaprop.AppendRootMergeOpts
+
+	// PrependRootMergeOpts configures root-level prepend merging.
+	PrependRootMergeOpts = inertiaprop.PrependRootMergeOpts
+
+	// PathMergeOpts configures per-path merge behavior for nested keys within a prop.
+	PathMergeOpts = inertiaprop.PathMergeOpts
 
 	DeepMergeOpts = inertiaprop.DeepMergeOpts
 )
 
 func At(path string) MergeAt { return inertiaprop.NewMergeAt(path) }
 
+// NewAppendRoot creates an AppendRootMergeOpts for root-level append merging.
+func NewAppendRoot(matchOn ...string) *AppendRootMergeOpts {
+	return inertiaprop.NewAppendRootMergeOpts(matchOn...)
+}
+
+// NewPrependRoot creates a PrependRootMergeOpts for root-level prepend merging.
+func NewPrependRoot(matchOn ...string) *PrependRootMergeOpts {
+	return inertiaprop.NewPrependRootMergeOpts(matchOn...)
+}
+
+// NewPaths creates a PathMergeOpts for per-path merge configuration.
+func NewPaths() *PathMergeOpts { return inertiaprop.NewPathMergeOpts() }
+
+// NewDeepMerge creates a DeepMergeOpts for deep merging.
 func NewDeepMerge(matchOn ...string) *DeepMergeOpts {
 	return inertiaprop.NewDeepMergeOpts(matchOn...)
 }
-
-// NewMerge returns a MergeOpts with append behavior enabled by default;
-// pass the result to inertiaprop.WithMerge to opt a prop into client-side
-// merging.
-func NewMerge() *MergeOpts { return inertiaprop.NewMergeOpts() }
-
-// NewMergeAppend returns a MergeOpts configured for root-level append merging.
-func NewMergeAppend() *MergeOpts { return inertiaprop.NewMergeAppend() }
-
-// NewMergePrepend returns a MergeOpts configured for root-level prepend merging.
-func NewMergePrepend() *MergeOpts { return inertiaprop.NewMergePrepend() }

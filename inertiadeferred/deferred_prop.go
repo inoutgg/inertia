@@ -18,7 +18,7 @@ var _ inertiaprop.Prop = (*Prop)(nil)
 
 // Config holds the configuration for a Prop.
 type Config struct {
-	merge      *inertiaprop.MergeOpts
+	merge      inertiaprop.Merge
 	once       *inertiaprop.OnceOpts
 	group      string
 	rescue     bool
@@ -39,8 +39,11 @@ func WithRescue(rescue bool) Option { return func(config *Config) { config.rescu
 // WithConcurrent enables concurrent resolution for the prop.
 func WithConcurrent(config *Config) { config.concurrent = true }
 
-// WithMerge sets the merge options for the prop.
-func WithMerge(merge *inertiaprop.MergeOpts) Option {
+// WithMerge sets the merge configuration for the prop.
+//
+// Accepts any type that implements Merge, such as AppendRootMergeOpts,
+// PrependRootMergeOpts, PathMergeOpts, or DeepMergeOpts.
+func WithMerge(merge inertiaprop.Merge) Option {
 	return func(config *Config) { config.merge = merge }
 }
 

@@ -164,3 +164,104 @@
  "version": "1.0.0"
 }
 ---
+
+[TestProp/should_populate_prependProps_with_NewPrependRoot_for_root-only_prepend - 1]
+{
+ "component": "TestComponent",
+ "prependProps": [
+  "notifications"
+ ],
+ "props": {
+  "notifications": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_treat_matchOn-only_as_root-level_append_with_NewAppendRoot - 1]
+{
+ "component": "TestComponent",
+ "matchPropsOn": [
+  "posts.id"
+ ],
+ "mergeProps": [
+  "posts"
+ ],
+ "props": {
+  "posts": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_populate_mergeProps_with_NewAppendRoot_for_root-only_append - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "mergeable"
+ ],
+ "props": {
+  "mergeable": {
+   "key": "val"
+  },
+  "normal": "value"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_emit_merge_match-on_metadata_for_root_and_path_configs - 1]
+{
+ "component": "TestComponent",
+ "matchPropsOn": [
+  "posts.id",
+  "notifications.uuid",
+  "conversation.messages.id"
+ ],
+ "mergeProps": [
+  "posts",
+  "conversation.messages"
+ ],
+ "prependProps": [
+  "notifications"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  },
+  "notifications": [
+   "one"
+  ],
+  "posts": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/should_populate_mergeProps_with_NewAppendRoot_for_root-only_append#01 - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "posts"
+ ],
+ "props": {
+  "posts": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
