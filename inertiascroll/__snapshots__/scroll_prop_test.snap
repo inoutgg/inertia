@@ -173,3 +173,27 @@
  "version": "1.0.0"
 }
 ---
+
+[TestScrollProp/should_default_to_append_when_scroll_merge_intent_is_empty - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data"
+ ],
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

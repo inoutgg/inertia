@@ -82,3 +82,13 @@ type Scrollable struct {
 	PageName     string
 	Path         string
 }
+
+// QualifyPath joins a prop key with a nested path using dot notation.
+// If either argument is empty, the non-empty argument is returned unchanged.
+func QualifyPath(propKey, path string) string {
+	if path == "" || propKey == "" {
+		return path
+	}
+
+	return propKey + "." + path
+}

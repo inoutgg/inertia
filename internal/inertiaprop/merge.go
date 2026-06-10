@@ -88,7 +88,7 @@ func (o *PathMergeOpts) Append(keys ...MergeAt) *PathMergeOpts {
 		}
 
 		o.appendKeys = append(o.appendKeys, k.path)
-		o.matchOn = append(o.matchOn, k.path+"."+k.matchOn)
+		o.matchOn = append(o.matchOn, QualifyPath(k.path, k.matchOn))
 	}
 
 	return o
@@ -102,7 +102,7 @@ func (o *PathMergeOpts) Prepend(keys ...MergeAt) *PathMergeOpts {
 		}
 
 		o.prependKeys = append(o.prependKeys, k.path)
-		o.matchOn = append(o.matchOn, k.path+"."+k.matchOn)
+		o.matchOn = append(o.matchOn, QualifyPath(k.path, k.matchOn))
 	}
 
 	return o

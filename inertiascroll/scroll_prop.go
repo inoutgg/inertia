@@ -6,7 +6,6 @@ import (
 	"go.inout.gg/foundations/debug"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
-	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
 
 var _ inertiaprop.Prop = (*Prop)(nil)
@@ -69,7 +68,7 @@ func New(key string, value any, opts ...Option) *Prop {
 	prop := &Prop{
 		val: value,
 		scroll: &inertiaprop.Scrollable{
-			Path:         inertiaprotocol.QualifyPath(key, "data"),
+			Path:         inertiaprop.QualifyPath(key, "data"),
 			PageName:     config.pageName,
 			PreviousPage: config.previousPage,
 			NextPage:     config.nextPage,
@@ -85,7 +84,7 @@ func New(key string, value any, opts ...Option) *Prop {
 	}
 
 	if config.wrapper != "" {
-		prop.scroll.Path = inertiaprotocol.QualifyPath(key, config.wrapper)
+		prop.scroll.Path = inertiaprop.QualifyPath(key, config.wrapper)
 	}
 
 	return prop
