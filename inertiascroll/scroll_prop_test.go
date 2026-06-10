@@ -94,6 +94,19 @@ func TestScrollProp(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid scroll merge intent")
 	})
 
+	t.Run("should default to append when scroll merge intent is empty", func(t *testing.T) {
+		t.Parallel()
+
+		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+			URL:               "/users",
+			ScrollMergeIntent: "",
+		}).
+			With(inertiascroll.New("users", map[string]any{"data": []string{"one"}})).
+			ExpectMergeProps("users.data").
+			ExpectNoPrependProps().
+			Run()
+	})
+
 	t.Run("should resolve value from lazy source when prop value is lazy", func(t *testing.T) {
 		t.Parallel()
 

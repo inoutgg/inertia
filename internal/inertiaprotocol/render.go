@@ -315,7 +315,8 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		// Scrollable is a special case since it is a combination of merge props
 		// with a custom handling.
 		// The Scrollable prop check must be performed before the Mergeable prop check
-		// since the inertiascoll.Prop has no Mergeable capability.
+		// so that the scroll.Path is used for merge metadata instead of the
+		// prop's own Mergeable configuration.
 		if scroll, ok := prop.Scrollable(); ok {
 			if resetting {
 				continue
@@ -324,7 +325,9 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 			switch scrollMergeIntent {
 			case inertiaprop.ScrollMergeIntentPrepend:
 				m.prepend = append(m.prepend, scroll.Path)
-			case inertiaprop.ScrollMergeIntentAppend:
+			case inertiaprop.ScrollMergeIntentAppend, "":
+				// Default to append when no intent is present (initial load or
+				// non-infinite-scroll visits).
 				m.append = append(m.append, scroll.Path)
 			default:
 				return mergeProps{}, fmt.Errorf("invalid scroll merge intent: %s", scrollMergeIntent)
@@ -354,16 +357,16 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 				}
 			default:
 				for _, key := range appendKeys {
-					m.append = append(m.append, QualifyPath(rootKey, key))
+					m.append = append(m.append, inertiaprop.QualifyPath(rootKey, key))
 				}
 
 				for _, key := range prependKeys {
-					m.prepend = append(m.prepend, QualifyPath(rootKey, key))
+					m.prepend = append(m.prepend, inertiaprop.QualifyPath(rootKey, key))
 				}
 			}
 
 			for _, key := range merge.MatchOn {
-				m.matchOn = append(m.matchOn, QualifyPath(rootKey, key))
+				m.matchOn = append(m.matchOn, inertiaprop.QualifyPath(rootKey, key))
 			}
 		}
 	}
@@ -394,14 +397,6 @@ func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]Sc
 	}, make(map[string]ScrollProp))
 
 	return m
-}
-
-func QualifyPath(propKey, path string) string {
-	if path == "" || propKey == "" {
-		return path
-	}
-
-	return propKey + "." + path
 }
 
 // result is a generic value-or-error container.

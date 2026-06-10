@@ -20,6 +20,10 @@ const DefaultVersion = "1.0.0"
 // PropAssert is a function that asserts expectations on a rendered page.
 type PropAssert func(t *testing.T, page *inertiaprotocol.Page)
 
+// ContextOption is a function modifying the inertia protocol request context
+// during PropTestBuilder run.
+type ContextOption func(*inertiaprotocol.Context)
+
 // PropTestBuilder is a fluent test builder that encapsulates rendering, assertion, and snapshotting.
 //
 // Create a builder with New, add props with With, add expectations with Expect* methods,
@@ -231,15 +235,19 @@ func (b *PropTestBuilder) ExpectRescuedProps(keys ...string) *PropTestBuilder {
 // skips page assertions and snapshotting, and returns nil.
 //
 // Otherwise, Run returns the rendered page so callers can perform additional assertions.
-func (b *PropTestBuilder) Run() *inertiaprotocol.Page {
+func (b *PropTestBuilder) Run(opts ...ContextOption) *inertiaprotocol.Page {
 	b.t.Helper()
 
-	page, err := inertiaprotocol.Render(b.t.Context(), b.request, inertiaprotocol.Context{ //nolint:exhaustruct
+	ctx := inertiaprotocol.Context{ //nolint:exhaustruct
 		Component: DefaultComponent,
 		Version:   DefaultVersion,
 		Props:     b.props,
-	})
+	}
+	for _, opt := range opts {
+		opt(&ctx)
+	}
 
+	page, err := inertiaprotocol.Render(b.t.Context(), b.request, ctx)
 	if b.expectErr != nil {
 		require.Error(b.t, err)
 		assert.ErrorIs(b.t, err, b.expectErr)
