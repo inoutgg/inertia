@@ -13,6 +13,9 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
 
+//nolint:gochecknoglobals
+var resultPool = pond.NewResultPool[result[any, error]](0)
+
 // Request holds the request for the rendered page.
 type Request struct {
 	URL               string
@@ -103,13 +106,16 @@ func resolveProps(
 		)
 	}
 
-	props = sliceutil.Filter(props, func(p inertiaprop.Prop) bool {
-		return !shouldSkipOnceProp(p, req.ExceptOnceProps)
-	})
-
 	m := make(map[string]any, len(props))
 
 	for _, prop := range props {
+		key := prop.Key()
+
+		// Skip once-per-session props that the client has already loaded.
+		if shouldSkipOnceProp(prop, req.ExceptOnceProps) {
+			continue
+		}
+
 		// Skip deferred and optional props on the first render.
 		if prop.IsFirstLoadIgnorable() {
 			continue
@@ -117,10 +123,10 @@ func resolveProps(
 
 		val, err := prop.Value(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", prop.Key(), err)
+			return nil, nil, fmt.Errorf("inertia: failed to resolve prop %s: %w", key, err)
 		}
 
-		m[prop.Key()] = val
+		m[key] = val
 	}
 
 	return m, nil, nil
@@ -130,7 +136,7 @@ func resolvePartialComponentRequest(
 	ctx context.Context,
 	props []inertiaprop.Prop,
 	whitelist, blacklist, exceptOnceProps []string,
-	concurrency int,
+	_ int,
 ) (map[string]any, []string, error) {
 	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
 		key := prop.Key()
@@ -175,8 +181,7 @@ func resolvePartialComponentRequest(
 				} else {
 					return nil, nil, fmt.Errorf(
 						"inertia: failed to resolve prop %s: %w",
-						prop.Key(),
-						err,
+						key, err,
 					)
 				}
 			}
@@ -185,9 +190,31 @@ func resolvePartialComponentRequest(
 		}
 	}
 
-	if len(concurrentProps) > 0 {
-		pool := pond.NewResultPool[result[any, error]](concurrency)
-		group := pool.NewGroupContext(ctx)
+	switch len(concurrentProps) {
+	case 0:
+		// Nothing to do.
+	case 1:
+		// Single concurrent prop: resolve inline. The pool machinery
+		// (linked buffer, task group, composite future) is far more expensive
+		// than the Value call itself for a single item.
+		prop := concurrentProps[0]
+		key := prop.Key()
+
+		val, err := prop.Value(ctx)
+		if err != nil {
+			if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
+				rescuedProps = append(rescuedProps, re.Key)
+			} else {
+				return nil, nil, fmt.Errorf(
+					"inertia: failed to resolve prop %s: %w",
+					key, err,
+				)
+			}
+		}
+
+		m[key] = val
+	default:
+		group := resultPool.NewGroupContext(ctx)
 
 		// Resolve the rest of concurrent props in pool. Each prop resolution
 		// may return an error.
@@ -204,6 +231,7 @@ func resolvePartialComponentRequest(
 
 		for i, r := range results {
 			prop := concurrentProps[i]
+			key := prop.Key()
 
 			if r.err != nil {
 				if err, ok := errors.AsType[*inertiaprop.RescueError](r.err); ok {
@@ -213,12 +241,11 @@ func resolvePartialComponentRequest(
 
 				return nil, nil, fmt.Errorf(
 					"inertia: failed to resolve prop %s: %w",
-					prop.Key(),
-					r.err,
+					key, r.err,
 				)
 			}
 
-			m[prop.Key()] = r.value
+			m[key] = r.value
 		}
 	}
 
@@ -246,50 +273,56 @@ func makeDeferredProps(req Request, componentName string, props []inertiaprop.Pr
 		return nil
 	}
 
-	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
-		_, ok := prop.Deferrable()
-		return ok
-	})
-	if len(props) == 0 {
+	m := make(map[string][]string)
+
+	for _, prop := range props {
+		deferred, ok := prop.Deferrable()
+		if !ok {
+			continue
+		}
+
+		key := prop.Key()
+		debug.Assert(deferred != nil, "the property %s must be deferrable", key)
+
+		// If there is no group yet, create a pre-sized slice so the first
+		// append doesn't allocate.
+		group, ok := m[deferred.Group]
+		if !ok {
+			group = make([]string, 0, 4)
+		}
+
+		group = append(group, key)
+		m[deferred.Group] = group
+	}
+
+	if len(m) == 0 {
 		return nil
 	}
 
-	return sliceutil.Reduce(props, func(prop inertiaprop.Prop, m map[string][]string) map[string][]string {
-		deferred, _ := prop.Deferrable()
-
-		debug.Assert(deferred != nil, "the property %s must be deferrable", prop.Key())
-
-		// if there is no group, create a new one.
-		if _, ok := m[deferred.Group]; !ok {
-			m[deferred.Group] = []string{}
-		}
-
-		m[deferred.Group] = append(m[deferred.Group], prop.Key())
-
-		return m
-	}, make(map[string][]string, len(props)))
+	return m
 }
 
 // makeOnceProps creates a once piece of the response to the client.
 func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
-	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
-		_, ok := prop.Onceable()
-		return ok
-	})
-	if len(props) == 0 {
+	m := make(map[string]OnceProp)
+
+	for _, prop := range props {
+		once, ok := prop.Onceable()
+		if !ok {
+			continue
+		}
+
+		m[once.Key] = OnceProp{
+			Prop:      prop.Key(),
+			ExpiresAt: once.ExpiresAt,
+		}
+	}
+
+	if len(m) == 0 {
 		return nil
 	}
 
-	return sliceutil.Reduce(props, func(prop inertiaprop.Prop, m map[string]OnceProp) map[string]OnceProp {
-		if once, ok := prop.Onceable(); ok {
-			m[once.Key] = OnceProp{
-				Prop:      prop.Key(),
-				ExpiresAt: once.ExpiresAt,
-			}
-		}
-
-		return m
-	}, make(map[string]OnceProp, len(props)))
+	return m
 }
 
 // makeMergeProps creates a list of props that should be merged instead of
@@ -304,13 +337,13 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 //
 // The root-level append/prepend flag is mutually exclusive with path-based
 // keys: when a prop has any append or prepend path, the root-level entry is
-// suppressed and only the per-path entries are emitted. This matches Laravel's
-// MergesProps::mergesAtRoot semantics.
+// suppressed and only the per-path entries are emitted.
 func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeIntent string) (mergeProps, error) {
 	var m mergeProps
 
 	for _, prop := range props {
-		resetting := len(resetKeys) > 0 && slices.Contains(resetKeys, prop.Key())
+		rootKey := prop.Key()
+		resetting := len(resetKeys) > 0 && slices.Contains(resetKeys, rootKey)
 
 		// Scrollable is a special case since it is a combination of merge props
 		// with a custom handling.
@@ -341,31 +374,44 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		}
 
 		if merge, ok := prop.Mergeable(); ok {
-			rootKey := prop.Key()
+			hasAppend := false
 
-			appendKeys := sliceutil.Filter(merge.AppendKeys, func(k string) bool { return k != "" })
-			prependKeys := sliceutil.Filter(merge.PrependKeys, func(k string) bool { return k != "" })
+			for _, key := range merge.AppendKeys {
+				if key == "" {
+					continue
+				}
+
+				m.append = append(m.append, inertiaprop.QualifyPath(rootKey, key))
+				hasAppend = true
+			}
+
+			hasPrepend := false
+
+			for _, key := range merge.PrependKeys {
+				if key == "" {
+					continue
+				}
+
+				m.prepend = append(m.prepend, inertiaprop.QualifyPath(rootKey, key))
+				hasPrepend = true
+			}
 
 			switch {
 			case merge.DeepMerge:
 				m.deepMerge = append(m.deepMerge, rootKey)
-			case len(appendKeys) == 0 && len(prependKeys) == 0:
+			case !hasAppend && !hasPrepend:
 				if !merge.Append {
 					m.prepend = append(m.prepend, rootKey)
 				} else {
 					m.append = append(m.append, rootKey)
 				}
-			default:
-				for _, key := range appendKeys {
-					m.append = append(m.append, inertiaprop.QualifyPath(rootKey, key))
-				}
-
-				for _, key := range prependKeys {
-					m.prepend = append(m.prepend, inertiaprop.QualifyPath(rootKey, key))
-				}
 			}
 
 			for _, key := range merge.MatchOn {
+				if key == "" {
+					continue
+				}
+
 				m.matchOn = append(m.matchOn, inertiaprop.QualifyPath(rootKey, key))
 			}
 		}
@@ -375,26 +421,27 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 }
 
 func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]ScrollProp {
-	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
-		_, ok := prop.Scrollable()
-		return ok
-	})
-	if len(props) == 0 {
-		return nil
-	}
+	m := make(map[string]ScrollProp)
 
-	m := sliceutil.Reduce(props, func(prop inertiaprop.Prop, m map[string]ScrollProp) map[string]ScrollProp {
-		scroll, _ := prop.Scrollable()
-		m[prop.Key()] = ScrollProp{
+	for _, prop := range props {
+		scroll, ok := prop.Scrollable()
+		if !ok {
+			continue
+		}
+
+		key := prop.Key()
+		m[key] = ScrollProp{
 			PageName:     scroll.PageName,
 			PreviousPage: scroll.PreviousPage,
 			NextPage:     scroll.NextPage,
 			CurrentPage:  scroll.CurrentPage,
-			Reset:        len(resetKeys) > 0 && slices.Contains(resetKeys, prop.Key()),
+			Reset:        len(resetKeys) > 0 && slices.Contains(resetKeys, key),
 		}
+	}
 
-		return m
-	}, make(map[string]ScrollProp))
+	if len(m) == 0 {
+		return nil
+	}
 
 	return m
 }
