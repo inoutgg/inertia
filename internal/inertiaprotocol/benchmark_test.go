@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alitto/pond/v2"
+
 	"go.segfaultmedaddy.com/inertia/inertiaalways"
 	"go.segfaultmedaddy.com/inertia/inertiadeferred"
 	"go.segfaultmedaddy.com/inertia/inertiamerge"
@@ -188,11 +190,13 @@ func benchBuildProps() ([]intprop.Prop, []intprop.Prop) {
 func BenchmarkRenderComplex(b *testing.B) {
 	props, shared := benchBuildProps()
 	req := benchBuildRequest()
+	pool := pond.NewResultPool[Result](0)
 	ctx := Context{
 		Component:   benchComponent,
 		Version:     benchVersion,
 		Props:       props,
 		SharedProps: shared,
+		ResultPool:  pool,
 	}
 
 	b.ReportAllocs()
@@ -219,11 +223,13 @@ func BenchmarkRenderComplex(b *testing.B) {
 func BenchmarkRenderInitial(b *testing.B) {
 	props, shared := benchBuildProps()
 	req := benchBuildInitialRequest()
+	pool := pond.NewResultPool[Result](0)
 	ctx := Context{
 		Component:   benchComponent,
 		Version:     benchVersion,
 		Props:       props,
 		SharedProps: shared,
+		ResultPool:  pool,
 	}
 
 	b.ReportAllocs()

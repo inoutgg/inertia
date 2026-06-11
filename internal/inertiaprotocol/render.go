@@ -13,9 +13,6 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
 
-//nolint:gochecknoglobals
-var resultPool = pond.NewResultPool[result[any, error]](0)
-
 // Request holds the request for the rendered page.
 type Request struct {
 	URL               string
@@ -32,6 +29,7 @@ type Request struct {
 // The difference between a Context and a Request is that a Context
 // is populated by the server and a Request is populated by the client.
 type Context struct {
+	ResultPool       pond.ResultPool[Result]
 	Component        string
 	Version          string
 	Props            []inertiaprop.Prop
@@ -39,7 +37,6 @@ type Context struct {
 	PreserveFragment bool
 	ClearHistory     bool
 	EncryptHistory   bool
-	Concurrency      int
 }
 
 // Render returns a rendered page for the given request and context.
@@ -47,7 +44,7 @@ type Context struct {
 // Render is protocol agnostic (meaning it does not contain any HTTP specific logic)
 // and all the protocol-specific logic must be handled by the caller.
 func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
-	props, rescuedProps, err := resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.Concurrency)
+	props, rescuedProps, err := resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +89,7 @@ func resolveProps(
 	req Request,
 	componentName string,
 	props []inertiaprop.Prop,
-	concurrency int,
+	pool pond.ResultPool[Result],
 ) (map[string]any, []string, error) {
 	// If the request is a partial, we need to filter the props.
 	if req.PartialComponent == componentName {
@@ -102,7 +99,7 @@ func resolveProps(
 			req.PartialData,
 			req.PartialExcept,
 			req.ExceptOnceProps,
-			concurrency,
+			pool,
 		)
 	}
 
@@ -136,7 +133,7 @@ func resolvePartialComponentRequest(
 	ctx context.Context,
 	props []inertiaprop.Prop,
 	whitelist, blacklist, exceptOnceProps []string,
-	_ int,
+	pool pond.ResultPool[Result],
 ) (map[string]any, []string, error) {
 	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
 		key := prop.Key()
@@ -214,13 +211,14 @@ func resolvePartialComponentRequest(
 
 		m[key] = val
 	default:
-		group := resultPool.NewGroupContext(ctx)
+		group := pool.NewGroupContext(ctx)
 
 		// Resolve the rest of concurrent props in pool. Each prop resolution
 		// may return an error.
 		for _, prop := range concurrentProps {
-			group.SubmitErr(func() (result[any, error], error) {
-				return newResult(prop.Value(ctx)), nil
+			group.SubmitErr(func() (Result, error) {
+				val, err := prop.Value(ctx)
+				return Result{Value: val, Err: err}, nil
 			})
 		}
 
@@ -233,19 +231,19 @@ func resolvePartialComponentRequest(
 			prop := concurrentProps[i]
 			key := prop.Key()
 
-			if r.err != nil {
-				if err, ok := errors.AsType[*inertiaprop.RescueError](r.err); ok {
-					rescuedProps = append(rescuedProps, err.Key)
+			if r.Err != nil {
+				if re, ok := errors.AsType[*inertiaprop.RescueError](r.Err); ok {
+					rescuedProps = append(rescuedProps, re.Key)
 					continue
 				}
 
 				return nil, nil, fmt.Errorf(
 					"inertia: failed to resolve prop %s: %w",
-					key, r.err,
+					key, r.Err,
 				)
 			}
 
-			m[key] = r.value
+			m[key] = r.Value
 		}
 	}
 
@@ -446,22 +444,13 @@ func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]Sc
 	return m
 }
 
-// result is a generic value-or-error container.
-//
-// use newResult to create a result value.
+// Result is a generic value-or-error container.
 //
 // It is used with pond's ResultPool so that every worker's outcome is
 // collected as data rather than aborting the group on the first error.
-type result[R any, E error] struct {
-	value R
-	err   E
-}
-
-func newResult[R any, E error](value R, err E) result[R, E] {
-	return result[R, E]{
-		value: value,
-		err:   err,
-	}
+type Result struct {
+	Value any
+	Err   error
 }
 
 // mergeProps holds the properties for the mergeable props.

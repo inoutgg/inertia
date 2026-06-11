@@ -170,10 +170,6 @@ type RenderContext struct {
 
 	// PreserveFragment instructs the client to preserve the current URL fragment.
 	PreserveFragment bool
-
-	// Concurrency sets the maximum number of concurrent prop resolutions for this page.
-	// If 0, uses the renderer's default. Negative values mean sequential resolution.
-	Concurrency int
 }
 
 // NewRenderContext creates a RenderContext configured with the provided options.
@@ -259,17 +255,6 @@ func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
 
 		renderCtx.AddValidationErrorer(errorers)
 		renderCtx.ErrorBag = errorBag
-	}
-}
-
-// WithConcurrency sets the maximum number of props that can be resolved concurrently for this page.
-// This only affects props marked as concurrent.
-//
-// A value of 0 uses the renderer's default concurrency level.
-// Negative values allow unlimited concurrent resolution.
-func WithConcurrency(concurrency int) Option {
-	return func(renderCtx *RenderContext) {
-		renderCtx.Concurrency = concurrency
 	}
 }
 
