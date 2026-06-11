@@ -2,6 +2,8 @@ package inertia
 
 import (
 	"encoding/gob"
+
+	"go.inout.gg/foundations/debug"
 )
 
 var (
@@ -53,6 +55,9 @@ type validationError struct {
 // NewValidationError creates a validation error for a specific field with a message.
 // The error is associated with the default error bag.
 func NewValidationError(field string, message string) *validationError { //nolint:revive
+	debug.Assert(field != "", "field must be non-empty")
+	debug.Assert(message != "", "message must be non-empty")
+
 	return &validationError{
 		Field_:    field,
 		Message_:  message,

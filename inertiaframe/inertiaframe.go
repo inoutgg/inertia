@@ -160,6 +160,8 @@ type Response interface {
 // NewResponse creates a Response with the specified component and props.
 // Optional ResponseOption functions can customize history behavior.
 func NewResponse(component string, proper inertia.Proper, opts ...ResponseOption) Response {
+	debug.Assert(component != "", "component must be non-empty")
+
 	var options ResponseOptions
 
 	if len(opts) > 0 {
@@ -191,6 +193,8 @@ type rawResp struct{ h Handler }
 // The provided handler has full control over the HTTP response.
 // Useful for file downloads, API endpoints, or custom authentication flows.
 func NewRawResponse(h Handler) Response {
+	debug.Assert(h != nil, "Handler must not be nil")
+
 	return &rawResp{h}
 }
 
@@ -353,8 +357,10 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
 	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
 
+	debug.Assert(mux != nil, "Mux must not be nil")
 	debug.Assert(endpoint != nil, "Executor must not be nil")
 	debug.Assert(opts.ErrorHandler != nil, "Executor must specify the error handler")
+	debug.Assert(opts.FormDecoder != nil, "FormDecoder must be set")
 
 	m := endpoint.Meta()
 
@@ -386,6 +392,10 @@ func newHandler[M any](
 	formDecoder *form.Decoder,
 	jsonUnmarshalOptions []json.Options,
 ) http.Handler {
+	debug.Assert(endpoint != nil, "Endpoint must not be nil")
+	debug.Assert(errorHandler != nil, "ErrorHandler must be set")
+	debug.Assert(formDecoder != nil, "FormDecoder must be set")
+
 	handleError := httphandler.WithErrorHandler(errorHandler)
 
 	return handleError(httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

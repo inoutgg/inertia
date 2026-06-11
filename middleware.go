@@ -95,6 +95,8 @@ func (m *MiddlewareConfig) defaults() {
 //
 // Once the middleware is set up, Render can be used to create Inertia responses.
 func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(http.Handler) http.Handler {
+	debug.Assert(renderer != nil, "Renderer must not be nil")
+
 	var config MiddlewareConfig
 	for _, opt := range opts {
 		opt(&config)
@@ -264,6 +266,10 @@ func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
 // This function requires the Inertia middleware to be installed in the request chain.
 // Returns an error if the middleware is not found or if rendering fails.
 func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx RenderContext) error {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+	debug.Assert(r != nil, "Request must not be nil")
+	debug.Assert(componentName != "", "component name must be non-empty")
+
 	render, ok := r.Context().Value(kCtxKey).(*Renderer)
 	if !ok {
 		return errors.New(
@@ -294,5 +300,9 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx R
 
 // MustRender is like Render, but panics if an error occurs.
 func MustRender(w http.ResponseWriter, req *http.Request, name string, r RenderContext) {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+	debug.Assert(req != nil, "Request must not be nil")
+	debug.Assert(name != "", "component name must be non-empty")
+
 	must.Must1(Render(w, req, name, r))
 }

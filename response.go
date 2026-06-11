@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"net/http"
 	"sync"
+
+	"go.inout.gg/foundations/debug"
 )
 
 var (
@@ -15,6 +17,8 @@ var (
 var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	debug.Assert(w != nil, "underlying ResponseWriter must not be nil")
+
 	return &responseWriter{
 		ResponseWriter: w,
 		statusCode:     http.StatusOK,

@@ -64,6 +64,7 @@ type Prop struct {
 // Deferred props are fetched separately after the initial page loads, improving perceived performance.
 // Options such as WithGroup and WithRescue customize the prop's behavior.
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
 	debug.Assert(val != nil, "p.val must not be nil")
 
 	cfg := Config{group: DefaultGroup} //nolint:exhaustruct

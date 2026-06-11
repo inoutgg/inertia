@@ -60,6 +60,8 @@ type Prop struct {
 //
 // Options such as WithPagination and WithPageName customize the prop's behavior.
 func New(key string, value any, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
+
 	var config Config
 	for _, opt := range opts {
 		opt(&config)

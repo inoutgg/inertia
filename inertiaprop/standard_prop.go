@@ -49,6 +49,8 @@ type Prop struct {
 // It is included on standard visits and optionally during partial reloads when requested via only/except.
 // Options such as WithMerge and WithOnce customize the prop's behavior.
 func New(key string, val any, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
+
 	var cfg Config
 	for _, opt := range opts {
 		opt(&cfg)
@@ -65,6 +67,9 @@ func New(key string, val any, opts ...Option) *Prop {
 
 // NewLazy is like New but accepts a lazy value.
 func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
+	debug.Assert(valFn != nil, "valFn must not be nil")
+
 	var cfg Config
 	for _, opt := range opts {
 		opt(&cfg)
