@@ -36,11 +36,14 @@ type Prop struct {
 // It bypasses partial reload filters, ensuring the prop is present even when
 // the client requests only specific props via only/except.
 func New(key string, val any) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
+
 	return &Prop{val: val, key: key} //nolint:exhaustruct
 }
 
 // NewLazy is like New but accepts a lazy value.
 func NewLazy(key string, valFn inertiaprop.Lazy, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
 	debug.Assert(valFn != nil, "valFn must not be nil")
 
 	var cfg Config

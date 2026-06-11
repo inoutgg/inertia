@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"go.inout.gg/foundations/debug"
+
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
@@ -35,6 +37,8 @@ type response struct {
 }
 
 func parseRequest(r *http.Request) (request, error) {
+	debug.Assert(r != nil, "Request must not be nil")
+
 	//nolint:exhaustruct
 	req := request{
 		URL:       r.RequestURI,

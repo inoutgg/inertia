@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httpcookie"
 
 	"go.segfaultmedaddy.com/inertia"
@@ -49,6 +50,8 @@ type session struct {
 // sessionFromRequest retrieves a session from the request. If the session
 // does not exist, a new session is created.
 func sessionFromRequest(r *http.Request) (*session, error) {
+	debug.Assert(r != nil, "request must not be nil")
+
 	sess, ok := r.Context().Value(kSessCtx).(*session)
 	if ok && sess != nil {
 		return sess, nil
@@ -105,6 +108,8 @@ func (s *session) Clear(w http.ResponseWriter, r *http.Request) {
 
 // Save persists the session to a cookie sent to the client.
 func (s *session) Save(w http.ResponseWriter) error {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+
 	buf := bufPool.Get().(*bytes.Buffer) //nolint:forcetypeassert
 
 	defer func() {

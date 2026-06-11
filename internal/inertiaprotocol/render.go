@@ -44,6 +44,9 @@ type Context struct {
 // Render is protocol agnostic (meaning it does not contain any HTTP specific logic)
 // and all the protocol-specific logic must be handled by the caller.
 func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
+	debug.Assert(renderCtx.Component != "", "component must be non-empty")
+	debug.Assert(renderCtx.ResultPool != nil, "ResultPool must be set")
+
 	props, rescuedProps, err := resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
 	if err != nil {
 		return nil, err

@@ -155,6 +155,9 @@ func (r *Renderer) render(
 	name string,
 	renderCtx RenderContext,
 ) (response, error) {
+	debug.Assert(r.t != nil, "Renderer template must be set")
+	debug.Assert(name != "", "component name must be non-empty")
+
 	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
@@ -181,6 +184,8 @@ func (r *Renderer) render(
 	if err != nil {
 		return response{}, fmt.Errorf("inertia: an error occurred while rendering page: %w", err)
 	}
+
+	debug.Assert(page != nil, "rendered page must not be nil")
 
 	if req.IsInertia {
 		d("Received inertia request, sending JSON response: %s", req.URL)
@@ -344,6 +349,10 @@ type TemplateData struct {
 // For Inertia requests, it uses a 409 Conflict response with X-Inertia-Location header.
 // For regular requests, it performs a standard HTTP redirect.
 func Location(w http.ResponseWriter, r *http.Request, url string) {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+	debug.Assert(r != nil, "Request must not be nil")
+	debug.Assert(url != "", "url must be non-empty")
+
 	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
 		h := w.Header()
 
@@ -360,11 +369,19 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 
 // Redirect sends a redirect response to the Inertia app page.
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+	debug.Assert(r != nil, "Request must not be nil")
+	debug.Assert(url != "", "url must be non-empty")
+
 	inertiaredirect.Redirect(w, r, url)
 }
 
 // RedirectPreserveFragment redirects while instructing Inertia to preserve the current URL fragment.
 func RedirectPreserveFragment(w http.ResponseWriter, r *http.Request, url string) {
+	debug.Assert(w != nil, "ResponseWriter must not be nil")
+	debug.Assert(r != nil, "Request must not be nil")
+	debug.Assert(url != "", "url must be non-empty")
+
 	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
 		h := w.Header()
 

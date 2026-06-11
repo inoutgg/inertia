@@ -6,6 +6,7 @@ import (
 
 	"buf.build/go/protovalidate"
 	"github.com/go-json-experiment/json"
+	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httphandler"
 	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
@@ -111,6 +112,9 @@ func NewMiddleware(template string, opts ...Option) httpmiddleware.MiddlewareFun
 // The incoming and outgoing messages are automatically marshaled and unmarshaled
 // from/to JSON using protojson.
 func Mount[M proto.Message](mux inertiaframe.Mux, endpoint Endpoint[M]) {
+	debug.Assert(mux != nil, "Mux must not be nil")
+	debug.Assert(endpoint != nil, "Endpoint must not be nil")
+
 	inertiaframe.Mount(mux, endpoint, &inertiaframe.MountConfig[M]{ //nolint:exhaustruct
 		Validator: inertiaframe.ValidatorFunc[M](func(data M) error {
 			if err := protovalidate.Validate(data); err != nil {

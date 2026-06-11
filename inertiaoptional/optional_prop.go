@@ -34,6 +34,7 @@ type Prop struct {
 // The value function is only called when the client specifically requests this prop.
 // Options customize the prop's behavior.
 func New(key string, val inertiaprop.Lazy, opts ...Option) *Prop {
+	debug.Assert(key != "", "key must be non-empty")
 	debug.Assert(val != nil, "p.val must not be nil")
 
 	var cfg Config

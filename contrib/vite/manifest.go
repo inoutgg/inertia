@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+
+	"go.inout.gg/foundations/debug"
 )
 
 type rawManifest = map[string]*ManifestEntry
@@ -110,6 +112,9 @@ func ParseManifest(b []byte) (*Manifest, error) {
 
 // ParseManifestFromFS reads and parses a Vite manifest from a file system.
 func ParseManifestFromFS(fsys fs.FS, path string) (*Manifest, error) {
+	debug.Assert(fsys != nil, "fsys must not be nil")
+	debug.Assert(path != "", "path must be non-empty")
+
 	b, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to read manifest file: %w", err)
