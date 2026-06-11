@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/alitto/pond/v2"
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
@@ -27,8 +28,9 @@ const (
 	DefaultRootViewID = "app"
 )
 
-// DefaultConcurrency is the default concurrency level for props resolution
-// marked as concurrently resolvable.
+// DefaultConcurrency is the default maximum concurrency for the ResultPool
+// used to resolve concurrent props. A value of 0 means no limit (pond's "0 = unlimited"
+// convention).
 var DefaultConcurrency = runtime.GOMAXPROCS(0) //nolint:gochecknoglobals
 
 // Page represents an Inertia.js page that is sent to the client.
@@ -55,10 +57,10 @@ type Config struct {
 	// JSONMarshalOptions configures JSON serialization for page props and data.
 	JSONMarshalOptions []json.Options
 
-	// Concurrency sets the default maximum number of props that can be resolved concurrently.
-	// It only affects props marked as concurrent.
+	// Concurrency sets the maximum number of props that can be resolved concurrently
+	// by the renderer's internal ResultPool. It only affects props marked as concurrent.
 	//
-	// Defaults to runtime.GOMAXPROCS(0).
+	// Defaults to runtime.GOMAXPROCS(0). A value of 0 means no limit.
 	Concurrency int
 }
 
@@ -75,12 +77,12 @@ func (c *Config) defaults() {
 // Create a Renderer using New or FromFS constructor functions.
 type Renderer struct {
 	ssrClient       SSRClient
-	jsonMarshalOpts []json.Options
+	resultPool      pond.ResultPool[inertiaprotocol.Result]
 	t               *template.Template
 	rootViewID      string
 	version         string
+	jsonMarshalOpts []json.Options
 	rootViewAttrs   []pair[[]byte, []byte]
-	concurrency     int
 }
 
 // New creates a Renderer with the provided HTML template and configuration.
@@ -108,7 +110,7 @@ func New(t *template.Template, config *Config) *Renderer {
 		version:         config.Version,
 		rootViewID:      config.RootViewID,
 		rootViewAttrs:   attrs,
-		concurrency:     config.Concurrency,
+		resultPool:      pond.NewResultPool[inertiaprotocol.Result](config.Concurrency),
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -153,8 +155,6 @@ func (r *Renderer) render(
 	name string,
 	renderCtx RenderContext,
 ) (response, error) {
-	renderCtx.Concurrency = max(cmp.Or(renderCtx.Concurrency, r.concurrency), 0)
-
 	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
@@ -176,7 +176,7 @@ func (r *Renderer) render(
 		PreserveFragment: renderCtx.PreserveFragment,
 		ClearHistory:     renderCtx.ClearHistory,
 		EncryptHistory:   renderCtx.EncryptHistory,
-		Concurrency:      renderCtx.Concurrency,
+		ResultPool:       r.resultPool,
 	})
 	if err != nil {
 		return response{}, fmt.Errorf("inertia: an error occurred while rendering page: %w", err)

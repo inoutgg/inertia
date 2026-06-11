@@ -3,6 +3,7 @@ package inertiatest
 import (
 	"testing"
 
+	"github.com/alitto/pond/v2"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -239,9 +240,10 @@ func (b *PropTestBuilder) Run(opts ...ContextOption) *inertiaprotocol.Page {
 	b.t.Helper()
 
 	ctx := inertiaprotocol.Context{ //nolint:exhaustruct
-		Component: DefaultComponent,
-		Version:   DefaultVersion,
-		Props:     b.props,
+		Component:  DefaultComponent,
+		Version:    DefaultVersion,
+		Props:      b.props,
+		ResultPool: pond.NewResultPool[inertiaprotocol.Result](0),
 	}
 	for _, opt := range opts {
 		opt(&ctx)

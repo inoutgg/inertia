@@ -138,13 +138,6 @@ type ResponseOptions struct {
 
 	// EncryptHistory instructs the client to encrypt the history state.
 	EncryptHistory bool
-
-	// Concurrency sets the maximum concurrent lazy prop resolutions for this response.
-	Concurrency int
-}
-
-func (opt *ResponseOptions) defaults() {
-	opt.Concurrency = cmp.Or(opt.Concurrency, inertia.DefaultConcurrency)
 }
 
 // ResponseOption is used to configure inertia response.
@@ -165,7 +158,7 @@ type Response interface {
 }
 
 // NewResponse creates a Response with the specified component and props.
-// Optional ResponseOption functions can customize history and concurrency behavior.
+// Optional ResponseOption functions can customize history behavior.
 func NewResponse(component string, proper inertia.Proper, opts ...ResponseOption) Response {
 	var options ResponseOptions
 
@@ -174,8 +167,6 @@ func NewResponse(component string, proper inertia.Proper, opts ...ResponseOption
 			opt(&options)
 		}
 	}
-
-	options.defaults()
 
 	return &resp{proper, component, options}
 }
@@ -279,7 +270,7 @@ type RawResponseWriter interface {
 }
 
 // ResponseOptioner is an optional interface for Responses that need custom options
-// (history management, concurrency). If implemented, Options() is called to configure the response.
+// (history management). If implemented, Options() is called to configure the response.
 type ResponseOptioner interface {
 	Options() ResponseOptions
 }
@@ -476,7 +467,6 @@ func newHandler[M any](
 
 			renderCtx.ClearHistory = opts.ClearHistory
 			renderCtx.EncryptHistory = opts.EncryptHistory
-			renderCtx.Concurrency = opts.Concurrency
 		}
 
 		var sharedProps []inertia.Prop

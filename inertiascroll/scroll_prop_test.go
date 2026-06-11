@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/alitto/pond/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -83,8 +84,9 @@ func TestScrollProp(t *testing.T) {
 			URL:               "/users",
 			ScrollMergeIntent: "sideways",
 		}, inertiaprotocol.Context{
-			Component: inertiatest.DefaultComponent,
-			Version:   inertiatest.DefaultVersion,
+			Component:  inertiatest.DefaultComponent,
+			Version:    inertiatest.DefaultVersion,
+			ResultPool: pond.NewResultPool[inertiaprotocol.Result](0),
 			Props: []inertia.Prop{
 				inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
 			},

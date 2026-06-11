@@ -41,6 +41,12 @@ type Config struct {
 	// BundleVersion is the asset version reported to the client via
 	// X-Inertia-Version for stale-asset detection.
 	BundleVersion string
+
+	// Concurrency sets the maximum number of props that can be resolved concurrently
+	// by the renderer's internal ResultPool. It only affects props marked as concurrent.
+	//
+	// Defaults to runtime.GOMAXPROCS(0). A value of 0 means no limit.
+	Concurrency int
 }
 
 // Option configures the middleware.
@@ -61,6 +67,15 @@ func WithBundleVersion(v string) Option {
 	return func(c *Config) { c.BundleVersion = v }
 }
 
+// WithConcurrency sets the maximum number of props that can be resolved concurrently
+// for this middleware. This only affects props marked as concurrent.
+//
+// A value of 0 uses the default (runtime.GOMAXPROCS(0)). A value of 0 also means
+// no limit at the pool level.
+func WithConcurrency(concurrency int) Option {
+	return func(c *Config) { c.Concurrency = concurrency }
+}
+
 // NewMiddleware creates a new middleware that handles inertia requests
 // using protobuf messages.
 func NewMiddleware(template string, opts ...Option) httpmiddleware.MiddlewareFunc {
@@ -76,11 +91,10 @@ func NewMiddleware(template string, opts ...Option) httpmiddleware.MiddlewareFun
 		)),
 		//nolint:exhaustruct
 		&inertia.Config{
-			RootViewID: inertia.DefaultRootViewID,
-
-			Concurrency: inertia.DefaultConcurrency,
+			RootViewID:  inertia.DefaultRootViewID,
 			Version:     config.BundleVersion,
 			SSRClient:   config.SSRClient,
+			Concurrency: config.Concurrency,
 			JSONMarshalOptions: []json.Options{
 				json.WithMarshalers(json.MarshalFunc(protojson.Marshal)),
 			},
