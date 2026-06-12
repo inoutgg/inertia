@@ -49,7 +49,7 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 	debug.Assert(renderCtx.Component != "", "component must be non-empty")
 	debug.Assert(renderCtx.ResultPool != nil, "ResultPool must be set")
 
-	d("Render: component=%q partial=%q props=%d shared=%d",
+	d("component=%q partial=%q props=%d shared=%d",
 		renderCtx.Component, req.PartialComponent,
 		len(renderCtx.Props), len(renderCtx.SharedProps))
 
@@ -102,7 +102,7 @@ func resolveProps(
 ) (map[string]any, []string, error) {
 	// If the request is a partial, we need to filter the props.
 	if req.PartialComponent == componentName {
-		d("resolveProps: partial reload for %q whitelist=%v except=%v",
+		d("partial reload for %q whitelist=%v except=%v",
 			componentName, req.PartialData, req.PartialExcept)
 
 		return resolvePartialComponentRequest(
@@ -186,7 +186,7 @@ func resolvePartialComponentRequest(
 				// The rescued properties will be returned to the client via
 				// a special field "rescuedProps" in the response.
 				if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
-					d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
+					d("rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
 				} else {
 					return nil, nil, fmt.Errorf(
@@ -213,7 +213,7 @@ func resolvePartialComponentRequest(
 		val, err := prop.Value(ctx)
 		if err != nil {
 			if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
-				d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
+				d("rescued prop %q: %v", re.Key, re.Err)
 				rescuedProps = append(rescuedProps, re.Key)
 			} else {
 				return nil, nil, fmt.Errorf(
@@ -225,7 +225,7 @@ func resolvePartialComponentRequest(
 
 		m[key] = val
 	default:
-		d("resolvePartial: resolving %d props concurrently", len(concurrentProps))
+		d("resolving %d props concurrently", len(concurrentProps))
 
 		group := pool.NewGroupContext(ctx)
 
@@ -249,7 +249,7 @@ func resolvePartialComponentRequest(
 
 			if r.Err != nil {
 				if re, ok := errors.AsType[*inertiaprop.RescueError](r.Err); ok {
-					d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
+					d("rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
 
 					continue
@@ -315,7 +315,7 @@ func makeDeferredProps(req Request, componentName string, props []inertiaprop.Pr
 		return nil
 	}
 
-	d("makeDeferredProps: %d groups", len(m))
+	d("deferred props: %d groups", len(m))
 
 	return m
 }
@@ -340,7 +340,7 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 		return nil
 	}
 
-	d("makeOnceProps: %d once props", len(m))
+	d("once props: %d", len(m))
 
 	return m
 }
@@ -437,7 +437,7 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		}
 	}
 
-	d("makeMergeProps: append=%d prepend=%d deepMerge=%d matchOn=%d",
+	d("merge props: append=%d prepend=%d deepMerge=%d matchOn=%d",
 		len(m.append), len(m.prepend), len(m.deepMerge), len(m.matchOn))
 
 	return m, nil
@@ -466,7 +466,7 @@ func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]Sc
 		return nil
 	}
 
-	d("makeScrollProps: %d scroll props", len(m))
+	d("scroll props: %d", len(m))
 
 	return m
 }

@@ -91,14 +91,14 @@ func parseRequest(r *http.Request) (request, error) {
 	req.ExceptOnceProps = exceptOnceProps
 
 	if (len(req.PartialData) > 0 || len(req.PartialExcept) > 0) && req.PartialComponent == "" {
-		d("parseRequest: rejecting partial reload without %s header",
+		d("rejecting partial reload without %s header",
 			inertiaheader.HeaderXInertiaPartialComponent)
 
 		return req, fmt.Errorf("%w: %s is required for partial reloads",
 			ErrInvalidInertiaRequest, inertiaheader.HeaderXInertiaPartialComponent)
 	}
 
-	d("parseRequest: method=%s url=%s inertia=%v partial=%q onceExcept=%v",
+	d("method=%s url=%s inertia=%v partial=%q onceExcept=%v",
 		r.Method, r.RequestURI, req.IsInertia, req.PartialComponent, req.ExceptOnceProps)
 
 	return req, nil

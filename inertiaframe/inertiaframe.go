@@ -443,10 +443,10 @@ func newHandler[M any](
 					}
 				}
 			default:
-				d("newHandler: unknown Content-Type %q, leaving message empty", mediaType)
+				d("unknown Content-Type %q, leaving message empty", mediaType)
 			}
 		} else {
-			d("newHandler: GET %s, skipping body decode", r.URL.Path)
+			d("GET %s, skipping body decode", r.URL.Path)
 		}
 
 		if validator != nil {
@@ -469,7 +469,7 @@ func newHandler[M any](
 		}
 
 		if writer, ok := resp.(RawResponseWriter); ok {
-			d("newHandler: writing raw response for %s %s", r.Method, r.URL.Path)
+			d("writing raw response for %s %s", r.Method, r.URL.Path)
 
 			if err := writer.Write(w, r); err != nil {
 				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
@@ -520,7 +520,7 @@ func newHandler[M any](
 		component := resp.Component()
 		debug.Assert(component != "", "component must not be empty, when using non RawResponseWriter")
 
-		d("newHandler: rendering %q with %d props and %d shared props",
+		d("rendering %q with %d props and %d shared props",
 			component, len(props), len(sharedProps))
 
 		if err := inertia.Render(w, r, component, renderCtx); err != nil {
