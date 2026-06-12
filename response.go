@@ -82,6 +82,8 @@ func (w *responseWriter) flush() {
 
 	w.flushed = true
 
+	d("responseWriter: flush status=%d bytes=%d", w.statusCode, w.size)
+
 	w.ResponseWriter.WriteHeader(w.statusCode)
 	_, _ = w.ResponseWriter.Write(w.buf.Bytes())
 

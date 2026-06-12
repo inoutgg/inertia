@@ -13,6 +13,8 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
 
+var d = debug.Debuglog("inertiaprotocol") //nolint:gochecknoglobals
+
 // Request holds the request for the rendered page.
 type Request struct {
 	URL               string
@@ -46,6 +48,10 @@ type Context struct {
 func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
 	debug.Assert(renderCtx.Component != "", "component must be non-empty")
 	debug.Assert(renderCtx.ResultPool != nil, "ResultPool must be set")
+
+	d("Render: component=%q partial=%q props=%d shared=%d",
+		renderCtx.Component, req.PartialComponent,
+		len(renderCtx.Props), len(renderCtx.SharedProps))
 
 	props, rescuedProps, err := resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
 	if err != nil {
@@ -96,6 +102,9 @@ func resolveProps(
 ) (map[string]any, []string, error) {
 	// If the request is a partial, we need to filter the props.
 	if req.PartialComponent == componentName {
+		d("resolveProps: partial reload for %q whitelist=%v except=%v",
+			componentName, req.PartialData, req.PartialExcept)
+
 		return resolvePartialComponentRequest(
 			ctx,
 			props,
@@ -177,6 +186,7 @@ func resolvePartialComponentRequest(
 				// The rescued properties will be returned to the client via
 				// a special field "rescuedProps" in the response.
 				if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
+					d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
 				} else {
 					return nil, nil, fmt.Errorf(
@@ -203,6 +213,7 @@ func resolvePartialComponentRequest(
 		val, err := prop.Value(ctx)
 		if err != nil {
 			if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
+				d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
 				rescuedProps = append(rescuedProps, re.Key)
 			} else {
 				return nil, nil, fmt.Errorf(
@@ -214,6 +225,8 @@ func resolvePartialComponentRequest(
 
 		m[key] = val
 	default:
+		d("resolvePartial: resolving %d props concurrently", len(concurrentProps))
+
 		group := pool.NewGroupContext(ctx)
 
 		// Resolve the rest of concurrent props in pool. Each prop resolution
@@ -236,7 +249,9 @@ func resolvePartialComponentRequest(
 
 			if r.Err != nil {
 				if re, ok := errors.AsType[*inertiaprop.RescueError](r.Err); ok {
+					d("resolvePartial: rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
+
 					continue
 				}
 
@@ -300,6 +315,8 @@ func makeDeferredProps(req Request, componentName string, props []inertiaprop.Pr
 		return nil
 	}
 
+	d("makeDeferredProps: %d groups", len(m))
+
 	return m
 }
 
@@ -322,6 +339,8 @@ func makeOnceProps(props []inertiaprop.Prop) map[string]OnceProp {
 	if len(m) == 0 {
 		return nil
 	}
+
+	d("makeOnceProps: %d once props", len(m))
 
 	return m
 }
@@ -418,6 +437,9 @@ func makeMergeProps(props []inertiaprop.Prop, resetKeys []string, scrollMergeInt
 		}
 	}
 
+	d("makeMergeProps: append=%d prepend=%d deepMerge=%d matchOn=%d",
+		len(m.append), len(m.prepend), len(m.deepMerge), len(m.matchOn))
+
 	return m, nil
 }
 
@@ -443,6 +465,8 @@ func makeScrollProps(props []inertiaprop.Prop, resetKeys []string) map[string]Sc
 	if len(m) == 0 {
 		return nil
 	}
+
+	d("makeScrollProps: %d scroll props", len(m))
 
 	return m
 }
