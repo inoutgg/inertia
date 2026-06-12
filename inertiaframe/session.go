@@ -65,11 +65,13 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 
 	b, err := base64.RawURLEncoding.DecodeString(val)
 	if err != nil {
+		d("session: failed to decode cookie: %v", err)
 		return nil, fmt.Errorf("inertiaframe: failed to decode session cookie: %w", err)
 	}
 
 	sess = &session{} //nolint:exhaustruct
 	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(sess); err != nil {
+		d("session: failed to decode payload: %v", err)
 		return nil, fmt.Errorf("inertiaframe: failed to decode session: %w", err)
 	}
 
@@ -133,6 +135,8 @@ func (s *session) Save(w http.ResponseWriter) error {
 	}
 
 	http.SetCookie(w, cookie)
+
+	d("session: saved %d errors path=%q", len(s.ValidationErrors_), s.Path_)
 
 	return nil
 }

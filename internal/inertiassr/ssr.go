@@ -15,6 +15,8 @@ import (
 
 var _ SSRClient = (*ssr)(nil)
 
+var d = debug.Debuglog("inertiassr") //nolint:gochecknoglobals
+
 type SSRTemplateData struct {
 	Head string `json:"head"`
 	Body string `json:"body"`
@@ -39,10 +41,12 @@ func NewHTTPSsrClient(url string, client *http.Client) SSRClient {
 	return &ssr{client, url}
 }
 
-func (s *ssr) Render(ctx context.Context, p *inertiaprotocol.Page) (*SSRTemplateData, error) {
-	debug.Assert(p != nil, "page must be set")
+func (s *ssr) Render(ctx context.Context, page *inertiaprotocol.Page) (*SSRTemplateData, error) {
+	debug.Assert(page != nil, "page must be set")
 
-	b, err := json.Marshal(p)
+	d("ssr: requesting render of %q from %s", page.Component, s.url)
+
+	b, err := json.Marshal(page)
 	if err != nil {
 		return nil, fmt.Errorf("inertia: failed to marshal page: %w", err)
 	}
@@ -62,6 +66,7 @@ func (s *ssr) Render(ctx context.Context, p *inertiaprotocol.Page) (*SSRTemplate
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		d("ssr: upstream returned status %d for %q", resp.StatusCode, page.Component)
 		return nil, fmt.Errorf("inertia: unexpected HTTP status code: %d", resp.StatusCode)
 	}
 
@@ -69,6 +74,8 @@ func (s *ssr) Render(ctx context.Context, p *inertiaprotocol.Page) (*SSRTemplate
 	if err := json.UnmarshalRead(resp.Body, &data); err != nil {
 		return nil, fmt.Errorf("inertia: failed to decode JSON response: %w", err)
 	}
+
+	d("ssr: rendered %q head=%d body=%d", page.Component, len(data.Head), len(data.Body))
 
 	return &data, nil
 }

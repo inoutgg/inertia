@@ -124,7 +124,10 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 			serverVersion := renderer.Version()
 			if r.Method == http.MethodGet && req.Version != serverVersion {
+				d("middleware: version mismatch: client=%q server=%q for %s",
+					req.Version, serverVersion, r.URL.Path)
 				config.VersionMismatchHandler(w, r)
+
 				return
 			}
 
@@ -133,11 +136,15 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 			if rww.statusCode == http.StatusFound &&
 				slices.Contains(seeOtherMethods, r.Method) {
+				d("middleware: upgrading 302 -> 303 for %s %s", r.Method, r.URL.Path)
 				rww.WriteHeader(http.StatusSeeOther)
 			}
 
 			if rww.Empty() {
+				d("middleware: empty response from handler for %s %s",
+					r.Method, r.URL.Path)
 				config.EmptyResponseHandler(w, r)
+
 				return
 			}
 
