@@ -8,8 +8,11 @@ import (
 
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 type (
@@ -66,6 +69,11 @@ type MiddlewareConfig struct {
 
 	// InvalidRequestHandler is called before the handler when Inertia request headers are invalid.
 	InvalidRequestHandler func(http.ResponseWriter, *http.Request, error)
+
+	// TelemetryConfig configures OpenTelemetry tracing and metrics.
+	//
+	// If zero, telemetry is a no-op.
+	TelemetryConfig otelutil.TelemetryConfig
 }
 
 func (m *MiddlewareConfig) defaults() {
@@ -80,6 +88,8 @@ func (m *MiddlewareConfig) defaults() {
 	if m.InvalidRequestHandler == nil {
 		m.InvalidRequestHandler = DefaultInvalidRequestHandler
 	}
+
+	m.TelemetryConfig.Defaults()
 
 	debug.Assert(m.EmptyResponseHandler != nil, "EmptyResponseHandler must be set")
 	debug.Assert(m.VersionMismatchHandler != nil, "VersionMismatchHandler must be set")
@@ -107,6 +117,19 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			req, err := parseRequest(r)
+
+			span := trace.SpanFromContext(r.Context())
+			span.SetAttributes(
+				attribute.String("inertia.request.type", requestType(req)),
+				attribute.Bool("inertia.version.mismatch",
+					req.IsInertia && req.Version != renderer.Version()),
+			)
+
+			if err != nil {
+				span.AddEvent("inertia.request.invalid",
+					trace.WithAttributes(attribute.String("error", err.Error())))
+			}
+
 			if err != nil {
 				config.InvalidRequestHandler(w, r, err)
 				return
@@ -312,4 +335,16 @@ func MustRender(w http.ResponseWriter, req *http.Request, name string, r RenderC
 	debug.Assert(name != "", "component name must be non-empty")
 
 	must.Must1(Render(w, req, name, r))
+}
+
+func requestType(req request) string {
+	if !req.IsInertia {
+		return "non_inertia"
+	}
+
+	if req.PartialComponent != "" {
+		return "partial"
+	}
+
+	return "full"
 }

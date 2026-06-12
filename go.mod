@@ -10,6 +10,9 @@ require (
 	github.com/go-playground/form/v4 v4.3.0
 	github.com/stretchr/testify v1.11.1
 	go.inout.gg/foundations v0.0.0-20251108094430-2c59a9842cd4
+	go.opentelemetry.io/otel v1.38.0
+	go.opentelemetry.io/otel/metric v1.38.0
+	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/mock v0.6.0
 	google.golang.org/protobuf v1.36.11
 )
