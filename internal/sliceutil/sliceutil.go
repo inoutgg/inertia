@@ -21,13 +21,3 @@ func Filter[I any](in []I, f func(I) bool) []I {
 
 	return out
 }
-
-// Reduce returns the result of applying f to each element of in, accumulating the result.
-func Reduce[I, O any](in []I, f func(I, O) O, initial O) O {
-	out := initial
-	for _, t := range in {
-		out = f(t, out)
-	}
-
-	return out
-}

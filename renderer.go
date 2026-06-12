@@ -15,11 +15,14 @@ import (
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"go.segfaultmedaddy.com/inertia/inertiaalways"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
+	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 const (
@@ -37,6 +40,8 @@ var DefaultConcurrency = runtime.GOMAXPROCS(0) //nolint:gochecknoglobals
 type Page = inertiaprotocol.Page
 
 // Config configures the Renderer behavior and capabilities.
+//
+//nolint:govet
 type Config struct {
 	// SSRClient enables server-side rendering of Inertia pages.
 	//
@@ -62,11 +67,17 @@ type Config struct {
 	//
 	// Defaults to runtime.GOMAXPROCS(0). A value of 0 means no limit.
 	Concurrency int
+
+	// Telemetry configures OpenTelemetry tracing and metrics.
+	//
+	// If zero, telemetry is a no-op.
+	Telemetry otelutil.TelemetryConfig
 }
 
 func (c *Config) defaults() {
 	c.RootViewID = cmp.Or(c.RootViewID, DefaultRootViewID)
 	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
+	c.Telemetry.Defaults()
 
 	debug.Assert(c.RootViewID != "", "RooViewID must be non-empty string")
 }
@@ -75,6 +86,8 @@ func (c *Config) defaults() {
 // It manages HTML template rendering, JSON serialization, and prop resolution.
 //
 // Create a Renderer using New or FromFS constructor functions.
+//
+//nolint:govet
 type Renderer struct {
 	ssrClient       SSRClient
 	resultPool      pond.ResultPool[inertiaprotocol.Result]
@@ -83,6 +96,7 @@ type Renderer struct {
 	version         string
 	jsonMarshalOpts []json.Options
 	rootViewAttrs   []pair[[]byte, []byte]
+	telemetry       otelutil.TelemetryConfig
 }
 
 // New creates a Renderer with the provided HTML template and configuration.
@@ -111,6 +125,7 @@ func New(t *template.Template, config *Config) *Renderer {
 		rootViewID:      config.RootViewID,
 		rootViewAttrs:   attrs,
 		resultPool:      pond.NewResultPool[inertiaprotocol.Result](config.Concurrency),
+		telemetry:       config.Telemetry,
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
@@ -157,6 +172,17 @@ func (r *Renderer) render(
 ) (response, error) {
 	debug.Assert(r.t != nil, "Renderer template must be set")
 	debug.Assert(name != "", "component name must be non-empty")
+
+	ctx, span := r.telemetry.Span(ctx, "inertia.render",
+		trace.WithSpanKind(trace.SpanKindInternal))
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("inertia.component", name),
+		attribute.String("inertia.request.type", requestType(req)),
+		attribute.String("inertia.render.type", renderType(req)),
+		attribute.Bool("inertia.ssr.enabled", r.ssrClient != nil),
+	)
 
 	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
@@ -413,4 +439,12 @@ func ErrorBagFromRequest(r *http.Request) string {
 type pair[K any, V any] struct {
 	key   K
 	value V
+}
+
+func renderType(req request) string {
+	if req.IsInertia {
+		return "json"
+	}
+
+	return "html"
 }

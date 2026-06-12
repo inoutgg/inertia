@@ -18,10 +18,13 @@ import (
 	"go.inout.gg/foundations/http/httphandler"
 	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
+	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
@@ -318,6 +321,8 @@ type Mux interface {
 }
 
 // MountConfig configures endpoint mounting behavior.
+//
+//nolint:govet
 type MountConfig[M any] struct {
 	// Validator validates requests before execution.
 	//
@@ -340,6 +345,11 @@ type MountConfig[M any] struct {
 	// Middleware wraps the endpoint's HTTP handler in cross-cutting behavior (e.g., logging, auth).
 	// Applied in slice order, with the first element being the outermost wrapper.
 	Middleware []Middleware
+
+	// TelemetryConfig configures OpenTelemetry tracing and metrics.
+	//
+	// If zero, telemetry is a no-op.
+	TelemetryConfig otelutil.TelemetryConfig
 }
 
 // Mount registers an Endpoint on a Mux, creating an HTTP handler that:
@@ -377,6 +387,7 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 		opts.Validator,
 		opts.FormDecoder,
 		opts.JSONUnmarshalOptions,
+		opts.TelemetryConfig,
 	)
 
 	h = httpmiddleware.NewChain(opts.Middleware...).Middleware(h)
@@ -391,6 +402,7 @@ func newHandler[M any](
 	validator Validator[M],
 	formDecoder *form.Decoder,
 	jsonUnmarshalOptions []json.Options,
+	tc otelutil.TelemetryConfig,
 ) http.Handler {
 	debug.Assert(endpoint != nil, "Endpoint must not be nil")
 	debug.Assert(errorHandler != nil, "ErrorHandler must be set")
@@ -405,6 +417,15 @@ func newHandler[M any](
 		)
 
 		ctx := r.Context()
+
+		ctx, span := tc.Span(ctx, "inertiaframe.endpoint",
+			trace.WithSpanKind(trace.SpanKindInternal))
+		defer span.End()
+
+		span.SetAttributes(
+			attribute.String("inertiaframe.endpoint.method", endpoint.Meta().Method),
+			attribute.String("inertiaframe.endpoint.path", endpoint.Meta().Path),
+		)
 
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
@@ -457,7 +478,13 @@ func newHandler[M any](
 			}
 		}
 
+		ctx, execSpan := tc.Span(ctx, "inertiaframe.execute",
+			trace.WithSpanKind(trace.SpanKindInternal))
+
 		resp, err := endpoint.Execute(ctx, newRequest(msg))
+
+		execSpan.End()
+
 		if err != nil {
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
@@ -467,6 +494,10 @@ func newHandler[M any](
 
 			return ErrEmptyResponse
 		}
+
+		span.SetAttributes(
+			attribute.String("inertiaframe.response.type", responseType(resp)),
+		)
 
 		if writer, ok := resp.(RawResponseWriter); ok {
 			d("writing raw response for %s %s", r.Method, r.URL.Path)
@@ -529,4 +560,19 @@ func newHandler[M any](
 
 		return nil
 	}))
+}
+
+func responseType(resp Response) string {
+	switch resp.(type) {
+	case *rawResp:
+		return "raw"
+	case *redirectMessage:
+		return "redirect"
+	case *redirectBackMessage:
+		return "redirect_back"
+	case *externalRedirectMessage:
+		return "external_redirect"
+	default:
+		return "inertia"
+	}
 }
