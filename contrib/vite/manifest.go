@@ -59,7 +59,7 @@ func (m *Manifest) HTML(name string) ([]template.HTML, []template.HTML, error) {
 
 	entry, ok := m.raw[name]
 	if !ok {
-		d("vite: manifest entry %q not found", name)
+		d("manifest entry %q not found", name)
 		return nil, nil, fmt.Errorf("inertia: entry %s not found in manifest", name)
 	}
 
