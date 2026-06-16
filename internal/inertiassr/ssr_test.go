@@ -10,11 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
-
-//nolint:gochecknoglobals
-var defaultClient = http.DefaultClient
 
 func TestSsrRender(t *testing.T) {
 	t.Parallel()
@@ -56,7 +54,7 @@ func TestSsrRender(t *testing.T) {
 		defer server.Close()
 
 		// act
-		client := NewHTTPSsrClient(server.URL, defaultClient)
+		client := NewHTTPSsrClient(server.URL, WithTelemetry(inertiaotel.DefaultConfig))
 		result, err := client.Render(t.Context(), page)
 
 		// assert
@@ -75,7 +73,7 @@ func TestSsrRender(t *testing.T) {
 		defer server.Close()
 
 		// act
-		client := NewHTTPSsrClient(server.URL, defaultClient)
+		client := NewHTTPSsrClient(server.URL, WithTelemetry(inertiaotel.DefaultConfig))
 		_, err := client.Render(t.Context(), page)
 
 		// assert
@@ -94,7 +92,7 @@ func TestSsrRender(t *testing.T) {
 		defer server.Close()
 
 		// act
-		client := NewHTTPSsrClient(server.URL, defaultClient)
+		client := NewHTTPSsrClient(server.URL, WithTelemetry(inertiaotel.DefaultConfig))
 		_, err := client.Render(t.Context(), page)
 
 		// assert
@@ -105,7 +103,7 @@ func TestSsrRender(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		client := NewHTTPSsrClient("invalid-url", defaultClient)
+		client := NewHTTPSsrClient("invalid-url", WithTelemetry(inertiaotel.DefaultConfig))
 
 		// act
 		_, err := client.Render(t.Context(), page)

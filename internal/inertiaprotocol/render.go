@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/alitto/pond/v2"
 	"go.inout.gg/foundations/debug"
+	"go.opentelemetry.io/otel/metric"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/sliceutil"
 )
@@ -41,11 +44,47 @@ type Context struct {
 	EncryptHistory   bool
 }
 
-// Render returns a rendered page for the given request and context.
+// Renderer renders an Inertia page from a request and a server-side context.
 //
-// Render is protocol agnostic (meaning it does not contain any HTTP specific logic)
+// Renderer is protocol agnostic (meaning it does not contain any HTTP specific logic)
 // and all the protocol-specific logic must be handled by the caller.
-func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
+type Renderer struct {
+	rescuedPropsCounter     metric.Int64Counter
+	concurrentPropsDuration metric.Float64Histogram
+}
+
+// New creates a Renderer configured with the given OpenTelemetry config.
+//
+// The instruments are created eagerly; if creation fails, no-op instruments
+// are used and the error is logged.
+func New(telemetry *inertiaotel.Config) *Renderer {
+	debug.Assert(telemetry != nil, "telemetry config must be provided")
+
+	rescuedPropsCounter, err := telemetry.Meter().Int64Counter(
+		"inertia.props.rescued",
+		metric.WithDescription("Number of rescued deferred props"),
+	)
+	if err != nil {
+		d("failed to create inertia.props.rescued counter: %v", err)
+	}
+
+	concurrentPropsDuration, err := telemetry.Meter().Float64Histogram(
+		"inertia.props.concurrent.resolution.duration",
+		metric.WithUnit("ms"),
+		metric.WithDescription("Duration of concurrent prop resolution"),
+	)
+	if err != nil {
+		d("failed to create inertia.props.concurrent.resolution.duration histogram: %v", err)
+	}
+
+	return &Renderer{
+		rescuedPropsCounter:     rescuedPropsCounter,
+		concurrentPropsDuration: concurrentPropsDuration,
+	}
+}
+
+// Render returns a rendered page for the given request and context.
+func (r *Renderer) Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
 	debug.Assert(renderCtx.Component != "", "component must be non-empty")
 	debug.Assert(renderCtx.ResultPool != nil, "ResultPool must be set")
 
@@ -53,7 +92,7 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 		renderCtx.Component, req.PartialComponent,
 		len(renderCtx.Props), len(renderCtx.SharedProps))
 
-	props, rescuedProps, err := resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
+	props, rescuedProps, err := r.resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
 	if err != nil {
 		return nil, err
 	}
@@ -93,19 +132,18 @@ func Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) 
 // resolveProps resolves the props for the given request and component.
 //
 // It handles both full and partial component requests.
-func resolveProps(
+func (r *Renderer) resolveProps(
 	ctx context.Context,
 	req Request,
 	componentName string,
 	props []inertiaprop.Prop,
 	pool pond.ResultPool[Result],
 ) (map[string]any, []string, error) {
-	// If the request is a partial, we need to filter the props.
 	if req.PartialComponent == componentName {
 		d("partial reload for %q whitelist=%v except=%v",
 			componentName, req.PartialData, req.PartialExcept)
 
-		return resolvePartialComponentRequest(
+		return r.resolvePartialComponentRequest(
 			ctx,
 			props,
 			req.PartialData,
@@ -141,7 +179,7 @@ func resolveProps(
 	return m, nil, nil
 }
 
-func resolvePartialComponentRequest(
+func (r *Renderer) resolvePartialComponentRequest(
 	ctx context.Context,
 	props []inertiaprop.Prop,
 	whitelist, blacklist, exceptOnceProps []string,
@@ -238,17 +276,25 @@ func resolvePartialComponentRequest(
 			})
 		}
 
+		concurrentStart := time.Now()
+
 		results, err := group.Wait()
+
+		r.concurrentPropsDuration.Record(
+			ctx,
+			float64(time.Since(concurrentStart).Milliseconds()),
+		)
+
 		if err != nil {
 			return nil, nil, fmt.Errorf("inertia: failed to resolve concurrent props: %w", err)
 		}
 
-		for i, r := range results {
+		for i, result := range results {
 			prop := concurrentProps[i]
 			key := prop.Key()
 
-			if r.Err != nil {
-				if re, ok := errors.AsType[*inertiaprop.RescueError](r.Err); ok {
+			if result.Err != nil {
+				if re, ok := errors.AsType[*inertiaprop.RescueError](result.Err); ok {
 					d("rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
 
@@ -257,12 +303,16 @@ func resolvePartialComponentRequest(
 
 				return nil, nil, fmt.Errorf(
 					"inertia: failed to resolve prop %s: %w",
-					key, r.Err,
+					key, result.Err,
 				)
 			}
 
-			m[key] = r.Value
+			m[key] = result.Value
 		}
+	}
+
+	if rescuedPropsCount := len(rescuedProps); rescuedPropsCount > 0 {
+		r.rescuedPropsCounter.Add(ctx, int64(rescuedPropsCount))
 	}
 
 	return m, rescuedProps, nil

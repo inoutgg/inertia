@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.segfaultmedaddy.com/inertia"
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/inertiascroll"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
@@ -80,7 +81,7 @@ func TestScrollProp(t *testing.T) {
 	t.Run("should return error when scroll merge intent is invalid", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := inertiaprotocol.Render(t.Context(), inertiaprotocol.Request{
+		_, err := inertiaprotocol.New(inertiaotel.DefaultConfig).Render(t.Context(), inertiaprotocol.Request{
 			URL:               "/users",
 			ScrollMergeIntent: "sideways",
 		}, inertiaprotocol.Context{

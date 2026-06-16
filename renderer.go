@@ -10,19 +10,21 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/alitto/pond/v2"
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
 	"go.segfaultmedaddy.com/inertia/inertiaalways"
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
-	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 const (
@@ -71,15 +73,16 @@ type Config struct {
 	// Telemetry configures OpenTelemetry tracing and metrics.
 	//
 	// If zero, telemetry is a no-op.
-	Telemetry otelutil.TelemetryConfig
+	Telemetry *inertiaotel.Config
 }
 
 func (c *Config) defaults() {
+	if c.Telemetry == nil {
+		c.Telemetry = inertiaotel.DefaultConfig
+	}
+
 	c.RootViewID = cmp.Or(c.RootViewID, DefaultRootViewID)
 	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
-	c.Telemetry.Defaults()
-
-	debug.Assert(c.RootViewID != "", "RooViewID must be non-empty string")
 }
 
 // Renderer handles Inertia.js page responses, supporting both client-side and server-side rendering.
@@ -96,7 +99,9 @@ type Renderer struct {
 	version         string
 	jsonMarshalOpts []json.Options
 	rootViewAttrs   []pair[[]byte, []byte]
-	telemetry       otelutil.TelemetryConfig
+	telemetry       *inertiaotel.Config
+	renderDuration  metric.Float64Histogram
+	protocol        *inertiaprotocol.Renderer
 }
 
 // New creates a Renderer with the provided HTML template and configuration.
@@ -117,7 +122,7 @@ func New(t *template.Template, config *Config) *Renderer {
 		attrs = append(attrs, pair[[]byte, []byte]{[]byte(key), []byte(value)})
 	}
 
-	r := &Renderer{
+	r := &Renderer{ //nolint:exhaustruct
 		t:               t,
 		ssrClient:       config.SSRClient,
 		jsonMarshalOpts: config.JSONMarshalOptions,
@@ -126,10 +131,23 @@ func New(t *template.Template, config *Config) *Renderer {
 		rootViewAttrs:   attrs,
 		resultPool:      pond.NewResultPool[inertiaprotocol.Result](config.Concurrency),
 		telemetry:       config.Telemetry,
+		protocol:        inertiaprotocol.New(config.Telemetry),
+	}
+
+	var err error
+
+	r.renderDuration, err = config.Telemetry.Meter().Float64Histogram(
+		"inertia.render.duration",
+		metric.WithUnit("ms"),
+		metric.WithDescription("Duration of Inertia page rendering"),
+	)
+	if err != nil {
+		d("failed to create inertia.render.duration histogram: %v", err)
 	}
 
 	debug.Assert(r.t != nil, "expected t to be defined")
 	debug.Assert(r.rootViewID != "", "expected RootViewID to be defined")
+	debug.Assert(r.telemetry != nil, "expected telemetry to be defined")
 
 	return r
 }
@@ -173,23 +191,35 @@ func (r *Renderer) render(
 	debug.Assert(r.t != nil, "Renderer template must be set")
 	debug.Assert(name != "", "component name must be non-empty")
 
-	ctx, span := r.telemetry.Span(ctx, "inertia.render",
-		trace.WithSpanKind(trace.SpanKindInternal))
-	defer span.End()
+	start := time.Now()
+	requestType := requestType(req)
 
-	span.SetAttributes(
-		attribute.String("inertia.component", name),
-		attribute.String("inertia.request.type", requestType(req)),
-		attribute.String("inertia.render.type", renderType(req)),
-		attribute.Bool("inertia.ssr.enabled", r.ssrClient != nil),
+	ctx, span := r.telemetry.Tracer().Start(
+		ctx,
+		"inertia.render",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("inertia.component", name),
+			attribute.String("inertia.request.type", requestType),
+			attribute.String("inertia.render.type", renderType(req)),
+			attribute.Bool("inertia.ssr.enabled", r.ssrClient != nil),
+		),
 	)
+
+	defer func() {
+		span.End()
+
+		r.renderDuration.Record(ctx, float64(time.Since(start).Milliseconds()),
+			metric.WithAttributes(attribute.String("inertia.request.type", requestType)),
+		)
+	}()
 
 	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
 	rawProps = append(rawProps, makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
 
-	page, err := inertiaprotocol.Render(ctx, inertiaprotocol.Request{
+	page, err := r.protocol.Render(ctx, inertiaprotocol.Request{
 		URL:               req.URL,
 		PartialComponent:  req.PartialComponent,
 		ScrollMergeIntent: req.ScrollMergeIntent,

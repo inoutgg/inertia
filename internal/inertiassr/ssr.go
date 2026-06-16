@@ -8,7 +8,9 @@ import (
 
 	"github.com/go-json-experiment/json"
 	"go.inout.gg/foundations/debug"
+	"go.opentelemetry.io/otel/metric"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
@@ -30,21 +32,62 @@ type SSRClient interface {
 
 // ssr is an HTTP client that makes requests to a server-side rendering service.
 type ssr struct {
-	client *http.Client
-	url    string
+	ssrFallbackCounter metric.Int64Counter
+	client             *http.Client
+	telemetry          *inertiaotel.Config
+	url                string
 }
 
-func NewHTTPSsrClient(url string, client *http.Client) SSRClient {
+type Option func(*ssr)
+
+func WithHTTPClient(client *http.Client) Option {
+	return func(s *ssr) { s.client = client }
+}
+
+func WithTelemetry(t *inertiaotel.Config) Option {
+	return func(s *ssr) { s.telemetry = t }
+}
+
+func NewHTTPSsrClient(url string, opts ...Option) SSRClient {
+	//nolint:exhaustruct
+	client := &ssr{
+		client:    http.DefaultClient,
+		telemetry: inertiaotel.DefaultConfig,
+		url:       url,
+	}
+	for _, opt := range opts {
+		opt(client)
+	}
+
 	debug.Assert(url != "", "url must be provided")
 	debug.Assert(client != nil, "client must be provided")
+	debug.Assert(client.telemetry != nil, "telemetry config must be provided")
 
-	return &ssr{client, url}
+	var err error
+
+	client.ssrFallbackCounter, err = client.telemetry.Meter().Int64Counter(
+		"inertia.ssr.client_render_fallback",
+		metric.WithDescription("Number of SSR fallbacks to client-side rendering"),
+	)
+	if err != nil {
+		d("failed to create inertia.ssr.client_render_fallback counter: %v", err)
+	}
+
+	return client
 }
 
 func (s *ssr) Render(ctx context.Context, page *inertiaprotocol.Page) (*SSRTemplateData, error) {
 	debug.Assert(page != nil, "page must be set")
 
 	d("requesting render of %q from %s", page.Component, s.url)
+
+	var err error
+
+	defer func() {
+		if err != nil {
+			s.ssrFallbackCounter.Add(ctx, 1)
+		}
+	}()
 
 	b, err := json.Marshal(page)
 	if err != nil {
@@ -67,6 +110,7 @@ func (s *ssr) Render(ctx context.Context, page *inertiaprotocol.Page) (*SSRTempl
 
 	if resp.StatusCode != http.StatusOK {
 		d("upstream returned status %d for %q", resp.StatusCode, page.Component)
+
 		return nil, fmt.Errorf("inertia: unexpected HTTP status code: %d", resp.StatusCode)
 	}
 
