@@ -9,10 +9,11 @@ import (
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
-	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 type (
@@ -73,7 +74,7 @@ type MiddlewareConfig struct {
 	// TelemetryConfig configures OpenTelemetry tracing and metrics.
 	//
 	// If zero, telemetry is a no-op.
-	TelemetryConfig otelutil.TelemetryConfig
+	TelemetryConfig *inertiaotel.Config
 }
 
 func (m *MiddlewareConfig) defaults() {
@@ -89,7 +90,9 @@ func (m *MiddlewareConfig) defaults() {
 		m.InvalidRequestHandler = DefaultInvalidRequestHandler
 	}
 
-	m.TelemetryConfig.Defaults()
+	if m.TelemetryConfig == nil {
+		m.TelemetryConfig = inertiaotel.DefaultConfig
+	}
 
 	debug.Assert(m.EmptyResponseHandler != nil, "EmptyResponseHandler must be set")
 	debug.Assert(m.VersionMismatchHandler != nil, "VersionMismatchHandler must be set")
@@ -126,12 +129,9 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 			)
 
 			if err != nil {
-				span.AddEvent("inertia.request.invalid",
-					trace.WithAttributes(attribute.String("error", err.Error())))
-			}
-
-			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				config.InvalidRequestHandler(w, r, err)
+
 				return
 			}
 

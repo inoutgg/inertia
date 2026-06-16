@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 )
@@ -32,6 +33,7 @@ type ContextOption func(*inertiaprotocol.Context)
 type PropTestBuilder struct {
 	expectErr  error
 	t          *testing.T
+	renderer   *inertiaprotocol.Renderer
 	request    inertiaprotocol.Request
 	props      []inertiaprop.Prop
 	assertions []PropAssert
@@ -42,8 +44,9 @@ func NewPropTestBuilder(t *testing.T, request inertiaprotocol.Request) *PropTest
 	t.Helper()
 
 	return &PropTestBuilder{ //nolint:exhaustruct
-		t:       t,
-		request: request,
+		t:        t,
+		request:  request,
+		renderer: inertiaprotocol.New(inertiaotel.DefaultConfig),
 	}
 }
 
@@ -249,7 +252,7 @@ func (b *PropTestBuilder) Run(opts ...ContextOption) *inertiaprotocol.Page {
 		opt(&ctx)
 	}
 
-	page, err := inertiaprotocol.Render(b.t.Context(), b.request, ctx)
+	page, err := b.renderer.Render(b.t.Context(), b.request, ctx)
 	if b.expectErr != nil {
 		require.Error(b.t, err)
 		assert.ErrorIs(b.t, err, b.expectErr)

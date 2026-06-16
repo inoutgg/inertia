@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-json-experiment/json"
 	"github.com/go-playground/form/v4"
@@ -19,12 +21,13 @@ import (
 	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
 	"go.segfaultmedaddy.com/inertia"
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
-	"go.segfaultmedaddy.com/inertia/otelutil"
 )
 
 var d = debug.Debuglog("inertiaframe") //nolint:gochecknoglobals
@@ -349,7 +352,13 @@ type MountConfig[M any] struct {
 	// TelemetryConfig configures OpenTelemetry tracing and metrics.
 	//
 	// If zero, telemetry is a no-op.
-	TelemetryConfig otelutil.TelemetryConfig
+	TelemetryConfig *inertiaotel.Config
+}
+
+func (c *MountConfig[M]) defaults() {
+	if c.TelemetryConfig == nil {
+		c.TelemetryConfig = inertiaotel.DefaultConfig
+	}
 }
 
 // Mount registers an Endpoint on a Mux, creating an HTTP handler that:
@@ -366,6 +375,7 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 
 	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
 	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
+	opts.defaults()
 
 	debug.Assert(mux != nil, "Mux must not be nil")
 	debug.Assert(endpoint != nil, "Executor must not be nil")
@@ -402,11 +412,39 @@ func newHandler[M any](
 	validator Validator[M],
 	formDecoder *form.Decoder,
 	jsonUnmarshalOptions []json.Options,
-	tc otelutil.TelemetryConfig,
+	telemetry *inertiaotel.Config,
 ) http.Handler {
 	debug.Assert(endpoint != nil, "Endpoint must not be nil")
 	debug.Assert(errorHandler != nil, "ErrorHandler must be set")
 	debug.Assert(formDecoder != nil, "FormDecoder must be set")
+	debug.Assert(telemetry != nil, "Telemetry must be set")
+
+	meter := telemetry.Meter()
+
+	endpointDuration, err := meter.Float64Histogram(
+		"inertiaframe.endpoint.duration",
+		metric.WithUnit("ms"),
+		metric.WithDescription("Duration of inertiaframe endpoint execution"),
+	)
+	if err != nil {
+		d("failed to create inertiaframe.endpoint.duration histogram: %v", err)
+	}
+
+	validationErrorsCounter, err := meter.Int64Counter(
+		"inertiaframe.validation_error",
+		metric.WithDescription("Number of validation errors"),
+	)
+	if err != nil {
+		d("failed to create inertiaframe.validation_error counter: %v", err)
+	}
+
+	emptyResponsesCounter, err := meter.Int64Counter(
+		"inertiaframe.empty_response",
+		metric.WithDescription("Number of empty responses from endpoints"),
+	)
+	if err != nil {
+		d("failed to create inertiaframe.empty_response counter: %v", err)
+	}
 
 	handleError := httphandler.WithErrorHandler(errorHandler)
 
@@ -416,16 +454,16 @@ func newHandler[M any](
 			renderCtx inertia.RenderContext
 		)
 
-		ctx := r.Context()
-
-		ctx, span := tc.Span(ctx, "inertiaframe.endpoint",
-			trace.WithSpanKind(trace.SpanKindInternal))
-		defer span.End()
-
-		span.SetAttributes(
-			attribute.String("inertiaframe.endpoint.method", endpoint.Meta().Method),
-			attribute.String("inertiaframe.endpoint.path", endpoint.Meta().Path),
+		ctx, span := telemetry.Tracer().Start(
+			r.Context(),
+			"inertiaframe.endpoint",
+			trace.WithSpanKind(trace.SpanKindInternal),
+			trace.WithAttributes(
+				attribute.String("inertiaframe.endpoint.method", endpoint.Meta().Method),
+				attribute.String("inertiaframe.endpoint.path", endpoint.Meta().Path),
+			),
 		)
+		defer span.End()
 
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
@@ -437,6 +475,8 @@ func newHandler[M any](
 			if err != nil {
 				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
 			}
+
+			span.SetAttributes(attribute.String("inertiframe.request.mime", mediaType))
 
 			// Inertia accepts only JSON or multipart/form-data.
 			switch mediaType {
@@ -474,16 +514,17 @@ func newHandler[M any](
 			if err := validator.Validate(msg); err != nil {
 				d("failed to validate request")
 
+				validationErrorsCounter.Add(ctx, 1, metric.WithAttributes(
+					attribute.String("inertiaframe.error_bag", inertia.ErrorBagFromRequest(r)),
+				))
+
 				return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
 			}
 		}
 
-		ctx, execSpan := tc.Span(ctx, "inertiaframe.execute",
-			trace.WithSpanKind(trace.SpanKindInternal))
-
+		execStart := time.Now()
 		resp, err := endpoint.Execute(ctx, newRequest(msg))
-
-		execSpan.End()
+		endpointDuration.Record(ctx, float64(time.Since(execStart).Milliseconds()))
 
 		if err != nil {
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
@@ -491,6 +532,8 @@ func newHandler[M any](
 
 		if resp == nil {
 			d("received empty response")
+
+			emptyResponsesCounter.Add(ctx, 1)
 
 			return ErrEmptyResponse
 		}
@@ -514,6 +557,15 @@ func newHandler[M any](
 
 			renderCtx.ClearHistory = opts.ClearHistory
 			renderCtx.EncryptHistory = opts.EncryptHistory
+
+			span.SetAttributes(
+				attribute.String(
+					"inertiaframe.response.clear_history",
+					strconv.FormatBool(opts.ClearHistory),
+				),
+				attribute.String("inertiaframe.response.encrypt_history",
+					strconv.FormatBool(opts.EncryptHistory)),
+			)
 		}
 
 		var sharedProps []inertia.Prop
@@ -546,10 +598,18 @@ func newHandler[M any](
 		if errors != nil {
 			renderCtx.ErrorBag = sess.ErrorBag()
 			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errors))
+
+			validationErrorsCounter.Add(ctx, int64(len(errors)), metric.WithAttributes(
+				attribute.String("inertiaframe.error_bag", renderCtx.ErrorBag),
+			))
 		}
 
 		component := resp.Component()
 		debug.Assert(component != "", "component must not be empty, when using non RawResponseWriter")
+
+		span.SetAttributes(
+			attribute.String("inertiaframe.response.component", component),
+		)
 
 		d("rendering %q with %d props and %d shared props",
 			component, len(props), len(sharedProps))

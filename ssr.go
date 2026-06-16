@@ -3,6 +3,7 @@ package inertia
 import (
 	"net/http"
 
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiassr"
 )
 
@@ -14,12 +15,21 @@ type (
 	SsrTemplateData = inertiassr.SSRTemplateData
 )
 
-// NewHTTPSsrClient creates an HTTP-based SSR client that sends render requests to the specified URL.
-// If client is nil, http.DefaultClient is used.
-func NewHTTPSsrClient(url string, client *http.Client) SSRClient {
-	if client == nil {
-		client = http.DefaultClient
-	}
+// SSROption configures an HTTP-based SSR client.
+type SSROption = inertiassr.Option
 
-	return inertiassr.NewHTTPSsrClient(url, client)
+// WithSSRClient sets the HTTP client used to send SSR requests.
+func WithSSRClient(client *http.Client) SSROption {
+	return inertiassr.WithHTTPClient(client)
+}
+
+// WithSSRTelemetry sets the OpenTelemetry config used to record SSR metrics.
+func WithSSRTelemetry(tc *inertiaotel.Config) SSROption {
+	return inertiassr.WithTelemetry(tc)
+}
+
+// NewHTTPSsrClient creates an HTTP-based SSR client that sends render requests to the specified URL.
+// The telemetry config is required (use WithSSRTelemetry) to enable OpenTelemetry metrics.
+func NewHTTPSsrClient(url string, opts ...SSROption) SSRClient {
+	return inertiassr.NewHTTPSsrClient(url, opts...)
 }
