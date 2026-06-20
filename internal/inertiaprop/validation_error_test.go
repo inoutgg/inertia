@@ -1,4 +1,4 @@
-package inertia
+package inertiaprop
 
 import (
 	"testing"

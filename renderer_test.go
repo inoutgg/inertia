@@ -16,6 +16,7 @@ import (
 
 	"go.segfaultmedaddy.com/inertia/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 	"go.segfaultmedaddy.com/inertia/internal/inertiassr"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
 )
@@ -198,7 +199,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 		validateResponse   responseValidator
 		name               string
 		componentName      string
-		options            []Option
+		options            []RenderContextOption
 		expectedStatusCode int
 		expectJSON         bool
 		expectError        bool
@@ -211,7 +212,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{},
 			componentName:      "TestComponent",
-			options:            []Option{},
+			options:            []RenderContextOption{},
 			expectedStatusCode: http.StatusOK,
 			expectedHeaders: map[string]string{
 				inertiaheader.HeaderContentType: inertiaheader.ContentTypeHTML,
@@ -235,7 +236,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				Inertia: true,
 			},
 			componentName:      "TestComponent",
-			options:            []Option{},
+			options:            []RenderContextOption{},
 			expectedStatusCode: http.StatusOK,
 			expectedHeaders: map[string]string{
 				inertiaheader.HeaderContentType: inertiaheader.ContentTypeJSON,
@@ -264,7 +265,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{},
 			componentName:      "TestComponent",
-			options:            []Option{},
+			options:            []RenderContextOption{},
 			expectedStatusCode: http.StatusOK,
 			expectedHeaders: map[string]string{
 				inertiaheader.HeaderContentType: inertiaheader.ContentTypeHTML,
@@ -286,7 +287,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{},
 			componentName:      "TestComponent",
-			options:            []Option{},
+			options:            []RenderContextOption{},
 			expectedStatusCode: http.StatusOK,
 			expectError:        false,
 			validateResponse: func(t *testing.T, body []byte) {
@@ -309,7 +310,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{},
 			componentName:      "TestComponent",
-			options:            []Option{},
+			options:            []RenderContextOption{},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
 			expectError:        false,
@@ -328,7 +329,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
 			componentName: "TestComponent",
-			options: []Option{
+			options: []RenderContextOption{
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
 					NewValidationError("email", "Invalid email"),
@@ -365,7 +366,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				Inertia: true,
 			},
 			componentName: "TestComponent",
-			options: []Option{
+			options: []RenderContextOption{
 				WithValidationErrors(ValidationErrors{
 					NewValidationError("name", "Name is required"),
 				}, "custom_errors"),
@@ -401,7 +402,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:     &inertiatest.RequestConfig{Inertia: true},
 			componentName: "TestComponent",
-			options: []Option{
+			options: []RenderContextOption{
 				WithSharedProps(Props{
 					inertiaprop.New("auth", "shared"),
 				}),
@@ -438,7 +439,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{Inertia: true},
 			componentName:      "TestComponent",
-			options:            []Option{WithClearHistory()},
+			options:            []RenderContextOption{WithClearHistory()},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
 			expectError:        false,
@@ -463,7 +464,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{Inertia: true},
 			componentName:      "TestComponent",
-			options:            []Option{WithEncryptHistory()},
+			options:            []RenderContextOption{WithEncryptHistory()},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
 			expectError:        false,
@@ -488,7 +489,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			}),
 			reqConfig:          &inertiatest.RequestConfig{Inertia: true},
 			componentName:      "TestComponent",
-			options:            []Option{WithPreserveFragment()},
+			options:            []RenderContextOption{WithPreserveFragment()},
 			expectedStatusCode: http.StatusOK,
 			expectJSON:         false,
 			expectError:        false,
@@ -630,7 +631,7 @@ func TestRenderer_render(t *testing.T) {
 
 		// arrange
 		renderer := New(testTpl, &Config{Version: "1.0.0"})
-		req := request{
+		req := inertiahttp.Request{
 			URL:       "/users",
 			IsInertia: true,
 			Version:   "1.0.0",
@@ -638,7 +639,7 @@ func TestRenderer_render(t *testing.T) {
 		rCtx := NewRenderContext(WithProps(Props{inertiaprop.New("name", "Roman")}))
 
 		// act
-		resp, err := renderer.render(t.Context(), req, "Users/Index", rCtx)
+		resp, err := renderer.Render(t.Context(), req, "Users/Index", rCtx)
 
 		// assert
 		require.NoError(t, err)
@@ -653,71 +654,6 @@ func TestRenderer_render(t *testing.T) {
 		assert.Equal(t, "Users/Index", page["component"])
 		assert.Equal(t, "/users", page["url"])
 	})
-}
-
-func TestParseHeaderValueList(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		header   string
-		expected []string
-	}{
-		{
-			name:     "empty header",
-			header:   "",
-			expected: nil,
-		},
-		{
-			name:     "single value",
-			header:   "test",
-			expected: []string{"test"},
-		},
-		{
-			name:     "multiple values",
-			header:   "test1,test2,test3",
-			expected: []string{"test1", "test2", "test3"},
-		},
-		{
-			name:     "values with whitespace",
-			header:   " test1 , test2 , test3 ",
-			expected: []string{"test1", "test2", "test3"},
-		},
-		{
-			name:     "values with mixed whitespace",
-			header:   "test1,  test2,test3  ",
-			expected: []string{"test1", "test2", "test3"},
-		},
-		{
-			name:     "values with dots",
-			header:   "user.name,user.email,user.age",
-			expected: []string{"user.name", "user.email", "user.age"},
-		},
-		{
-			name:     "single value with whitespace",
-			header:   " test ",
-			expected: []string{"test"},
-		},
-		{
-			name:   "empty values between commas",
-			header: "test1,,test2",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := parseHeaderValueList(tt.header, "Test-Header")
-			if tt.expected == nil && tt.header != "" {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result, "extracted list should match expected values")
-		})
-	}
 }
 
 func TestRender_WithoutMiddleware(t *testing.T) {

@@ -12,6 +12,9 @@ const (
 	HeaderXInertiaErrorBag         = "X-Inertia-Error-Bag"                    // client
 	HeaderXInertiaScrollMerge      = "X-Inertia-Infinite-Scroll-Merge-Intent" // client, append/prepend
 	HeaderXInertiaExceptOnceProps  = "X-Inertia-Except-Once-Props"            // client, once props already loaded
+	HeaderPrecognition             = "Precognition"                           // client/server, form validation
+	HeaderPrecognitionValidateOnly = "Precognition-Validate-Only"             // client, form validation fields
+	HeaderPrecognitionSuccess      = "Precognition-Success"                   // server, successful validation
 
 	HeaderVary        = "Vary"
 	HeaderContentType = "Content-Type"
