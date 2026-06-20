@@ -27,6 +27,7 @@ import (
 	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprecognition"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
 )
 
@@ -292,6 +293,9 @@ type Meta struct {
 
 	// Path is the URL pattern, following http.ServeMux syntax (e.g., "/users/{id}").
 	Path string
+
+	// Precognition enables Precognition validation requests for this route.
+	Precognition bool
 }
 
 // Validator validates parsed request messages before execution.
@@ -395,6 +399,7 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 		endpoint,
 		opts.ErrorHandler,
 		opts.Validator,
+		m.Precognition,
 		opts.FormDecoder,
 		opts.JSONUnmarshalOptions,
 		opts.TelemetryConfig,
@@ -410,6 +415,7 @@ func newHandler[M any](
 	endpoint Endpoint[M],
 	errorHandler httphandler.ErrorHandler,
 	validator Validator[M],
+	precognition bool,
 	formDecoder *form.Decoder,
 	jsonUnmarshalOptions []json.Options,
 	telemetry *inertiaotel.Config,
@@ -446,7 +452,39 @@ func newHandler[M any](
 		d("failed to create inertiaframe.empty_response counter: %v", err)
 	}
 
-	handleError := httphandler.WithErrorHandler(errorHandler)
+	errorResponsesCounter, err := meter.Int64Counter(
+		"inertiaframe.error_response",
+		metric.WithDescription("Number of error responses from endpoints"),
+	)
+	if err != nil {
+		d("failed to create inertiaframe.error_response counter: %v", err)
+	}
+
+	handleError := httphandler.WithErrorHandler(httphandler.ErrorHandlerFunc(func(
+		w http.ResponseWriter,
+		r *http.Request,
+		err error,
+	) {
+		if precognition && inertiaprecognition.IsRequest(r) {
+			if validationErr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
+				validationErrs := inertiaprecognition.FilterValidationErrors(
+					r,
+					validationErr.ValidationErrors(),
+				)
+				if len(validationErrs) == 0 {
+					inertiaprecognition.WriteSuccess(w)
+					return
+				}
+
+				inertiaprecognition.WriteValidationErrors(w, validationErrs)
+
+				return
+			}
+		}
+
+		errorResponsesCounter.Add(r.Context(), 1)
+		errorHandler.ServeHTTP(w, r, err)
+	}))
 
 	return handleError(httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		var (
@@ -476,7 +514,7 @@ func newHandler[M any](
 				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
 			}
 
-			span.SetAttributes(attribute.String("inertiframe.request.mime", mediaType))
+			span.SetAttributes(attribute.String("inertiaframe.request.mime", mediaType))
 
 			// Inertia accepts only JSON or multipart/form-data.
 			switch mediaType {
@@ -518,8 +556,13 @@ func newHandler[M any](
 					attribute.String("inertiaframe.error_bag", inertia.ErrorBagFromRequest(r)),
 				))
 
-				return fmt.Errorf("inertiaframe: failed to validate request: %w", err)
+				return fmt.Errorf("inertiaframe: validation failed for request: %w", err)
 			}
+		}
+
+		if precognition && inertiaprecognition.IsRequest(r) {
+			inertiaprecognition.WriteSuccess(w)
+			return nil
 		}
 
 		execStart := time.Now()
@@ -593,15 +636,17 @@ func newHandler[M any](
 			return fmt.Errorf("inertiaframe: failed to get session: %w", err)
 		}
 
-		errors := sess.ValidationErrors()
-
-		if errors != nil {
+		if errs := sess.ValidationErrors(); errs != nil {
 			renderCtx.ErrorBag = sess.ErrorBag()
-			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errors))
+			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errs))
 
-			validationErrorsCounter.Add(ctx, int64(len(errors)), metric.WithAttributes(
-				attribute.String("inertiaframe.error_bag", renderCtx.ErrorBag),
-			))
+			validationErrorsCounter.Add(
+				ctx,
+				int64(len(errs)),
+				metric.WithAttributes(
+					attribute.String("inertiaframe.error_bag", renderCtx.ErrorBag),
+				),
+			)
 		}
 
 		component := resp.Component()

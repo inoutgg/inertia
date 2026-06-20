@@ -14,6 +14,7 @@ import (
 
 	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
+	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 )
 
 type (
@@ -119,11 +120,10 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			req, err := parseRequest(r)
+			req, err := inertiahttp.ParseRequest(r)
 
 			span := trace.SpanFromContext(r.Context())
 			span.SetAttributes(
-				attribute.String("inertia.request.type", requestType(req)),
 				attribute.Bool("inertia.version.mismatch",
 					req.IsInertia && req.Version != renderer.Version()),
 			)
@@ -178,117 +178,7 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 // RenderContext contains all configuration and data for rendering an Inertia.js page response.
 // It includes props, validation errors, history management options, and performance settings.
-type RenderContext struct {
-	// T is custom data passed to the HTML template via html/template.
-	T any
-
-	// Props are the properties sent to the page component.
-	Props []Prop
-
-	// SharedProps are globally shared properties sent to the page component.
-	SharedProps []Prop
-
-	// ErrorBag specifies the validation error bag name for scoped error handling.
-	ErrorBag string
-
-	// ValidationErrorer contains validation errors to be sent to the client.
-	ValidationErrorer []ValidationErrorer
-
-	// EncryptHistory instructs the client to encrypt the history state for this page.
-	EncryptHistory bool
-
-	// ClearHistory instructs the client to clear the history stack.
-	ClearHistory bool
-
-	// PreserveFragment instructs the client to preserve the current URL fragment.
-	PreserveFragment bool
-}
-
-// NewRenderContext creates a RenderContext configured with the provided options.
-// Options are applied in order and can be combined to build up the desired page state.
-func NewRenderContext(opts ...Option) RenderContext {
-	var ctx RenderContext
-	for _, opt := range opts {
-		opt(&ctx)
-	}
-
-	return ctx
-}
-
-// AddValidationErrorer appends validation errors to the context.
-// Multiple calls accumulate errors into a single error bag.
-func (ctx *RenderContext) AddValidationErrorer(err ValidationErrorer) {
-	if ctx.ValidationErrorer == nil {
-		ctx.ValidationErrorer = make([]ValidationErrorer, 0, 1)
-	}
-
-	ctx.ValidationErrorer = append(ctx.ValidationErrorer, err)
-}
-
-// Option is a function that configures a RenderContext.
-type Option func(*RenderContext)
-
-// WithClearHistory instructs the client to clear its history stack when rendering this page.
-func WithClearHistory() Option {
-	return func(opt *RenderContext) { opt.ClearHistory = true }
-}
-
-// WithEncryptHistory instructs the client to encrypt the history state.
-func WithEncryptHistory() Option {
-	return func(opt *RenderContext) { opt.EncryptHistory = true }
-}
-
-// WithPreserveFragment instructs the client to preserve the current URL fragment.
-func WithPreserveFragment() Option {
-	return func(opt *RenderContext) { opt.PreserveFragment = true }
-}
-
-// WithProps adds properties to the page component.
-//
-// Multiple calls append additional props to the existing set.
-func WithProps(props Proper) Option {
-	return func(renderCtx *RenderContext) {
-		if props == nil {
-			return
-		}
-
-		if renderCtx.Props == nil {
-			renderCtx.Props = make([]Prop, 0, props.Len())
-		}
-
-		renderCtx.Props = append(renderCtx.Props, props.Props()...)
-	}
-}
-
-// WithSharedProps adds shared properties to the page component.
-func WithSharedProps(props Proper) Option {
-	return func(renderCtx *RenderContext) {
-		if props == nil {
-			return
-		}
-
-		if renderCtx.SharedProps == nil {
-			renderCtx.SharedProps = make([]Prop, 0, props.Len())
-		}
-
-		renderCtx.SharedProps = append(renderCtx.SharedProps, props.Props()...)
-	}
-}
-
-// WithValidationErrors adds validation errors to be displayed on the page.
-// Multiple calls append errors to the same or different error bags.
-//
-// The errorBag parameter allows scoping errors to specific forms on the same page.
-func WithValidationErrors(errorers ValidationErrorer, errorBag string) Option {
-	return func(renderCtx *RenderContext) {
-		if errorers == nil {
-			return
-		}
-
-		renderCtx.AddValidationErrorer(errorers)
-		renderCtx.ErrorBag = errorBag
-	}
-}
+type RenderContext = inertiahttp.RenderContext
 
 // Render sends an Inertia.js page response with the specified component and context.
 // It automatically detects whether to send JSON (for Inertia requests) or HTML (for full page loads).
@@ -300,21 +190,21 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx R
 	debug.Assert(r != nil, "Request must not be nil")
 	debug.Assert(componentName != "", "component name must be non-empty")
 
-	render, ok := r.Context().Value(kCtxKey).(*Renderer)
+	renderer, ok := r.Context().Value(kCtxKey).(*Renderer)
 	if !ok {
 		return errors.New(
 			"inertia: renderer not found in request context - did you forget to use the middleware?",
 		)
 	}
 
-	req, err := parseRequest(r)
+	req, err := inertiahttp.ParseRequest(r)
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck
 	}
 
-	resp, err := render.render(r.Context(), req, componentName, rCtx)
+	resp, err := renderer.Render(r.Context(), req, componentName, rCtx)
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck
 	}
 
 	for key, value := range resp.Headers {
@@ -335,16 +225,4 @@ func MustRender(w http.ResponseWriter, req *http.Request, name string, r RenderC
 	debug.Assert(name != "", "component name must be non-empty")
 
 	must.Must1(Render(w, req, name, r))
-}
-
-func requestType(req request) string {
-	if !req.IsInertia {
-		return "non_inertia"
-	}
-
-	if req.PartialComponent != "" {
-		return "partial"
-	}
-
-	return "full"
 }

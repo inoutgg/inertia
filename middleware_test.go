@@ -219,32 +219,6 @@ func TestMiddleware(t *testing.T) {
 				},
 			},
 			{
-				name: "empty partial data value",
-				configure: func(r *http.Request) {
-					r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, "Users/Index")
-					r.Header.Set(inertiaheader.HeaderXInertiaPartialData, "users,,roles")
-				},
-			},
-			{
-				name: "empty partial except value",
-				configure: func(r *http.Request) {
-					r.Header.Set(inertiaheader.HeaderXInertiaPartialComponent, "Users/Index")
-					r.Header.Set(inertiaheader.HeaderXInertiaPartialExcept, "users, ")
-				},
-			},
-			{
-				name: "empty reset value",
-				configure: func(r *http.Request) {
-					r.Header.Set(inertiaheader.HeaderXInertiaReset, "users,,roles")
-				},
-			},
-			{
-				name: "empty once prop value",
-				configure: func(r *http.Request) {
-					r.Header.Set(inertiaheader.HeaderXInertiaExceptOnceProps, "plans,,rates")
-				},
-			},
-			{
 				name: "missing partial component",
 				configure: func(r *http.Request) {
 					r.Header.Set(inertiaheader.HeaderXInertiaPartialData, "users")
