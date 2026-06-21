@@ -1,7 +1,6 @@
 package inertia
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -525,10 +524,13 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 				opt(&rCtx)
 			}
 
-			req = req.WithContext(context.WithValue(req.Context(), kCtxKey, tt.renderer))
+			scope, err := tt.renderer.NewScope(req)
+			require.NoError(t, err)
+
+			req = inertiahttp.WithRenderScope(req, scope)
 
 			// Call the package-level HTTP Render function
-			err := Render(w, req, tt.componentName, rCtx)
+			err = Render(w, req, tt.componentName, rCtx)
 
 			// Check for expected error conditions
 			if tt.expectError {
@@ -656,20 +658,6 @@ func TestRenderer_render(t *testing.T) {
 	})
 }
 
-func TestRender_WithoutMiddleware(t *testing.T) {
-	t.Parallel()
-
-	// arrange
-	req, w := inertiatest.NewRequest(http.MethodGet, "/", nil)
-
-	// act
-	err := Render(w, req, "TestComponent", RenderContext{})
-
-	// assert
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "renderer not found in request context")
-}
-
 func TestErrorBagFromRequest(t *testing.T) {
 	t.Parallel()
 
@@ -746,7 +734,7 @@ func TestRedirectPreserveFragment(t *testing.T) {
 		})
 
 		// act
-		RedirectPreserveFragment(w, req, "/target")
+		Redirect(w, req, "/target")
 
 		// assert
 		assert.Equal(t, http.StatusConflict, w.Code)
@@ -761,7 +749,7 @@ func TestRedirectPreserveFragment(t *testing.T) {
 		req, w := inertiatest.NewRequest(http.MethodGet, "/current", nil)
 
 		// act
-		RedirectPreserveFragment(w, req, "/target")
+		Redirect(w, req, "/target")
 
 		// assert
 		assert.Equal(t, http.StatusFound, w.Code)

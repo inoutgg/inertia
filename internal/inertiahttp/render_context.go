@@ -4,14 +4,13 @@ import "go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 
 var _ Proper = (Props)(nil)
 
-// Prop represents a single property passed to an Inertia page component.
-// Props control data visibility, lazy loading, merging behavior, and resolution timing.
-//
-// To create a prop, use the specialized prop packages:
-// inertiaprop, inertiaalways, inertiaoptional, inertiadeferred, and inertiascroll.
-//
-// Attach props to a page using WithProps option.
 type (
+	// Prop represents a single property passed to an Inertia page component.
+	//
+	// To create a prop, use the specialized prop packages:
+	// inertiaprop, inertiaalways, inertiaoptional, inertiadeferred, and inertiascroll.
+	//
+	// Attach props to a page using WithProps option.
 	Prop = inertiaprop.Prop
 
 	// Lazy represents a prop value that is resolved on-demand rather than eagerly.

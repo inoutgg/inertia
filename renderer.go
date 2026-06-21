@@ -77,8 +77,8 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 
 		h.Del(inertiaheader.HeaderVary)
 		h.Del(inertiaheader.HeaderXInertia)
-		h.Set(inertiaheader.HeaderXInertiaLocation, url) // redirect URL
-		w.WriteHeader(http.StatusConflict)               // 409 Conflict
+		h.Set(inertiaheader.HeaderXInertiaLocation, url)
+		w.WriteHeader(http.StatusConflict)
 
 		return
 	}
@@ -86,17 +86,8 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 	inertiaredirect.Redirect(w, r, url)
 }
 
-// Redirect sends a redirect response to the Inertia app page.
+// Redirect redirects while instructing Inertia to preserve the current URL fragment.
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {
-	debug.Assert(w != nil, "ResponseWriter must not be nil")
-	debug.Assert(r != nil, "Request must not be nil")
-	debug.Assert(url != "", "url must be non-empty")
-
-	inertiaredirect.Redirect(w, r, url)
-}
-
-// RedirectPreserveFragment redirects while instructing Inertia to preserve the current URL fragment.
-func RedirectPreserveFragment(w http.ResponseWriter, r *http.Request, url string) {
 	debug.Assert(w != nil, "ResponseWriter must not be nil")
 	debug.Assert(r != nil, "Request must not be nil")
 	debug.Assert(url != "", "url must be non-empty")

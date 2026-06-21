@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"net/http"
 	"runtime"
 	"strings"
 	"sync"
@@ -91,6 +92,21 @@ func (c *Config) defaults() {
 	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
 }
 
+type RenderScope struct {
+	renderer *Renderer
+	req      Request
+}
+
+func (s *RenderScope) Request() *Request { return &s.req }
+
+func (s *RenderScope) Render(
+	ctx context.Context,
+	name string,
+	renderCtx RenderContext,
+) (Response, error) {
+	return s.renderer.Render(ctx, s.req, name, renderCtx)
+}
+
 // Renderer handles Inertia.js page responses, supporting both client-side and server-side rendering.
 // It manages HTML template rendering, JSON serialization, and prop resolution.
 //
@@ -160,6 +176,19 @@ func New(t *template.Template, config *Config) *Renderer {
 
 // Version returns the current asset version string used for client version validation.
 func (r *Renderer) Version() string { return r.version }
+
+// NewScope returns a scoped render context for the given request.
+func (r *Renderer) NewScope(req *http.Request) (*RenderScope, error) {
+	parsedReq, err := ParseRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RenderScope{
+		renderer: r,
+		req:      parsedReq,
+	}, nil
+}
 
 // Render returns an Inertia response, automatically choosing the format:
 //   - JSON for Inertia requests (XHR navigation)

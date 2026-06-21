@@ -52,12 +52,7 @@ func ParseRequest(r *http.Request) (Request, error) {
 		return req, nil
 	}
 
-	scrollMergeIntent, err := parseScrollMergeIntent(
-		r.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
-	)
-	if err != nil {
-		return req, err
-	}
+	req.Version = r.Header.Get(inertiaheader.HeaderXInertiaVersion)
 
 	precognition := r.Header.Get(inertiaheader.HeaderPrecognition) == inertiaheader.HeaderValueTrue
 	if precognition {
@@ -65,9 +60,20 @@ func ParseRequest(r *http.Request) (Request, error) {
 		req.PrecognitionProps = parseHeaderValueList(
 			r.Header.Get(inertiaheader.HeaderPrecognitionValidateOnly),
 		)
+
+		// If it is a precognition request then we can get the only necessary information
+		// needed for the inertia.Middleware to handle request + precognition request
+		// itself, since the main execution won't happen anyway.
+		return req, nil
 	}
 
-	req.Version = r.Header.Get(inertiaheader.HeaderXInertiaVersion)
+	scrollMergeIntent, err := parseScrollMergeIntent(
+		r.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
+	)
+	if err != nil {
+		return req, err
+	}
+
 	req.PartialComponent = r.Header.Get(inertiaheader.HeaderXInertiaPartialComponent)
 	req.ErrorBag = r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
 	req.ScrollMergeIntent = scrollMergeIntent

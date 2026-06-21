@@ -129,7 +129,7 @@ func Mount[M proto.Message](mux inertiaframe.Mux, endpoint Endpoint[M]) {
 		}),
 		FormDecoder:  inertiaframe.DefaultFormDecoder,
 		ErrorHandler: DefaultErrorHandler,
-		JSONUnmarshalOptions: []json.Options{
+		JSONOptions: []json.Options{
 			json.WithUnmarshalers(json.UnmarshalFunc(protojson.Unmarshal)),
 		},
 	})

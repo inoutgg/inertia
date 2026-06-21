@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 	"go.segfaultmedaddy.com/inertia"
 	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
-	"go.segfaultmedaddy.com/inertia/internal/inertiaprecognition"
+	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
 )
 
@@ -346,8 +347,8 @@ type MountConfig[M any] struct {
 	// Defaults to DefaultErrorHandler if nil.
 	ErrorHandler httphandler.ErrorHandler
 
-	// JSONUnmarshalOptions customizes JSON parsing (e.g., for protobuf).
-	JSONUnmarshalOptions []json.Options
+	// JSONOptions customizes JSON parsing (e.g., for protobuf).
+	JSONOptions []json.Options
 
 	// Middleware wraps the endpoint's HTTP handler in cross-cutting behavior (e.g., logging, auth).
 	// Applied in slice order, with the first element being the outermost wrapper.
@@ -401,13 +402,105 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 		opts.Validator,
 		m.Precognition,
 		opts.FormDecoder,
-		opts.JSONUnmarshalOptions,
+		opts.JSONOptions,
 		opts.TelemetryConfig,
 	)
 
-	h = httpmiddleware.NewChain(opts.Middleware...).Middleware(h)
+	if len(opts.Middleware) > 0 {
+		h = httpmiddleware.NewChain(opts.Middleware...).Middleware(h)
+	}
 
 	mux.Handle(pattern, h)
+}
+
+func handlePrecognition(w http.ResponseWriter, req *inertiahttp.Request,
+	err inertia.ValidationErrorer, jsonOptions []json.Options,
+) error {
+	h := w.Header()
+	h.Set(inertiaheader.HeaderPrecognition, inertiaheader.HeaderValueTrue)
+	h.Add(inertiaheader.HeaderVary, inertiaheader.HeaderPrecognition)
+
+	if err != nil {
+		errorsMap := make(map[string][]string, err.Len())
+
+		errs := err.ValidationErrors()
+		for _, err := range errs {
+			field := err.Field()
+
+			// TODO: implement pattern matching for fields validation since laravel allows it.
+			if len(req.PrecognitionProps) > 0 && slices.Contains(req.PrecognitionProps, field) ||
+				len(req.PrecognitionProps) == 0 {
+				errorsMap[field] = append(errorsMap[field], err.Error())
+			}
+		}
+
+		if len(errorsMap) > 0 {
+			w.Header().Set(inertiaheader.HeaderContentType, inertiaheader.ContentTypeJSON)
+			w.WriteHeader(http.StatusUnprocessableEntity)
+
+			_, _ = w.Write([]byte(`{"errors":`))
+
+			if err := json.MarshalWrite(w, errorsMap, jsonOptions...); err != nil {
+				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+			}
+
+			_, _ = w.Write([]byte{'}'})
+
+			return nil
+		}
+	}
+
+	h.Set(inertiaheader.HeaderPrecognitionSuccess, inertiaheader.HeaderValueTrue)
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
+func decodeBody[M any](
+	ctx context.Context,
+	r *http.Request,
+	formDecoder *form.Decoder,
+	jsonOptions []json.Options,
+) (M, error) {
+	var msg M
+
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get(inertiaheader.HeaderContentType))
+	if err != nil {
+		return msg, fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
+	}
+	defer r.Body.Close()
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attribute.String("inertiaframe.request.mime", mediaType))
+
+	// Inertia accepts only JSON or multipart/form-data.
+	switch mediaType {
+	case mediaTypeJSON:
+		{
+			d("received JSON request")
+
+			err := json.UnmarshalRead(r.Body, &msg, jsonOptions...)
+			if err != nil {
+				return msg, fmt.Errorf("inertiaframe: failed to decode request: %w", err)
+			}
+		}
+	case mediaTypeForm, mediaTypeMultipart:
+		{
+			d("received form request")
+
+			if err := r.ParseForm(); err != nil {
+				return msg, fmt.Errorf("inertiaframe: failed to parse form data: %w", err)
+			}
+
+			if err := formDecoder.Decode(&msg, r.Form); err != nil {
+				return msg, fmt.Errorf("inertiaframe: failed to decode form data: %w", err)
+			}
+		}
+	default:
+		d("unknown Content-Type %q, leaving message empty", mediaType)
+	}
+
+	return msg, nil
 }
 
 // newHandler creates a new http.Handler for the given endpoint.
@@ -417,7 +510,7 @@ func newHandler[M any](
 	validator Validator[M],
 	precognition bool,
 	formDecoder *form.Decoder,
-	jsonUnmarshalOptions []json.Options,
+	jsonOptions []json.Options,
 	telemetry *inertiaotel.Config,
 ) http.Handler {
 	debug.Assert(endpoint != nil, "Endpoint must not be nil")
@@ -460,37 +553,43 @@ func newHandler[M any](
 		d("failed to create inertiaframe.error_response counter: %v", err)
 	}
 
-	handleError := httphandler.WithErrorHandler(httphandler.ErrorHandlerFunc(func(
-		w http.ResponseWriter,
-		r *http.Request,
-		err error,
-	) {
-		if precognition && inertiaprecognition.IsRequest(r) {
-			if validationErr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
-				validationErrs := inertiaprecognition.FilterValidationErrors(
-					r,
-					validationErr.ValidationErrors(),
-				)
-				if len(validationErrs) == 0 {
-					inertiaprecognition.WriteSuccess(w)
-					return
+	handle := func(h httphandler.HandlerFunc) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req := inertiahttp.RenderScopeFromRequest(r).Request()
+			err := h(w, r)
+
+			// precognition requests are special type of requests, the request
+			// goes thought the regular flow, middleware, validation, etc., but
+			// the controller is never executed.
+			if precognition && req.Precognition {
+				if err == nil {
+					err = handlePrecognition(w, req, nil, jsonOptions)
+					if err == nil {
+						return
+					}
+
+					// Precognition should handle the response only when it is a validation error
+					// otherwise the default handler must handle the failure.
+				} else if verr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
+					err = handlePrecognition(w, req, verr, jsonOptions)
+					if err == nil {
+						return
+					}
 				}
-
-				inertiaprecognition.WriteValidationErrors(w, validationErrs)
-
-				return
 			}
-		}
 
-		errorResponsesCounter.Add(r.Context(), 1)
-		errorHandler.ServeHTTP(w, r, err)
-	}))
+			if err != nil {
+				errorResponsesCounter.Add(r.Context(), 1)
+				errorHandler.ServeHTTP(w, r, err)
+			}
+		})
+	}
 
-	return handleError(httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		var (
-			msg       M
-			renderCtx inertia.RenderContext
-		)
+	return handle(httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		scope := inertiahttp.RenderScopeFromRequest(r)
+		req := scope.Request()
+
+		var renderCtx inertia.RenderContext
 
 		ctx, span := telemetry.Tracer().Start(
 			r.Context(),
@@ -503,46 +602,15 @@ func newHandler[M any](
 		)
 		defer span.End()
 
+		var msg M
 		if extract, ok := any(msg).(RawRequestExtractor); ok {
 			if err := extract.Extract(r); err != nil {
 				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
 			}
 		} else if r.Method != http.MethodGet {
-			mediaType, _, err := mime.ParseMediaType(
-				r.Header.Get(inertiaheader.HeaderContentType))
+			msg, err = decodeBody[M](ctx, r, formDecoder, jsonOptions)
 			if err != nil {
-				return fmt.Errorf("inertiaframe: failed to parse Content-Type header: %w", err)
-			}
-
-			span.SetAttributes(attribute.String("inertiaframe.request.mime", mediaType))
-
-			// Inertia accepts only JSON or multipart/form-data.
-			switch mediaType {
-			case mediaTypeJSON:
-				{
-					d("received JSON request")
-
-					if err := json.UnmarshalRead(
-						r.Body,
-						&msg,
-						jsonUnmarshalOptions...); err != nil {
-						return fmt.Errorf("inertiaframe: failed to decode request: %w", err)
-					}
-				}
-			case mediaTypeForm, mediaTypeMultipart:
-				{
-					d("received form request")
-
-					if err := r.ParseForm(); err != nil {
-						return fmt.Errorf("inertiaframe: failed to parse form data: %w", err)
-					}
-
-					if err := formDecoder.Decode(&msg, r.Form); err != nil {
-						return fmt.Errorf("inertiaframe: failed to decode form data: %w", err)
-					}
-				}
-			default:
-				d("unknown Content-Type %q, leaving message empty", mediaType)
+				return err
 			}
 		} else {
 			d("GET %s, skipping body decode", r.URL.Path)
@@ -560,8 +628,12 @@ func newHandler[M any](
 			}
 		}
 
-		if precognition && inertiaprecognition.IsRequest(r) {
-			inertiaprecognition.WriteSuccess(w)
+		// Precognition requests must not execute the main endpoint logic, but instead
+		// valid everything up to the logic.
+		//
+		// If validation fails for a precognition request the wrapping handler will take
+		// care of it, otherwise it will just pass it with 204.
+		if precognition && req.Precognition {
 			return nil
 		}
 
@@ -621,8 +693,7 @@ func newHandler[M any](
 
 		var props []inertia.Prop
 
-		proper := resp.Proper()
-		if proper.Len() > 0 {
+		if proper := resp.Proper(); proper != nil && proper.Len() > 0 {
 			d("response has props")
 
 			props = append(props, proper.Props()...)
