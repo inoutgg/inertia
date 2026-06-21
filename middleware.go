@@ -1,8 +1,6 @@
 package inertia
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"slices"
 
@@ -16,13 +14,6 @@ import (
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 )
-
-type (
-	ctxKey struct{}
-)
-
-//nolint:gochecknoglobals
-var kCtxKey = ctxKey{}
 
 // https://inertiajs.com/redirects#303-response-code
 //
@@ -120,14 +111,9 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			req, err := inertiahttp.ParseRequest(r)
-
 			span := trace.SpanFromContext(r.Context())
-			span.SetAttributes(
-				attribute.Bool("inertia.version.mismatch",
-					req.IsInertia && req.Version != renderer.Version()),
-			)
 
+			scope, err := renderer.NewScope(r)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
 				config.InvalidRequestHandler(w, r, err)
@@ -135,10 +121,11 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 				return
 			}
 
+			req := scope.Request()
+			r = inertiahttp.WithRenderScope(r, scope)
 			h := w.Header()
-			r = r.WithContext(context.WithValue(r.Context(), kCtxKey, renderer))
 
-			h.Set(inertiaheader.HeaderVary, inertiaheader.HeaderXInertia)
+			h.Add(inertiaheader.HeaderVary, inertiaheader.HeaderXInertia)
 
 			if !req.IsInertia {
 				next.ServeHTTP(w, r)
@@ -147,6 +134,10 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 
 			serverVersion := renderer.Version()
 			if r.Method == http.MethodGet && req.Version != serverVersion {
+				span.SetAttributes(
+					attribute.Bool("inertia.version.mismatch", req.Version != renderer.Version()),
+				)
+
 				d("version mismatch: client=%q server=%q for %s",
 					req.Version, serverVersion, r.URL.Path)
 				config.VersionMismatchHandler(w, r)
@@ -190,19 +181,9 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx R
 	debug.Assert(r != nil, "Request must not be nil")
 	debug.Assert(componentName != "", "component name must be non-empty")
 
-	renderer, ok := r.Context().Value(kCtxKey).(*Renderer)
-	if !ok {
-		return errors.New(
-			"inertia: renderer not found in request context - did you forget to use the middleware?",
-		)
-	}
+	scope := inertiahttp.RenderScopeFromRequest(r)
 
-	req, err := inertiahttp.ParseRequest(r)
-	if err != nil {
-		return err //nolint:wrapcheck
-	}
-
-	resp, err := renderer.Render(r.Context(), req, componentName, rCtx)
+	resp, err := scope.Render(r.Context(), componentName, rCtx)
 	if err != nil {
 		return err //nolint:wrapcheck
 	}
