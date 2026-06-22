@@ -67,23 +67,10 @@ func ParseRequest(r *http.Request) (Request, error) {
 		return req, nil
 	}
 
-	scrollMergeIntent, err := parseScrollMergeIntent(
-		r.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
-	)
-	if err != nil {
-		return req, err
-	}
-
 	req.PartialComponent = r.Header.Get(inertiaheader.HeaderXInertiaPartialComponent)
-	req.ErrorBag = r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
-	req.ScrollMergeIntent = scrollMergeIntent
 	req.PartialData = parseHeaderValueList(r.Header.Get(inertiaheader.HeaderXInertiaPartialData))
 	req.PartialExcept = parseHeaderValueList(r.Header.Get(
 		inertiaheader.HeaderXInertiaPartialExcept))
-	req.ResetProps = parseHeaderValueList(r.Header.Get(inertiaheader.HeaderXInertiaReset))
-	req.ExceptOnceProps = parseHeaderValueList(
-		r.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps),
-	)
 
 	if (len(req.PartialData) > 0 || len(req.PartialExcept) > 0) && req.PartialComponent == "" {
 		d(
@@ -97,6 +84,20 @@ func ParseRequest(r *http.Request) (Request, error) {
 			inertiaheader.HeaderXInertiaPartialComponent,
 		)
 	}
+
+	scrollMergeIntent, err := parseScrollMergeIntent(
+		r.Header.Get(inertiaheader.HeaderXInertiaScrollMerge),
+	)
+	if err != nil {
+		return req, err
+	}
+
+	req.ErrorBag = r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
+	req.ScrollMergeIntent = scrollMergeIntent
+	req.ResetProps = parseHeaderValueList(r.Header.Get(inertiaheader.HeaderXInertiaReset))
+	req.ExceptOnceProps = parseHeaderValueList(
+		r.Header.Get(inertiaheader.HeaderXInertiaExceptOnceProps),
+	)
 
 	d("parsed request: method=%s url=%s inertia=%v partial=%q once-except=%v",
 		r.Method, r.RequestURI, req.IsInertia, req.PartialComponent, req.ExceptOnceProps)
