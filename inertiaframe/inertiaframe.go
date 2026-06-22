@@ -5,6 +5,7 @@
 package inertiaframe
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -12,7 +13,6 @@ import (
 	"mime"
 	"net/http"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/go-json-experiment/json"
@@ -20,7 +20,6 @@ import (
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httphandler"
 	"go.inout.gg/foundations/http/httpmiddleware"
-	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
@@ -59,7 +58,7 @@ var (
 
 type ctxKey struct{}
 
-var kCtxKey = &ctxKey{} //nolint:gochecknoglobals
+var kCtxKey = ctxKey{} //nolint:gochecknoglobals
 
 // WithProps attaches shared props to the request context for later merging with response props.
 // Useful in middleware to provide global data (e.g., auth user, flash messages) to all pages.
@@ -92,16 +91,29 @@ func RedirectBack(w http.ResponseWriter, r *http.Request) {
 
 // DefaultValidationErrorHandler handles validation errors by storing them in the session
 // and redirecting back to the previous page where they can be displayed.
-func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, errorer inertia.ValidationErrorer) {
-	errorBag := inertia.ErrorBagFromRequest(r)
-	sess := must.Must(sessionFromRequest(r))
+//
+// If the session cannot be loaded or saved, the underlying error is forwarded to
+// httphandler.DefaultErrorHandler instead of panicking.
+func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, errorer inertia.ValidationErrorer) error {
+	sess, err := sessionFromRequest(r)
+	if err != nil {
+		d("failed to get session from request: %v", err)
 
-	sess.ErrorBag_ = errorBag
+		return err
+	}
+
+	sess.ErrorBag_ = inertia.ErrorBagFromRequest(r)
 	sess.ValidationErrors_ = errorer.ValidationErrors()
 
-	must.Must1(sess.Save(w))
+	if err := sess.Save(w); err != nil {
+		d("failed to save session: %v", err)
+
+		return err
+	}
 
 	RedirectBack(w, r)
+
+	return nil
 }
 
 // DefaultErrorHandler is the error handler used by Mount when MountConfig.ErrorHandler is nil.
@@ -112,9 +124,13 @@ func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, error
 //nolint:gochecknoglobals
 var DefaultErrorHandler httphandler.ErrorHandler = httphandler.ErrorHandlerFunc(
 	func(w http.ResponseWriter, r *http.Request, err error) {
-		if err, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
-			DefaultValidationErrorHandler(w, r, err)
-			return
+		if verr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
+			err = DefaultValidationErrorHandler(w, r, verr)
+			if err == nil {
+				// If no error is returned return normally, otherwise fall-through to the
+				// default error handler.
+				return
+			}
 		}
 
 		httphandler.DefaultErrorHandler(w, r, err)
@@ -361,6 +377,9 @@ type MountConfig[M any] struct {
 }
 
 func (c *MountConfig[M]) defaults() {
+	c.ErrorHandler = cmp.Or(c.ErrorHandler, DefaultErrorHandler)
+	c.FormDecoder = cmp.Or(c.FormDecoder, DefaultFormDecoder)
+
 	if c.TelemetryConfig == nil {
 		c.TelemetryConfig = inertiaotel.DefaultConfig
 	}
@@ -378,8 +397,6 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 		opts = &MountConfig[M]{}
 	}
 
-	opts.ErrorHandler = cmp.Or(opts.ErrorHandler, DefaultErrorHandler)
-	opts.FormDecoder = cmp.Or(opts.FormDecoder, DefaultFormDecoder)
 	opts.defaults()
 
 	debug.Assert(mux != nil, "Mux must not be nil")
@@ -413,38 +430,51 @@ func Mount[M any](mux Mux, endpoint Endpoint[M], opts *MountConfig[M]) {
 	mux.Handle(pattern, h)
 }
 
-func handlePrecognition(w http.ResponseWriter, req *inertiahttp.Request,
-	err inertia.ValidationErrorer, jsonOptions []json.Options,
+func handlePrecognition(
+	w http.ResponseWriter,
+	ineriaReq inertiahttp.Request,
+	verr inertia.ValidationErrorer,
+	jsonOptions []json.Options,
 ) error {
 	h := w.Header()
 	h.Set(inertiaheader.HeaderPrecognition, inertiaheader.HeaderValueTrue)
 	h.Add(inertiaheader.HeaderVary, inertiaheader.HeaderPrecognition)
 
-	if err != nil {
-		errorsMap := make(map[string][]string, err.Len())
+	if verr != nil {
+		errorsMap := make(map[string][]string, verr.Len())
 
-		errs := err.ValidationErrors()
+		errs := verr.ValidationErrors()
 		for _, err := range errs {
 			field := err.Field()
 
 			// TODO: implement pattern matching for fields validation since laravel allows it.
-			if len(req.PrecognitionProps) > 0 && slices.Contains(req.PrecognitionProps, field) ||
-				len(req.PrecognitionProps) == 0 {
+			if (len(ineriaReq.PrecognitionProps) > 0 &&
+				slices.Contains(ineriaReq.PrecognitionProps, field)) ||
+				len(ineriaReq.PrecognitionProps) == 0 {
 				errorsMap[field] = append(errorsMap[field], err.Error())
 			}
 		}
 
+		// Unfortunately, we don't have an easy way to apply the filter in validation
+		// function similar to Laravel, so we have to apply filter aftreward.
 		if len(errorsMap) > 0 {
 			w.Header().Set(inertiaheader.HeaderContentType, inertiaheader.ContentTypeJSON)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 
-			_, _ = w.Write([]byte(`{"errors":`))
+			// Use buf here to defer write to the response to prevent partial response write.
+			var buf bytes.Buffer
 
-			if err := json.MarshalWrite(w, errorsMap, jsonOptions...); err != nil {
-				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+			buf.WriteString(`{"errors":`)
+
+			if err := json.MarshalWrite(&buf, errorsMap, jsonOptions...); err != nil {
+				return fmt.Errorf("inertiaframe: failed to serialize errors: %w", err)
 			}
 
-			_, _ = w.Write([]byte{'}'})
+			buf.WriteByte('}')
+
+			if _, err := buf.WriteTo(w); err != nil {
+				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+			}
 
 			return nil
 		}
@@ -457,7 +487,6 @@ func handlePrecognition(w http.ResponseWriter, req *inertiahttp.Request,
 }
 
 func decodeBody[M any](
-	ctx context.Context,
 	r *http.Request,
 	formDecoder *form.Decoder,
 	jsonOptions []json.Options,
@@ -470,7 +499,7 @@ func decodeBody[M any](
 	}
 	defer r.Body.Close()
 
-	span := trace.SpanFromContext(ctx)
+	span := trace.SpanFromContext(r.Context())
 	span.SetAttributes(attribute.String("inertiaframe.request.mime", mediaType))
 
 	// Inertia accepts only JSON or multipart/form-data.
@@ -479,8 +508,7 @@ func decodeBody[M any](
 		{
 			d("received JSON request")
 
-			err := json.UnmarshalRead(r.Body, &msg, jsonOptions...)
-			if err != nil {
+			if err := json.UnmarshalRead(r.Body, &msg, jsonOptions...); err != nil {
 				return msg, fmt.Errorf("inertiaframe: failed to decode request: %w", err)
 			}
 		}
@@ -503,12 +531,156 @@ func decodeBody[M any](
 	return msg, nil
 }
 
+// withPrecognition intercepts precognition requests, rendering a 204 (success)
+// or 422 (validation errors) response instead of executing the endpoint.
+//
+// Non-precognition requests, non-validation errors, and handlePrecognition
+// failures are returned unchanged for the caller to dispatch.
+func withPrecognition(inner httphandler.HandlerFunc, jsonOptions []json.Options) httphandler.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		err := inner(w, r)
+
+		req := inertiahttp.RenderScopeFromRequest(r).Request()
+		if !req.Precognition {
+			return err
+		}
+
+		// precognition requests are a special type of requests: the request
+		// goes through the regular flow (middleware, validation, etc.), but
+		// the controller is never executed.
+		//
+		// Precognition should handle the response only when it is a validation
+		// error; otherwise the error is returned for the error dispatcher to
+		// handle.
+		if err != nil {
+			if verr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
+				return handlePrecognition(w, req, verr, jsonOptions)
+			}
+
+			return err
+		}
+
+		return handlePrecognition(w, req, nil, jsonOptions)
+	}
+}
+
+// extractRequest parses the request body into the message type M.
+//
+// If M implements RawRequestExtractor, its Extract method is used instead of the
+// default JSON/form decoder. GET requests skip body decoding entirely.
+func extractRequest[M any](
+	r *http.Request,
+	formDecoder *form.Decoder,
+	jsonOptions []json.Options,
+) (M, error) {
+	var msg M
+
+	if extract, ok := any(msg).(RawRequestExtractor); ok {
+		if err := extract.Extract(r); err != nil {
+			return msg, fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
+		}
+
+		return msg, nil
+	}
+
+	if r.Method == http.MethodGet {
+		d("GET %s, skipping body decode", r.URL.Path)
+		return msg, nil
+	}
+
+	return decodeBody[M](r, formDecoder, jsonOptions)
+}
+
+// render writes resp to w via the Inertia renderer.
+//
+// RawResponseWriter responses bypass Inertia rendering and write directly to w.
+// Otherwise the response's options, props (response-provided and context-shared),
+// and session-stored validation errors are merged into renderCtx before rendering.
+func render(
+	w http.ResponseWriter,
+	r *http.Request,
+	executionResponse Response,
+	metrics *metrics,
+) error {
+	span := trace.SpanFromContext(r.Context())
+
+	var renderCtx inertia.RenderContext
+
+	if writer, ok := executionResponse.(RawResponseWriter); ok {
+		d("writing raw response for %s %s", r.Method, r.URL.Path)
+
+		if err := writer.Write(w, r); err != nil {
+			return fmt.Errorf("inertiaframe: failed to write response: %w", err)
+		}
+
+		return nil
+	}
+
+	if optioner, ok := executionResponse.(ResponseOptioner); ok {
+		opts := optioner.Options()
+
+		renderCtx.ClearHistory = opts.ClearHistory
+		renderCtx.EncryptHistory = opts.EncryptHistory
+
+		span.SetAttributes(
+			attribute.Bool("inertiaframe.response.clear_history", opts.ClearHistory),
+			attribute.Bool("inertiaframe.response.encrypt_history", opts.EncryptHistory),
+		)
+	}
+
+	if proper, ok := r.Context().Value(kCtxKey).(inertia.Proper); ok {
+		renderCtx.SharedProps = proper.Props()
+	}
+
+	if proper := executionResponse.Proper(); proper != nil && proper.Len() > 0 {
+		renderCtx.Props = proper.Props()
+	}
+
+	sess, err := sessionFromRequest(r)
+	if err != nil {
+		return fmt.Errorf("inertiaframe: failed to get session: %w", err)
+	}
+
+	if errs := sess.ValidationErrors(); errs != nil {
+		renderCtx.ErrorBag = sess.ErrorBag()
+		renderCtx.AddValidationErrorer(inertia.ValidationErrors(errs))
+
+		metrics.validationErrorsCounter.Add(
+			r.Context(),
+			int64(len(errs)),
+			metric.WithAttributes(
+				attribute.String("inertiaframe.error_bag", renderCtx.ErrorBag),
+			),
+		)
+	}
+
+	componentName := executionResponse.Component()
+	debug.Assert(componentName != "", "component name must not be empty, when using non RawResponseWriter")
+
+	span.SetAttributes(
+		attribute.String("inertiaframe.response.component", componentName),
+	)
+
+	d(
+		"rendering %q with %d props and %d shared props",
+		componentName,
+		len(renderCtx.Props),
+		len(renderCtx.SharedProps),
+	)
+
+	if err := inertia.Render(w, r, componentName, renderCtx); err != nil {
+		return fmt.Errorf("inertiaframe: failed to render: %w", err)
+	}
+
+	return nil
+}
+
 // newHandler creates a new http.Handler for the given endpoint.
 func newHandler[M any](
 	endpoint Endpoint[M],
 	errorHandler httphandler.ErrorHandler,
 	validator Validator[M],
-	precognition bool,
+	hasPrecognition bool,
 	formDecoder *form.Decoder,
 	jsonOptions []json.Options,
 	telemetry *inertiaotel.Config,
@@ -518,79 +690,12 @@ func newHandler[M any](
 	debug.Assert(formDecoder != nil, "FormDecoder must be set")
 	debug.Assert(telemetry != nil, "Telemetry must be set")
 
-	meter := telemetry.Meter()
-
-	endpointDuration, err := meter.Float64Histogram(
-		"inertiaframe.endpoint.duration",
-		metric.WithUnit("ms"),
-		metric.WithDescription("Duration of inertiaframe endpoint execution"),
-	)
+	metrics, err := newMetrics(telemetry.Meter())
 	if err != nil {
-		d("failed to create inertiaframe.endpoint.duration histogram: %v", err)
+		d("failed to initialize metrics: %v", err)
 	}
 
-	validationErrorsCounter, err := meter.Int64Counter(
-		"inertiaframe.validation_error",
-		metric.WithDescription("Number of validation errors"),
-	)
-	if err != nil {
-		d("failed to create inertiaframe.validation_error counter: %v", err)
-	}
-
-	emptyResponsesCounter, err := meter.Int64Counter(
-		"inertiaframe.empty_response",
-		metric.WithDescription("Number of empty responses from endpoints"),
-	)
-	if err != nil {
-		d("failed to create inertiaframe.empty_response counter: %v", err)
-	}
-
-	errorResponsesCounter, err := meter.Int64Counter(
-		"inertiaframe.error_response",
-		metric.WithDescription("Number of error responses from endpoints"),
-	)
-	if err != nil {
-		d("failed to create inertiaframe.error_response counter: %v", err)
-	}
-
-	handle := func(h httphandler.HandlerFunc) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			req := inertiahttp.RenderScopeFromRequest(r).Request()
-			err := h(w, r)
-
-			// precognition requests are special type of requests, the request
-			// goes thought the regular flow, middleware, validation, etc., but
-			// the controller is never executed.
-			if precognition && req.Precognition {
-				if err == nil {
-					err = handlePrecognition(w, req, nil, jsonOptions)
-					if err == nil {
-						return
-					}
-
-					// Precognition should handle the response only when it is a validation error
-					// otherwise the default handler must handle the failure.
-				} else if verr, ok := errors.AsType[inertia.ValidationErrorer](err); ok {
-					err = handlePrecognition(w, req, verr, jsonOptions)
-					if err == nil {
-						return
-					}
-				}
-			}
-
-			if err != nil {
-				errorResponsesCounter.Add(r.Context(), 1)
-				errorHandler.ServeHTTP(w, r, err)
-			}
-		})
-	}
-
-	return handle(httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		scope := inertiahttp.RenderScopeFromRequest(r)
-		req := scope.Request()
-
-		var renderCtx inertia.RenderContext
-
+	inner := httphandler.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ctx, span := telemetry.Tracer().Start(
 			r.Context(),
 			"inertiaframe.endpoint",
@@ -602,140 +707,76 @@ func newHandler[M any](
 		)
 		defer span.End()
 
-		var msg M
-		if extract, ok := any(msg).(RawRequestExtractor); ok {
-			if err := extract.Extract(r); err != nil {
-				return fmt.Errorf("inertiaframe: failed to extract request data: %w", err)
-			}
-		} else if r.Method != http.MethodGet {
-			msg, err = decodeBody[M](ctx, r, formDecoder, jsonOptions)
-			if err != nil {
-				return err
-			}
-		} else {
-			d("GET %s, skipping body decode", r.URL.Path)
+		r = r.WithContext(ctx)
+
+		msg, err := extractRequest[M](r, formDecoder, jsonOptions)
+		if err != nil {
+			return err
 		}
 
 		if validator != nil {
 			if err := validator.Validate(msg); err != nil {
 				d("failed to validate request")
 
-				validationErrorsCounter.Add(ctx, 1, metric.WithAttributes(
-					attribute.String("inertiaframe.error_bag", inertia.ErrorBagFromRequest(r)),
-				))
+				metrics.validationErrorsCounter.Add(
+					ctx,
+					1,
+					metric.WithAttributes(
+						attribute.String(
+							"inertiaframe.error_bag",
+							inertia.ErrorBagFromRequest(r),
+						),
+					),
+				)
 
 				return fmt.Errorf("inertiaframe: validation failed for request: %w", err)
 			}
 		}
 
+		inertiaReq := inertiahttp.RenderScopeFromRequest(r).Request()
+
 		// Precognition requests must not execute the main endpoint logic, but instead
-		// valid everything up to the logic.
+		// validate everything up to the logic.
 		//
-		// If validation fails for a precognition request the wrapping handler will take
-		// care of it, otherwise it will just pass it with 204.
-		if precognition && req.Precognition {
+		// If validation fails for a precognition request the wrapping handler will
+		// take care of it, otherwise it will just pass it with 204.
+		if hasPrecognition && inertiaReq.Precognition {
 			return nil
 		}
 
 		execStart := time.Now()
-		resp, err := endpoint.Execute(ctx, newRequest(msg))
-		endpointDuration.Record(ctx, float64(time.Since(execStart).Milliseconds()))
+		result, err := endpoint.Execute(ctx, newRequest(msg))
+		metrics.endpointDuration.Record(ctx, float64(time.Since(execStart).Milliseconds()))
 
 		if err != nil {
 			return fmt.Errorf("inertiaframe: failed to execute: %w", err)
 		}
 
-		if resp == nil {
+		if result == nil {
 			d("received empty response")
 
-			emptyResponsesCounter.Add(ctx, 1)
+			metrics.emptyResponsesCounter.Add(ctx, 1)
 
 			return ErrEmptyResponse
 		}
 
 		span.SetAttributes(
-			attribute.String("inertiaframe.response.type", responseType(resp)),
+			attribute.String("inertiaframe.response.type", responseType(result)),
 		)
 
-		if writer, ok := resp.(RawResponseWriter); ok {
-			d("writing raw response for %s %s", r.Method, r.URL.Path)
+		return render(w, r, result, metrics)
+	})
 
-			if err := writer.Write(w, r); err != nil {
-				return fmt.Errorf("inertiaframe: failed to write response: %w", err)
-			}
+	if hasPrecognition {
+		inner = withPrecognition(inner, jsonOptions)
+	}
 
-			return nil
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := inner(w, r); err != nil {
+			metrics.errorResponsesCounter.Add(r.Context(), 1)
+			errorHandler.ServeHTTP(w, r, err)
 		}
-
-		if optioner, ok := resp.(ResponseOptioner); ok {
-			opts := optioner.Options()
-
-			renderCtx.ClearHistory = opts.ClearHistory
-			renderCtx.EncryptHistory = opts.EncryptHistory
-
-			span.SetAttributes(
-				attribute.String(
-					"inertiaframe.response.clear_history",
-					strconv.FormatBool(opts.ClearHistory),
-				),
-				attribute.String("inertiaframe.response.encrypt_history",
-					strconv.FormatBool(opts.EncryptHistory)),
-			)
-		}
-
-		var sharedProps []inertia.Prop
-
-		if proper, ok := r.Context().Value(kCtxKey).(inertia.Proper); ok {
-			d("has shared props")
-
-			sharedProps = proper.Props()
-		}
-
-		var props []inertia.Prop
-
-		if proper := resp.Proper(); proper != nil && proper.Len() > 0 {
-			d("response has props")
-
-			props = append(props, proper.Props()...)
-		}
-
-		renderCtx.SharedProps = sharedProps
-		renderCtx.Props = props
-
-		sess, err := sessionFromRequest(r)
-		if err != nil {
-			return fmt.Errorf("inertiaframe: failed to get session: %w", err)
-		}
-
-		if errs := sess.ValidationErrors(); errs != nil {
-			renderCtx.ErrorBag = sess.ErrorBag()
-			renderCtx.AddValidationErrorer(inertia.ValidationErrors(errs))
-
-			validationErrorsCounter.Add(
-				ctx,
-				int64(len(errs)),
-				metric.WithAttributes(
-					attribute.String("inertiaframe.error_bag", renderCtx.ErrorBag),
-				),
-			)
-		}
-
-		component := resp.Component()
-		debug.Assert(component != "", "component must not be empty, when using non RawResponseWriter")
-
-		span.SetAttributes(
-			attribute.String("inertiaframe.response.component", component),
-		)
-
-		d("rendering %q with %d props and %d shared props",
-			component, len(props), len(sharedProps))
-
-		if err := inertia.Render(w, r, component, renderCtx); err != nil {
-			return fmt.Errorf("inertiaframe: failed to render: %w", err)
-		}
-
-		return nil
-	}))
+	})
 }
 
 func responseType(resp Response) string {

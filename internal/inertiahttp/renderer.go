@@ -92,21 +92,6 @@ func (c *Config) defaults() {
 	c.Concurrency = cmp.Or(c.Concurrency, DefaultConcurrency)
 }
 
-type RenderScope struct {
-	renderer *Renderer
-	req      Request
-}
-
-func (s *RenderScope) Request() *Request { return &s.req }
-
-func (s *RenderScope) Render(
-	ctx context.Context,
-	name string,
-	renderCtx RenderContext,
-) (Response, error) {
-	return s.renderer.Render(ctx, s.req, name, renderCtx)
-}
-
 // Renderer handles Inertia.js page responses, supporting both client-side and server-side rendering.
 // It manages HTML template rendering, JSON serialization, and prop resolution.
 //
@@ -178,6 +163,8 @@ func New(t *template.Template, config *Config) *Renderer {
 func (r *Renderer) Version() string { return r.version }
 
 // NewScope returns a scoped render context for the given request.
+//
+// The given request is parsed via ParseRequest and is saved.
 func (r *Renderer) NewScope(req *http.Request) (*RenderScope, error) {
 	parsedReq, err := ParseRequest(req)
 	if err != nil {
@@ -190,19 +177,15 @@ func (r *Renderer) NewScope(req *http.Request) (*RenderScope, error) {
 	}, nil
 }
 
-// Render returns an Inertia response, automatically choosing the format:
-//   - JSON for Inertia requests (XHR navigation)
-//   - HTML for initial page loads or non-Inertia requests
-//
-// The renderCtx configures props, validation errors, and other page-specific settings.
-func (r *Renderer) Render(
+// render renders the response for a given request.
+func (r *Renderer) render(
 	ctx context.Context,
 	req Request,
-	name string,
+	componentName string,
 	renderCtx RenderContext,
 ) (Response, error) {
 	debug.Assert(r.t != nil, "Renderer template must be set")
-	debug.Assert(name != "", "component name must be non-empty")
+	debug.Assert(componentName != "", "component name must be non-empty")
 
 	start := time.Now()
 	requestType := requestType(req)
@@ -212,7 +195,7 @@ func (r *Renderer) Render(
 		"inertia.render",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("inertia.component", name),
+			attribute.String("inertia.component", componentName),
 			attribute.String("inertia.request.type", requestType),
 			attribute.String("inertia.render.type", renderType(req)),
 			attribute.Bool("inertia.ssr.enabled", r.ssrClient != nil),
@@ -227,7 +210,11 @@ func (r *Renderer) Render(
 		)
 	}()
 
-	rawProps := make([]Prop, 0, len(renderCtx.SharedProps)+len(renderCtx.Props)+1)
+	rawProps := make(
+		[]inertiaprop.Prop,
+		0,
+		len(renderCtx.SharedProps)+len(renderCtx.Props)+ /* validation errors (1 always prop) */ 1,
+	)
 	rawProps = append(rawProps, renderCtx.SharedProps...)
 	rawProps = append(rawProps, renderCtx.Props...)
 	rawProps = append(rawProps, makeValidationErrors(renderCtx.ValidationErrorer, renderCtx.ErrorBag))
@@ -241,7 +228,7 @@ func (r *Renderer) Render(
 		ResetProps:        req.ResetProps,
 		ExceptOnceProps:   req.ExceptOnceProps,
 	}, inertiaprotocol.Context{
-		Component:        name,
+		Component:        componentName,
 		Version:          r.version,
 		Props:            rawProps,
 		SharedProps:      renderCtx.SharedProps,
@@ -329,7 +316,7 @@ func (r *Renderer) makeRootView(page *Page) (template.HTML, error) {
 		return "", err
 	}
 
-	var w strings.Builder
+	var w bytes.Buffer
 
 	_ = must.Must(w.WriteString(string(pageScript)))
 
@@ -384,7 +371,32 @@ func (r *Renderer) makePageScript(page *Page) (template.HTML, error) {
 	return template.HTML(w.String()), nil //nolint:gosec
 }
 
-func makeValidationErrors(errorers []inertiaprop.ValidationErrorer, errorBag string) Prop {
+// RenderScope represents a per-request scope for inertia rendering.
+//
+// It is primarily created via Renderer.NewScope and is bound to a single
+// incoming request.
+type RenderScope struct {
+	renderer *Renderer
+	req      Request
+}
+
+// Request returns a copy of the request to which this rendering scope is bound.
+func (s *RenderScope) Request() Request { return s.req }
+
+// Render returns an inertia response, automatically choosing the format:
+//   - JSON for Inertia requests (XHR navigation)
+//   - HTML for initial page loads or non-Inertia requests
+//
+// The renderCtx configures props, validation errors, and other page-specific settings.
+func (s *RenderScope) Render(
+	ctx context.Context,
+	name string,
+	renderCtx RenderContext,
+) (Response, error) {
+	return s.renderer.render(ctx, s.req, name, renderCtx)
+}
+
+func makeValidationErrors(errorers []inertiaprop.ValidationErrorer, errorBag string) inertiaprop.Prop {
 	m := make(map[string]string)
 
 	for _, errorer := range errorers {

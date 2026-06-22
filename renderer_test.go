@@ -625,39 +625,6 @@ func TestRenderer_Version(t *testing.T) {
 	assert.Equal(t, "1.0.0", renderer.Version(), "renderer version should match config")
 }
 
-func TestRenderer_render(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns transport-neutral JSON response", func(t *testing.T) {
-		t.Parallel()
-
-		// arrange
-		renderer := New(testTpl, &Config{Version: "1.0.0"})
-		req := inertiahttp.Request{
-			URL:       "/users",
-			IsInertia: true,
-			Version:   "1.0.0",
-		}
-		rCtx := NewRenderContext(WithProps(Props{inertiaprop.New("name", "Roman")}))
-
-		// act
-		resp, err := renderer.Render(t.Context(), req, "Users/Index", rCtx)
-
-		// assert
-		require.NoError(t, err)
-		assert.Equal(t, inertiaheader.ContentTypeJSON,
-			resp.Headers[inertiaheader.HeaderContentType])
-		assert.Equal(t, "true", resp.Headers[inertiaheader.HeaderXInertia])
-
-		var page map[string]any
-
-		err = json.Unmarshal(resp.Body, &page)
-		require.NoError(t, err)
-		assert.Equal(t, "Users/Index", page["component"])
-		assert.Equal(t, "/users", page["url"])
-	})
-}
-
 func TestErrorBagFromRequest(t *testing.T) {
 	t.Parallel()
 
