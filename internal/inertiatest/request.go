@@ -10,18 +10,17 @@ import (
 )
 
 type RequestConfig struct {
-	Version           string
-	PartialComponent  string
-	ErrorBag          string
-	ScrollMergeIntent string
-
-	Whitelist []string
-	Blacklist []string
-
-	ResetProps []string
-	OnceProps  []string
-
-	Inertia bool
+	Version                  string
+	PartialComponent         string
+	ErrorBag                 string
+	ScrollMergeIntent        string
+	Whitelist                []string
+	Blacklist                []string
+	ResetProps               []string
+	OnceProps                []string
+	PrecognitionValidateOnly []string
+	Precognition             bool
+	Inertia                  bool
 }
 
 // NewRequest creates a new request with an empty body.
@@ -69,6 +68,15 @@ func NewRequest(
 
 	if config.ScrollMergeIntent != "" {
 		r.Header.Set(inertiaheader.HeaderXInertiaScrollMerge, config.ScrollMergeIntent)
+	}
+
+	if config.Precognition {
+		r.Header.Set(inertiaheader.HeaderPrecognition, inertiaheader.HeaderValueTrue)
+	}
+
+	if len(config.PrecognitionValidateOnly) > 0 {
+		r.Header.Set(inertiaheader.HeaderPrecognitionValidateOnly,
+			strings.Join(config.PrecognitionValidateOnly, ","))
 	}
 
 	return r, httptest.NewRecorder()
