@@ -92,3 +92,19 @@ func QualifyPath(propKey, path string) string {
 
 	return propKey + "." + path
 }
+
+// Proper represents a collection of props that can be attached to a render context.
+type Proper interface {
+	// Props returns the underlying prop slice.
+	Props() []Prop
+
+	// Len returns the number of props in the collection.
+	Len() int
+}
+
+// Props is a slice of Prop that satisfies the Proper interface, suitable for
+// use when attaching multiple props to a render context at once.
+type Props []Prop
+
+func (p Props) Len() int      { return len(p) }
+func (p Props) Props() []Prop { return p }

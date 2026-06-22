@@ -2,10 +2,14 @@
 
 Inertia is an adapter for the [Inertia.js](https://inertiajs.com/) library adapted for the Go.
 
-The library is designed to feel natural and look nature to Go developers.
+The library is designed to feel and look nature to Go developers.
 As such the API diverges from the reference implementation of Inertia in PHP.
 
-Optionally, it provides an [opinionated framework](https://github.com/segfaultmedaddy/inertia/tree/main/inertiaframe) for building Inertia.js applications on top of the `http.ServeMux` compatible routers.
+The package also exposes an opinionated framework that works on top of the
+inertia adapter -- inertiaframe.
+
+The inertiaframe abstracts away raw request and response via
+inertia-specific messages.
 
 ## Vite
 

@@ -34,9 +34,7 @@ type Renderer = inertiahttp.Renderer
 
 // New creates a Renderer with the provided HTML template and configuration.
 //
-// If config is nil, default values are used:
-//   - RootViewID: "app"
-//   - Concurrency: GOMAXPROCS(0)
+// If config is nil, default values are used; see Config for details.
 func New(t *template.Template, config *Config) *Renderer {
 	return inertiahttp.New(t, config)
 }
@@ -86,7 +84,11 @@ func Location(w http.ResponseWriter, r *http.Request, url string) {
 	inertiaredirect.Redirect(w, r, url)
 }
 
-// Redirect redirects while instructing Inertia to preserve the current URL fragment.
+// Redirect redirects to a URL within the Inertia app, preserving the current
+// URL fragment on the client.
+//
+// For Inertia requests, it uses a 409 Conflict response with X-Inertia-Redirect header.
+// For regular requests, it performs a standard HTTP redirect.
 func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 	debug.Assert(w != nil, "ResponseWriter must not be nil")
 	debug.Assert(r != nil, "Request must not be nil")
@@ -108,7 +110,7 @@ func Redirect(w http.ResponseWriter, r *http.Request, url string) {
 
 // ErrorBagFromRequest extracts the error bag name from the X-Inertia-Error-Bag header.
 //
-// Returns the default error bag (empty string) if the header is not present.
+// Returns DefaultErrorBag if the header is not present.
 // Used to scope validation errors to specific forms on a page.
 func ErrorBagFromRequest(r *http.Request) string {
 	errorBag := r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
