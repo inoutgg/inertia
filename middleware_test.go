@@ -44,7 +44,7 @@ func TestMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "",
 		})
@@ -67,7 +67,7 @@ func TestMiddleware(t *testing.T) {
 			_, _ = w.Write([]byte("hello"))
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", nil)
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", nil)
 
 		// act
 		middleware := newMiddleware(handler, nil)
@@ -87,7 +87,7 @@ func TestMiddleware(t *testing.T) {
 		})
 
 		renderer := New(tpl, &Config{Version: "2.0.0"})
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "1.0.0",
 		})
@@ -111,7 +111,7 @@ func TestMiddleware(t *testing.T) {
 		})
 
 		renderer := New(tpl, &Config{Version: "2.0.0"})
-		r, w := inertiatest.NewRequest(http.MethodPost, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodPost, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "1.0.0",
 		})
@@ -136,7 +136,7 @@ func TestMiddleware(t *testing.T) {
 		})
 
 		renderer := New(tpl, &Config{Version: "2.0.0"})
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "1.0.0",
 		})
@@ -164,7 +164,7 @@ func TestMiddleware(t *testing.T) {
 			// intentionally empty - no writes to response
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "",
 		})
@@ -186,7 +186,7 @@ func TestMiddleware(t *testing.T) {
 			// intentionally empty
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "",
 		})
@@ -238,9 +238,14 @@ func TestMiddleware(t *testing.T) {
 					w.WriteHeader(http.StatusOK)
 				})
 
-				r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
-					Inertia: true,
-				})
+				r, w := inertiatest.NewRequest(
+					t,
+					http.MethodGet,
+					"/inertia",
+					&inertiatest.RequestConfig{
+						Inertia: true,
+					},
+				)
 				tc.configure(r)
 
 				// act
@@ -267,7 +272,7 @@ func TestMiddleware(t *testing.T) {
 			_, _ = w.Write([]byte("executed"))
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia:           true,
 			PartialComponent:  "Users/Index",
 			Whitelist:         []string{"users", "roles"},
@@ -297,7 +302,7 @@ func TestMiddleware(t *testing.T) {
 			renderErr = Render(w, r, "TestComponent", RenderContext{})
 		})
 
-		r, w := inertiatest.NewRequest(http.MethodGet, "/inertia", &inertiatest.RequestConfig{
+		r, w := inertiatest.NewRequest(t, http.MethodGet, "/inertia", &inertiatest.RequestConfig{
 			Inertia: true,
 			Version: "",
 		})
@@ -334,7 +339,7 @@ func TestMiddleware(t *testing.T) {
 				t.Parallel()
 
 				// arrange
-				r, w := inertiatest.NewRequest(tc.method, "/inertia", &inertiatest.RequestConfig{
+				r, w := inertiatest.NewRequest(t, tc.method, "/inertia", &inertiatest.RequestConfig{
 					Inertia: true,
 				})
 

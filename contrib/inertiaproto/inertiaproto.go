@@ -115,7 +115,13 @@ func Mount[M proto.Message](mux inertiaframe.Mux, endpoint Endpoint[M]) {
 	debug.Assert(mux != nil, "Mux must not be nil")
 	debug.Assert(endpoint != nil, "Endpoint must not be nil")
 
-	inertiaframe.Mount(mux, endpoint, &inertiaframe.MountConfig[M]{ //nolint:exhaustruct
+	inertiaframe.New[M](&inertiaframe.Config{ //nolint:exhaustruct
+		FormDecoder:  inertiaframe.DefaultFormDecoder,
+		ErrorHandler: DefaultErrorHandler,
+		JSONOptions: []json.Options{
+			json.WithUnmarshalers(json.UnmarshalFunc(protojson.Unmarshal)),
+		},
+	}).Mount(mux, endpoint, &inertiaframe.MountConfig[M]{ //nolint:exhaustruct
 		Validator: inertiaframe.ValidatorFunc[M](func(data M) error {
 			if err := protovalidate.Validate(data); err != nil {
 				if err, ok := errors.AsType[*protovalidate.ValidationError](err); ok {
@@ -127,17 +133,12 @@ func Mount[M proto.Message](mux inertiaframe.Mux, endpoint Endpoint[M]) {
 
 			return nil
 		}),
-		FormDecoder:  inertiaframe.DefaultFormDecoder,
-		ErrorHandler: DefaultErrorHandler,
-		JSONOptions: []json.Options{
-			json.WithUnmarshalers(json.UnmarshalFunc(protojson.Unmarshal)),
-		},
 	})
 }
 
 // convertValidationError converts a protobuf validation error to an inertia validation error.
 func convertValidationError(verr protovalidate.ValidationError) inertia.ValidationErrors {
-	var errs inertia.ValidationErrors
+	errs := make(inertia.ValidationErrors, 0, len(verr.Violations))
 	for _, violation := range verr.Violations {
 		errs = append(
 			errs,
