@@ -193,7 +193,7 @@ func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx R
 	}
 
 	w.WriteHeader(http.StatusOK)
-	//nolint:gosec // The renderer generated this response body from trusted server-side templates/JSON encoding.
+
 	must.Must(w.Write(resp.Body))
 
 	return nil

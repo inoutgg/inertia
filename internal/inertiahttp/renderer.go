@@ -49,38 +49,14 @@ type Page = inertiaprotocol.Page
 var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
 // Config configures the Renderer behavior and capabilities.
-//
-//nolint:govet
 type Config struct {
-	// SSRClient enables server-side rendering of Inertia pages.
-	//
-	// If nil, only client-side rendering is used.
-	SSRClient SSRClient
-
-	// RootViewAttrs are HTML attributes applied to the root element.
-	RootViewAttrs map[string]string
-
-	// Version identifies the current asset version (e.g., build hash or timestamp).
-	Version string
-
-	// RootViewID is the HTML element ID where the Inertia app mounts.
-	//
-	// Defaults to "app" if not specified.
-	RootViewID string
-
-	// JSONMarshalOptions configures JSON serialization for page props and data.
+	SSRClient          SSRClient
+	RootViewAttrs      map[string]string
+	Telemetry          *inertiaotel.Config
+	Version            string
+	RootViewID         string
 	JSONMarshalOptions []json.Options
-
-	// Concurrency sets the maximum number of props that can be resolved concurrently
-	// by the renderer's internal ResultPool. It only affects props marked as concurrent.
-	//
-	// Defaults to runtime.GOMAXPROCS(0). A value of 0 means no limit.
-	Concurrency int
-
-	// Telemetry configures OpenTelemetry tracing and metrics.
-	//
-	// If zero, telemetry is a no-op.
-	Telemetry *inertiaotel.Config
+	Concurrency        int
 }
 
 func (c *Config) defaults() {
@@ -97,18 +73,18 @@ func (c *Config) defaults() {
 //
 // Create a Renderer using New or FromFS constructor functions.
 //
-//nolint:govet
+
 type Renderer struct {
 	ssrClient       SSRClient
 	resultPool      pond.ResultPool[inertiaprotocol.Result]
+	renderDuration  metric.Float64Histogram
 	t               *template.Template
+	telemetry       *inertiaotel.Config
+	protocol        *inertiaprotocol.Renderer
 	rootViewID      string
 	version         string
 	jsonMarshalOpts []json.Options
 	rootViewAttrs   []pair[[]byte, []byte]
-	telemetry       *inertiaotel.Config
-	renderDuration  metric.Float64Histogram
-	protocol        *inertiaprotocol.Renderer
 }
 
 // New creates a Renderer with the provided HTML template and configuration.

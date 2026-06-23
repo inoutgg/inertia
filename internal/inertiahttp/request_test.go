@@ -38,7 +38,7 @@ func TestParseRequest_Basic(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -110,7 +110,7 @@ func TestParseRequest_Partial(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -153,7 +153,7 @@ func TestParseRequest_Reset(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -189,7 +189,7 @@ func TestParseRequest_ExceptOnce(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -225,7 +225,7 @@ func TestParseRequest_ErrorBag(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -294,7 +294,7 @@ func TestParseRequest_ScrollIntent(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -362,7 +362,7 @@ func TestParseRequest_Precognition(t *testing.T) {
 			t.Parallel()
 
 			// arrange
-			r, _ := inertiatest.NewRequest(http.MethodGet, tt.target, tt.config)
+			r, _ := inertiatest.NewRequest(t, http.MethodGet, tt.target, tt.config)
 
 			// act
 			got, err := ParseRequest(r)
@@ -381,7 +381,7 @@ func TestParseRequest_Complex(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		r, _ := inertiatest.NewRequest(http.MethodGet, "/users", &inertiatest.RequestConfig{
+		r, _ := inertiatest.NewRequest(t, http.MethodGet, "/users", &inertiatest.RequestConfig{
 			Inertia:           true,
 			Version:           "1.0.0",
 			PartialComponent:  "Users",
@@ -416,7 +416,7 @@ func TestParseRequest_Complex(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		r, _ := inertiatest.NewRequest(http.MethodGet, "/users", &inertiatest.RequestConfig{
+		r, _ := inertiatest.NewRequest(t, http.MethodGet, "/users", &inertiatest.RequestConfig{
 			Inertia:                  true,
 			Version:                  "1.0.0",
 			PartialComponent:         "Users",
@@ -448,7 +448,7 @@ func TestParseRequest_Complex(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		r, _ := inertiatest.NewRequest(http.MethodGet, "/users", &inertiatest.RequestConfig{
+		r, _ := inertiatest.NewRequest(t, http.MethodGet, "/users", &inertiatest.RequestConfig{
 			Inertia:           true,
 			Version:           "1.0.0",
 			PartialComponent:  "Users",

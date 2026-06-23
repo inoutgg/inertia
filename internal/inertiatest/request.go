@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"testing"
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 )
@@ -25,11 +26,13 @@ type RequestConfig struct {
 
 // NewRequest creates a new request with an empty body.
 func NewRequest(
+	t *testing.T,
 	method string,
 	target string,
 	config *RequestConfig,
 ) (*http.Request, *httptest.ResponseRecorder) {
-	r := httptest.NewRequest(method, target, nil)
+	t.Helper()
+	r := httptest.NewRequestWithContext(t.Context(), method, target, nil)
 
 	//nolint:exhaustruct
 	config = cmp.Or(config, &RequestConfig{})

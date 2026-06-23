@@ -516,7 +516,7 @@ func TestRenderer_RenderProtocolResponse(t *testing.T) {
 			t.Parallel()
 
 			// Create request and recorder using inertiatest
-			req, w := inertiatest.NewRequest(http.MethodGet, "/", tt.reqConfig)
+			req, w := inertiatest.NewRequest(t, http.MethodGet, "/", tt.reqConfig)
 
 			// Create a RenderContext from the options
 			rCtx := RenderContext{}
@@ -599,7 +599,7 @@ func TestLocation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			req, w := inertiatest.NewRequest(http.MethodGet, "/current", tt.reqConfig)
+			req, w := inertiatest.NewRequest(t, http.MethodGet, "/current", tt.reqConfig)
 
 			// Add test-specific header to test cleanup (for inertia request headers are cleaned test)
 			if tt.name == "inertia request headers are cleaned" {
@@ -632,7 +632,7 @@ func TestErrorBagFromRequest(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, _ := inertiatest.NewRequest(http.MethodGet, "/", &inertiatest.RequestConfig{
+		req, _ := inertiatest.NewRequest(t, http.MethodGet, "/", &inertiatest.RequestConfig{
 			ErrorBag: "custom_bag",
 		})
 
@@ -647,7 +647,7 @@ func TestErrorBagFromRequest(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, _ := inertiatest.NewRequest(http.MethodGet, "/", nil)
+		req, _ := inertiatest.NewRequest(t, http.MethodGet, "/", nil)
 
 		// act
 		result := ErrorBagFromRequest(req)
@@ -664,7 +664,7 @@ func TestRedirect(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, w := inertiatest.NewRequest(http.MethodGet, "/current", nil)
+		req, w := inertiatest.NewRequest(t, http.MethodGet, "/current", nil)
 
 		// act
 		Redirect(w, req, "/target")
@@ -678,7 +678,7 @@ func TestRedirect(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, w := inertiatest.NewRequest(http.MethodPost, "/current", nil)
+		req, w := inertiatest.NewRequest(t, http.MethodPost, "/current", nil)
 
 		// act
 		Redirect(w, req, "/target")
@@ -696,7 +696,7 @@ func TestRedirectPreserveFragment(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, w := inertiatest.NewRequest(http.MethodGet, "/current", &inertiatest.RequestConfig{
+		req, w := inertiatest.NewRequest(t, http.MethodGet, "/current", &inertiatest.RequestConfig{
 			Inertia: true,
 		})
 
@@ -713,7 +713,7 @@ func TestRedirectPreserveFragment(t *testing.T) {
 		t.Parallel()
 
 		// arrange
-		req, w := inertiatest.NewRequest(http.MethodGet, "/current", nil)
+		req, w := inertiatest.NewRequest(t, http.MethodGet, "/current", nil)
 
 		// act
 		Redirect(w, req, "/target")

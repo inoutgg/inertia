@@ -25,7 +25,8 @@ const (
 	// data (validation errors and the last visited path) between requests.
 	SessionCookieName = "_inertiaframe"
 
-	// SessionPath is the Path attribute applied to the flash session cookie.
+	// SessionPath is the Path attribute set on the flash session cookie, so the
+	// cookie is sent for every request under the application root.
 	SessionPath = "/"
 )
 
@@ -52,8 +53,7 @@ type session struct {
 func sessionFromRequest(r *http.Request) (*session, error) {
 	debug.Assert(r != nil, "request must not be nil")
 
-	sess, ok := r.Context().Value(kSessCtx).(*session)
-	if ok && sess != nil {
+	if sess, ok := r.Context().Value(kSessCtx).(*session); ok && sess != nil {
 		return sess, nil
 	}
 
@@ -69,8 +69,8 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 		return nil, fmt.Errorf("inertiaframe: failed to decode session cookie: %w", err)
 	}
 
-	sess = &session{} //nolint:exhaustruct
-	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(sess); err != nil {
+	var sess session
+	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&sess); err != nil {
 		d("failed to decode payload: %v", err)
 		return nil, fmt.Errorf("inertiaframe: failed to decode session: %w", err)
 	}
@@ -78,7 +78,7 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 	// Save session for future requests.
 	*r = *r.WithContext(context.WithValue(r.Context(), kSessCtx, sess))
 
-	return sess, nil
+	return &sess, nil
 }
 
 // ValidationErrors returns validation errors from the previous request.
