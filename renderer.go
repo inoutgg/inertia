@@ -11,7 +11,6 @@ import (
 
 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
-	"go.segfaultmedaddy.com/inertia/internal/inertiaredirect"
 )
 
 // DefaultRootViewID is the default root HTML element ID to which
@@ -59,53 +58,6 @@ func FromFS(fsys fs.FS, path string, config *Config) (*Renderer, error) {
 // MustFromFS is like FromFS, but panics if an error occurs.
 func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 	return must.Must(FromFS(fsys, path, config))
-}
-
-// Location redirects to an external URL outside of the Inertia app.
-//
-// For Inertia requests, it uses a 409 Conflict response with X-Inertia-Location header.
-// For regular requests, it performs a standard HTTP redirect.
-func Location(w http.ResponseWriter, r *http.Request, url string) {
-	debug.Assert(w != nil, "ResponseWriter must not be nil")
-	debug.Assert(r != nil, "Request must not be nil")
-	debug.Assert(url != "", "url must be non-empty")
-
-	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
-		h := w.Header()
-
-		h.Del(inertiaheader.HeaderVary)
-		h.Del(inertiaheader.HeaderXInertia)
-		h.Set(inertiaheader.HeaderXInertiaLocation, url)
-		w.WriteHeader(http.StatusConflict)
-
-		return
-	}
-
-	inertiaredirect.Redirect(w, r, url)
-}
-
-// Redirect redirects to a URL within the Inertia app, preserving the current
-// URL fragment on the client.
-//
-// For Inertia requests, it uses a 409 Conflict response with X-Inertia-Redirect header.
-// For regular requests, it performs a standard HTTP redirect.
-func Redirect(w http.ResponseWriter, r *http.Request, url string) {
-	debug.Assert(w != nil, "ResponseWriter must not be nil")
-	debug.Assert(r != nil, "Request must not be nil")
-	debug.Assert(url != "", "url must be non-empty")
-
-	if r.Header.Get(inertiaheader.HeaderXInertia) == inertiaheader.HeaderValueTrue {
-		h := w.Header()
-
-		h.Del(inertiaheader.HeaderVary)
-		h.Del(inertiaheader.HeaderXInertia)
-		h.Set(inertiaheader.HeaderXInertiaRedirect, url)
-		w.WriteHeader(http.StatusConflict)
-
-		return
-	}
-
-	inertiaredirect.Redirect(w, r, url)
 }
 
 // ErrorBagFromRequest extracts the error bag name from the X-Inertia-Error-Bag header.
