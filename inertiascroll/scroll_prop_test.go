@@ -7,8 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.segfaultmedaddy.com/inertia/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/inertiascroll"
-	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
+	inertiainternalprop "go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
 	"go.segfaultmedaddy.com/inertia/internal/inertiatest"
 )
@@ -24,7 +25,7 @@ func TestScrollProp(t *testing.T) {
 
 		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 		}).
 			With(inertiascroll.New(
 				"users",
@@ -54,7 +55,7 @@ func TestScrollProp(t *testing.T) {
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 		}).
 			With(inertiascroll.New("users", map[string]any{"data": []string{"one"}})).
 			ExpectMergeProps("users.data").
@@ -67,7 +68,7 @@ func TestScrollProp(t *testing.T) {
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentPrepend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentPrepend,
 		}).
 			With(inertiascroll.New("users", map[string]any{"data": []string{"one"}})).
 			ExpectPrependProps("users.data").
@@ -111,7 +112,7 @@ func TestScrollProp(t *testing.T) {
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 		}).
 			With(inertiascroll.New(
 				"users",
@@ -129,7 +130,7 @@ func TestScrollProp(t *testing.T) {
 
 		inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 		}).
 			With(inertiascroll.New(
 				"users",
@@ -154,7 +155,7 @@ func TestScrollProp(t *testing.T) {
 
 			page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 				URL:               "/users",
-				ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+				ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 				ResetProps:        []string{"users"},
 			}).
 				With(inertiascroll.New(
@@ -181,7 +182,7 @@ func TestScrollProp(t *testing.T) {
 
 		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
 			URL:               "/users",
-			ScrollMergeIntent: inertiaprop.ScrollMergeIntentAppend,
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
 			ResetProps:        []string{"other"},
 		}).
 			With(inertiascroll.New(
@@ -195,5 +196,32 @@ func TestScrollProp(t *testing.T) {
 		scrollProps, ok := page.ScrollProps["users"]
 		require.True(t, ok)
 		assert.False(t, scrollProps.Reset, "expected scroll prop reset flag to be false")
+	})
+
+	t.Run("it should emit multiple scrollProps entries when multiple scroll props exist", func(t *testing.T) {
+		t.Parallel()
+
+		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+			URL:               "/users",
+			ScrollMergeIntent: inertiainternalprop.ScrollMergeIntentAppend,
+		}).
+			With(
+				inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
+				inertiascroll.New("notifications", map[string]any{"data": []string{"n"}}),
+			).
+			Run()
+
+		assert.Contains(t, page.ScrollProps, "users")
+		assert.Contains(t, page.ScrollProps, "notifications")
+	})
+
+	t.Run("it should leave scrollProps empty when no scroll props are present", func(t *testing.T) {
+		t.Parallel()
+
+		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{URL: "/users"}).
+			With(inertiaprop.New("name", "Roman")).
+			Run()
+
+		assert.Nil(t, page.ScrollProps)
 	})
 }

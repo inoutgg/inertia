@@ -20,6 +20,12 @@ const DefaultRootViewID = inertiahttp.DefaultRootViewID
 // convention).
 var DefaultConcurrency = inertiahttp.DefaultConcurrency //nolint:gochecknoglobals
 
+// ErrInvalidInertiaRequest is the sentinel error returned (or wrapped) when an
+// incoming Inertia request has malformed or invalid protocol headers.
+// Callers can match it with errors.Is to distinguish protocol errors from
+// other parse failures.
+var ErrInvalidInertiaRequest = inertiahttp.ErrInvalidInertiaRequest
+
 // Config configures the Renderer behavior and capabilities.
 type Config = inertiahttp.Config
 

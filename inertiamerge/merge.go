@@ -35,8 +35,8 @@ func NewPrependRoot() *PrependRootMergeOpts {
 	return inertiaprop.NewPrependRootMergeOpts()
 }
 
-// NewPaths returns a PathMergeOpts for configuring per-path merge behavior.
-func NewPaths() *PathMergeOpts { return inertiaprop.NewPathMergeOpts() }
+// NewPathsMerge returns a PathMergeOpts for configuring per-path merge behavior.
+func NewPathsMerge() *PathMergeOpts { return inertiaprop.NewPathMergeOpts() }
 
 // NewDeepMerge returns a DeepMergeOpts for deep merging.
 func NewDeepMerge(matchOn ...string) *DeepMergeOpts {

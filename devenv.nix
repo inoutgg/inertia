@@ -51,7 +51,7 @@ let
 
     languages.go = {
       enable = true;
-      version = "1.26.1";
+      version = "1.26.4";
     };
 
     env.GOTOOLCHAIN = lib.mkForce "local";

@@ -105,12 +105,12 @@ func DefaultValidationErrorHandler(w http.ResponseWriter, r *http.Request, error
 	return nil
 }
 
-// DefaultErrorHandler is the error handler used by Mount when
-// Config.ErrorHandler is nil.
+// DefaultErrorHandler is the error handler used when Config.ErrorHandler is
+// nil.
 //
-// Validation errors are routed to DefaultValidationErrorHandler, which stores
-// them in the session and redirects the client back. Any other error is written
-// as a generic HTTP error response.
+// Validation errors are stored in the flash session and the client is
+// redirected back to the previous page. Any other error is written as a generic
+// HTTP error response.
 //
 //nolint:gochecknoglobals
 var DefaultErrorHandler httphandler.ErrorHandler = httphandler.ErrorHandlerFunc(

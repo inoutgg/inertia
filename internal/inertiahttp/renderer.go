@@ -50,13 +50,13 @@ var bufPool = sync.Pool{New: func() any { return bytes.NewBuffer(nil) }}
 
 // Config configures the Renderer behavior and capabilities.
 type Config struct {
-	SSRClient          SSRClient
-	RootViewAttrs      map[string]string
-	Telemetry          *inertiaotel.Config
-	Version            string
-	RootViewID         string
-	JSONMarshalOptions []json.Options
-	Concurrency        int
+	SSRClient     SSRClient
+	RootViewAttrs map[string]string
+	Telemetry     *inertiaotel.Config
+	Version       string
+	RootViewID    string
+	JSONOptions   []json.Options
+	Concurrency   int
 }
 
 func (c *Config) defaults() {
@@ -107,7 +107,7 @@ func New(t *template.Template, config *Config) *Renderer {
 	r := &Renderer{ //nolint:exhaustruct
 		t:               t,
 		ssrClient:       config.SSRClient,
-		jsonMarshalOpts: config.JSONMarshalOptions,
+		jsonMarshalOpts: config.JSONOptions,
 		version:         config.Version,
 		rootViewID:      config.RootViewID,
 		rootViewAttrs:   attrs,

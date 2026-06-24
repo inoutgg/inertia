@@ -1,5 +1,5 @@
 
-[TestAlwaysProp/should_include_value_in_props_on_full_request - 1]
+[TestAlwaysProp/should_bypass_partial_filters_when_included_in_partial_request/whitelist_does_not_include_it - 1]
 {
  "component": "TestComponent",
  "props": {
@@ -12,12 +12,12 @@
 }
 ---
 
-[TestAlwaysProp/should_resolve_value_from_lazy_source_when_prop_value_is_lazy - 1]
+[TestAlwaysProp/should_include_value_in_props_on_full_request - 1]
 {
  "component": "TestComponent",
  "props": {
   "auth": {
-   "user": "LazyRoman"
+   "user": "Roman"
   }
  },
  "url": "/users",
@@ -38,12 +38,12 @@
 }
 ---
 
-[TestAlwaysProp/should_bypass_partial_filters_when_included_in_partial_request/whitelist_does_not_include_it - 1]
+[TestAlwaysProp/should_resolve_value_from_lazy_source_when_prop_value_is_lazy - 1]
 {
  "component": "TestComponent",
  "props": {
   "auth": {
-   "user": "Roman"
+   "user": "LazyRoman"
   }
  },
  "url": "/users",

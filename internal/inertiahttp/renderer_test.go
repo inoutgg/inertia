@@ -78,13 +78,13 @@ func TestNew_ConfigPropagation(t *testing.T) {
 			jsonOpts := []json.Options{json.Deterministic(true)}
 
 			config := &Config{
-				SSRClient:          ssrClient,
-				RootViewAttrs:      map[string]string{"class": "foo"},
-				Telemetry:          telemetry,
-				Version:            "2.0.0",
-				RootViewID:         "custom-app",
-				JSONMarshalOptions: jsonOpts,
-				Concurrency:        4,
+				SSRClient:     ssrClient,
+				RootViewAttrs: map[string]string{"class": "foo"},
+				Telemetry:     telemetry,
+				Version:       "2.0.0",
+				RootViewID:    "custom-app",
+				JSONOptions:   jsonOpts,
+				Concurrency:   4,
 			}
 
 			// act
