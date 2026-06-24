@@ -74,7 +74,7 @@ func TestDeferredProp(t *testing.T) {
 			With(inertiadeferred.New("rescued", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
 				return nil, errors.New("deferred error")
 			}), inertiadeferred.WithRescue(true))).
-			ExpectPropIsNil("rescued").
+			ExpectNoProp("rescued").
 			ExpectRescuedProps("rescued").
 			Run()
 	})

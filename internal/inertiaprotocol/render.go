@@ -34,7 +34,6 @@ type Request struct {
 // The difference between a Context and a Request is that a Context
 // is populated by the server and a Request is populated by the client.
 type Context struct {
-	ResultPool       pond.ResultPool[Result]
 	Component        string
 	Version          string
 	Props            []inertiaprop.Prop
@@ -49,6 +48,7 @@ type Context struct {
 // Renderer is protocol agnostic (meaning it does not contain any HTTP specific logic)
 // and all the protocol-specific logic must be handled by the caller.
 type Renderer struct {
+	execPool                pond.ResultPool[Result]
 	rescuedPropsCounter     metric.Int64Counter
 	concurrentPropsDuration metric.Float64Histogram
 }
@@ -57,8 +57,9 @@ type Renderer struct {
 //
 // The instruments are created eagerly; if creation fails, no-op instruments
 // are used and the error is logged.
-func New(telemetry *inertiaotel.Config) *Renderer {
+func New(execPool pond.ResultPool[Result], telemetry *inertiaotel.Config) *Renderer {
 	debug.Assert(telemetry != nil, "telemetry config must be provided")
+	debug.Assert(execPool != nil, "ResultPool must be set")
 
 	rescuedPropsCounter, err := telemetry.Meter().Int64Counter(
 		"inertia.props.rescued",
@@ -78,21 +79,25 @@ func New(telemetry *inertiaotel.Config) *Renderer {
 	}
 
 	return &Renderer{
+		execPool:                execPool,
 		rescuedPropsCounter:     rescuedPropsCounter,
 		concurrentPropsDuration: concurrentPropsDuration,
 	}
 }
 
 // Render returns a rendered page for the given request and context.
-func (r *Renderer) Render(ctx context.Context, req Request, renderCtx Context) (*Page, error) {
+func (r *Renderer) Render(
+	ctx context.Context,
+	req Request,
+	renderCtx Context,
+) (*Page, error) {
 	debug.Assert(renderCtx.Component != "", "component must be non-empty")
-	debug.Assert(renderCtx.ResultPool != nil, "ResultPool must be set")
 
 	d("component=%q partial=%q props=%d shared=%d",
 		renderCtx.Component, req.PartialComponent,
 		len(renderCtx.Props), len(renderCtx.SharedProps))
 
-	props, rescuedProps, err := r.resolveProps(ctx, req, renderCtx.Component, renderCtx.Props, renderCtx.ResultPool)
+	props, rescuedProps, err := r.resolveProps(ctx, req, renderCtx.Component, renderCtx.Props)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +142,6 @@ func (r *Renderer) resolveProps(
 	req Request,
 	componentName string,
 	props []inertiaprop.Prop,
-	pool pond.ResultPool[Result],
 ) (map[string]any, []string, error) {
 	if req.PartialComponent == componentName {
 		d("partial reload for %q whitelist=%v except=%v",
@@ -149,7 +153,6 @@ func (r *Renderer) resolveProps(
 			req.PartialData,
 			req.PartialExcept,
 			req.ExceptOnceProps,
-			pool,
 		)
 	}
 
@@ -183,7 +186,6 @@ func (r *Renderer) resolvePartialComponentRequest(
 	ctx context.Context,
 	props []inertiaprop.Prop,
 	whitelist, blacklist, exceptOnceProps []string,
-	pool pond.ResultPool[Result],
 ) (map[string]any, []string, error) {
 	props = sliceutil.Filter(props, func(prop inertiaprop.Prop) bool {
 		key := prop.Key()
@@ -226,12 +228,14 @@ func (r *Renderer) resolvePartialComponentRequest(
 				if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
 					d("rescued prop %q: %v", re.Key, re.Err)
 					rescuedProps = append(rescuedProps, re.Key)
-				} else {
-					return nil, nil, fmt.Errorf(
-						"inertia: failed to resolve prop %s: %w",
-						key, err,
-					)
+
+					continue // prevent adding the rescued prop to the list of resolved props.
 				}
+
+				return nil, nil, fmt.Errorf(
+					"inertia: failed to resolve prop %s: %w",
+					key, err,
+				)
 			}
 
 			m[key] = val
@@ -253,19 +257,21 @@ func (r *Renderer) resolvePartialComponentRequest(
 			if re, ok := errors.AsType[*inertiaprop.RescueError](err); ok {
 				d("rescued prop %q: %v", re.Key, re.Err)
 				rescuedProps = append(rescuedProps, re.Key)
-			} else {
-				return nil, nil, fmt.Errorf(
-					"inertia: failed to resolve prop %s: %w",
-					key, err,
-				)
+
+				break // prevent adding the rescued prop to the list of resolved props.
 			}
+
+			return nil, nil, fmt.Errorf(
+				"inertia: failed to resolve prop %s: %w",
+				key, err,
+			)
 		}
 
 		m[key] = val
 	default:
 		d("resolving %d props concurrently", len(concurrentProps))
 
-		group := pool.NewGroupContext(ctx)
+		group := r.execPool.NewGroupContext(ctx)
 
 		// Resolve the rest of concurrent props in pool. Each prop resolution
 		// may return an error.
@@ -344,6 +350,13 @@ func makeDeferredProps(req Request, componentName string, props []inertiaprop.Pr
 	for _, prop := range props {
 		deferred, ok := prop.Deferrable()
 		if !ok {
+			continue
+		}
+
+		// Skip deferred props that are also once-per-session props the client
+		// has already loaded. The client will never request these again so
+		// advertising them as deferred would be misleading.
+		if shouldSkipOnceProp(prop, req.ExceptOnceProps) {
 			continue
 		}
 

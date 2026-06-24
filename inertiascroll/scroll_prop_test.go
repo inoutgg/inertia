@@ -4,12 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alitto/pond/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.segfaultmedaddy.com/inertia"
-	"go.segfaultmedaddy.com/inertia/inertiaotel"
 	"go.segfaultmedaddy.com/inertia/inertiascroll"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprotocol"
@@ -81,17 +78,16 @@ func TestScrollProp(t *testing.T) {
 	t.Run("should return error when scroll merge intent is invalid", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := inertiaprotocol.New(inertiaotel.DefaultConfig).Render(t.Context(), inertiaprotocol.Request{
-			URL:               "/users",
-			ScrollMergeIntent: "sideways",
-		}, inertiaprotocol.Context{
-			Component:  inertiatest.DefaultComponent,
-			Version:    inertiatest.DefaultVersion,
-			ResultPool: pond.NewResultPool[inertiaprotocol.Result](0),
-			Props: []inertia.Prop{
-				inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
+		_, err := inertiatest.TestRender(
+			t,
+			inertiaprotocol.Request{
+				URL:               "/users",
+				ScrollMergeIntent: "sideways",
 			},
-		})
+			inertiatest.WithProps(
+				inertiascroll.New("users", map[string]any{"data": []string{"one"}}),
+			),
+		)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scroll merge intent")

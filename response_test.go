@@ -57,7 +57,7 @@ func TestRedirect_StandardRequest(t *testing.T) {
 
 			req, w := inertiatest.NewRequest(t, tt.method, "/current", &inertiatest.RequestConfig{})
 
-			Redirect(w, req, tt.target)
+			Redirect(w, req, tt.target, false)
 
 			assert.Equal(t, tt.expectedStatus, w.Code, "unexpected status code")
 			assert.Equal(t, tt.target, w.Header().Get("Location"), "unexpected Location header")
@@ -76,7 +76,7 @@ func TestRedirect_InertiaRequest(t *testing.T) {
 		})
 		req.URL.Fragment = "section"
 
-		Redirect(w, req, "/target", WithRedirectPreserveFragment())
+		Redirect(w, req, "/target", true)
 
 		assert.Equal(t, http.StatusConflict, w.Code, "unexpected status code")
 		assert.Equal(t, "/target#section", w.Header().Get(inertiaheader.HeaderXInertiaRedirect),
@@ -92,7 +92,7 @@ func TestRedirect_InertiaRequest(t *testing.T) {
 		w.Header().Set(inertiaheader.HeaderVary, "X-Inertia")
 		w.Header().Set(inertiaheader.HeaderXInertia, inertiaheader.HeaderValueTrue)
 
-		Redirect(w, req, "/target")
+		Redirect(w, req, "/target", false)
 
 		assert.Equal(t, http.StatusConflict, w.Code, "unexpected status code")
 		assert.Empty(t, w.Header().Get(inertiaheader.HeaderVary), "expected Vary header to be deleted")

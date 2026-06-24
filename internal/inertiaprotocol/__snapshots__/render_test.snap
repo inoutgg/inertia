@@ -1,0 +1,884 @@
+
+[TestRenderer_PageMetadata/it_should_populate_component,_url_and_version_from_the_context_and_request - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users/123",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PageMetadata/it_should_omit_optional_metadata_fields_from_JSON_when_none_are_produced_(omitempty) - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_FirstLoadIgnorables/it_should_skip_optional_and_deferred_props_on_full_request_without_invoking_their_lazy_functions - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "def"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PageMetadata/it_should_propagate_preserveFragment,_clearHistory_and_encryptHistory_when_set_on_the_context - 1]
+{
+ "clearHistory": true,
+ "component": "TestComponent",
+ "encryptHistory": true,
+ "preserveFragment": true,
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PageMetadata/it_should_default_preserveFragment,_clearHistory_and_encryptHistory_to_false_when_unset - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_FirstLoadIgnorables/it_should_still_include_always_and_standard_props_alongside_ignorable_props_on_full_request - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "def"
+  ]
+ },
+ "props": {
+  "auth": {
+   "user": "Roman"
+  },
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_FirstLoadIgnorables/it_should_emit_deferredProps_metadata_for_deferred_props_skipped_on_full_request - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "def"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_resolve_once_prop_value_on_first_load_and_emit_onceProps_metadata - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_not_skip_once_prop_when_onceable.Fresh_is_true_even_if_key_is_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_DeferredPropsMetadata/it_should_group_deferred_props_under_default_when_no_group_is_configured - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "a",
+   "b"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_populate_mergeProps_with_root-level_append_keys_when_merge.Append_is_true_without_paths - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "posts"
+ ],
+ "props": {
+  "posts": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_DeferredPropsMetadata/it_should_not_emit_deferredProps_when_no_deferred_props_are_present - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_skip_once_prop_value_resolution_when_its_key_appears_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "timezone": "UTC"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_preserve_custom_once_key_in_onceProps_map_when_WithOnce_key_differs_from_prop_key - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "app-locale": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_suppress_merge_metadata_for_non-scroll_props_whose_key_is_in_resetProps_while_still_returning_the_value - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman",
+  "posts": [
+   "fresh"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_default_to_append_when_scrollMergeIntent_is_empty_string - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data"
+ ],
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_not_affect_non-reset_props_when_some_props_are_listed_in_resetProps - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "keep"
+ ],
+ "props": {
+  "keep": [
+   "b"
+  ],
+  "reset_one": [
+   "a"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_suppress_root-level_entry_when_path-based_append_keys_are_present - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "conversation.messages"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_DeferredPropsMetadata/it_should_preserve_named_groups_across_multiple_deferred_props - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "alerts": [
+   "c"
+  ],
+  "sidebar": [
+   "a",
+   "b"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_suppress_matchPropsOn_entries_for_reset_props - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "settings": {
+   "theme": "dark"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_not_flag_scroll_prop_as_reset_when_resetProps_contains_unrelated_keys - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data"
+ ],
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "",
+   "previousPage": null
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_suppress_scroll-prop_merge_entries_when_its_key_is_in_resetProps - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": null,
+   "pageName": "",
+   "reset": true
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialComponentMismatch/it_should_behave_like_a_full_render_when_partialComponent_does_not_match_the_rendered_component - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "deferred"
+  ]
+ },
+ "props": {
+  "email": "test@example.com",
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_suppress_deferredProps_for_a_deferred+once_prop_when_its_key_is_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "posts": {
+   "prop": "posts"
+  }
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_keep_once_prop_on_partial_request_when_its_key_is_whitelisted_despite_exceptOnceProps_listing_it - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "lazy-locale"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_qualify_matchOn_keys_with_the_prop_root_when_matchOn_keys_are_non-empty - 1]
+{
+ "component": "TestComponent",
+ "matchPropsOn": [
+  "conversation.messages.id"
+ ],
+ "mergeProps": [
+  "conversation.messages"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_exclude_blacklisted_props_when_partialExcept_is_non-empty - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_resolve_only_whitelisted_props_when_partialData_is_non-empty - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_include_bypass-partial-filters_props_(always)_regardless_of_whitelist_and_blacklist - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "auth": {
+   "user": "Roman"
+  },
+  "other": "value"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_omit_deferredProps_metadata_on_partial_request_regardless_of_how_many_deferred_props_exist - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "a": "a-value",
+  "b": "b-value"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialComponentMismatch/it_should_ignore_partialData_whitelist_when_partialComponent_does_not_match - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "email": "test@example.com",
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialComponentMismatch/it_should_ignore_partialExcept_blacklist_when_partialComponent_does_not_match - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "email": "test@example.com",
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_ignore_empty_append,_prepend_and_matchOn_path_segments - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "posts.data",
+  "posts.items"
+ ],
+ "props": {
+  "posts": {
+   "data": [
+    "one"
+   ],
+   "items": [
+    "two"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ResetHeader/it_should_still_emit_scroll_metadata_with_reset=true_when_scroll_prop_key_is_in_resetProps - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "users": {
+   "data": [
+    "fresh"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "",
+   "previousPage": null,
+   "reset": true
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_populate_deepMergeProps_and_skip_append_and_prepend_when_DeepMerge_is_true - 1]
+{
+ "component": "TestComponent",
+ "deepMergeProps": [
+  "settings"
+ ],
+ "matchPropsOn": [
+  "settings.key"
+ ],
+ "props": {
+  "settings": {
+   "theme": "dark"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MergePropsMetadata/it_should_populate_prependProps_with_root-level_prepend_keys_when_merge.Append_is_false_without_paths - 1]
+{
+ "component": "TestComponent",
+ "prependProps": [
+  "notifications"
+ ],
+ "props": {
+  "notifications": [
+   "one"
+  ]
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_rescue_multiple_failed_props_aggregating_each_key_into_rescuedProps - 1]
+{
+ "component": "TestComponent",
+ "props": {},
+ "rescuedProps": [
+  "a",
+  "b"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_PartialResolution/it_should_combine_whitelist_and_blacklist_when_both_are_present - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MixedPropTypes/it_should_produce_all_metadata_fields_together_when_standard,_deferred,_optional,_once,_merge_and_scroll_props_are_combined_on_a_full_request - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "notifications"
+  ]
+ },
+ "mergeProps": [
+  "feed",
+  "users.data"
+ ],
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "feed": [
+   {
+    "id": 1
+   }
+  ],
+  "locale": "en",
+  "stats": "visible",
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "",
+   "previousPage": null
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ScrollPropsMetadata/it_should_emit_scrollProps_with_pageName,_pages_and_reset=false_when_a_scroll_prop_is_present - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data"
+ ],
+ "props": {
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": 1,
+   "nextPage": 2,
+   "pageName": "page",
+   "previousPage": null
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ScrollPropsMetadata/it_should_emit_multiple_scrollProps_entries_when_multiple_scroll_props_exist - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data",
+  "notifications.data"
+ ],
+ "props": {
+  "notifications": {
+   "data": [
+    "n"
+   ]
+  },
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "notifications": {
+   "currentPage": null,
+   "pageName": ""
+  },
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ScrollPropsMetadata/it_should_leave_scrollProps_empty_when_no_scroll_props_are_present - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MixedPropTypes/it_should_keep_rescuedProps,_scrollProps_and_mergeProps_consistent_when_a_rescued_deferred_prop_coexists_with_a_scroll_prop_and_a_merge_prop_on_the_same_partial_request - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "keep",
+  "users.data"
+ ],
+ "props": {
+  "keep": [
+   "a"
+  ],
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "rescuedProps": [
+  "rescued"
+ ],
+ "scrollProps": {
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_SharedProps/it_should_list_shared_prop_keys_in_sharedProps_when_shared_props_are_provided - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "sharedProps": [
+  "auth",
+  "errors"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ConcurrentResolution/it_should_aggregate_rescued_keys_and_not_fail_when_concurrent_props_fail_with_RescueError - 1]
+{
+ "component": "TestComponent",
+ "props": {},
+ "rescuedProps": [
+  "a",
+  "b"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_SharedProps/it_should_not_resolve_shared_prop_values_into_Page_props_when_they_are_only_declared_as_shared - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "sharedProps": [
+  "auth"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_MixedPropTypes/it_should_resolve_every_prop_on_a_partial_request_that_whitelists_the_parent_key_while_omitting_deferredProps_metadata - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "feed",
+  "users.data"
+ ],
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "feed": [
+   {
+    "id": 1
+   }
+  ],
+  "locale": "en",
+  "notifications": [
+   "msg"
+  ],
+  "stats": "visible",
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_SharedProps/it_should_leave_sharedProps_empty_when_no_shared_props_are_provided - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_SharedProps/it_should_keep_shared_props_independent_of_partial_whitelist_and_blacklist - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "sharedProps": [
+  "auth"
+ ],
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_ConcurrentResolution/it_should_mix_concurrent_and_sequential_props_in_the_same_partial_request_preserving_all_values - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "con1": "con1-value",
+  "con2": "con2-value",
+  "seq": "seq-value"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestRenderer_OncePropsResolution/it_should_keep_deferredProps_metadata_for_a_deferred+once_prop_whose_once_key_is_in_exceptOnceProps_on_a_non-partial_request - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "posts"
+  ]
+ },
+ "onceProps": {
+  "posts": {
+   "prop": "posts"
+  }
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

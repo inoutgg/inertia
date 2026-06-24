@@ -27,9 +27,7 @@
 [TestDeferredProp/should_rescue_failed_prop_and_report_it_in_rescuedProps_when_WithRescue_is_set - 1]
 {
  "component": "TestComponent",
- "props": {
-  "rescued": null
- },
+ "props": {},
  "rescuedProps": [
   "rescued"
  ],
