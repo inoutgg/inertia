@@ -3,12 +3,12 @@ package inertiavalidationerrors
 import (
 	"encoding/gob"
 
-	"go.segfaultmedaddy.com/inertia"
+	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
 
 var (
-	_ error                     = (*MapError)(nil)
-	_ inertia.ValidationErrorer = (*MapError)(nil)
+	_ error                         = (*MapError)(nil)
+	_ inertiaprop.ValidationErrorer = (*MapError)(nil)
 )
 
 //nolint:gochecknoinits
@@ -21,15 +21,14 @@ func init() {
 // Useful for quickly creating validation errors without defining custom types.
 type MapError map[string]string
 
-func (m MapError) ValidationErrors() []inertia.ValidationError {
-	errors := make([]inertia.ValidationError, 0, len(m))
+func (m MapError) ValidationErrors() []inertiaprop.ValidationError {
+	errors := make([]inertiaprop.ValidationError, 0, len(m))
 	for k, v := range m {
-		errors = append(errors, inertia.NewValidationError(k, v))
+		errors = append(errors, inertiaprop.NewValidationError(k, v))
 	}
 
 	return errors
 }
 
-func (m MapError) Error() string    { return "validation errors" }
-func (m MapError) Len() int         { return len(m) }
-func (m MapError) ErrorBag() string { return inertia.DefaultErrorBag }
+func (m MapError) Error() string { return "validation errors" }
+func (m MapError) Len() int      { return len(m) }

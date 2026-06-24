@@ -76,12 +76,11 @@ func (c *Config) defaults() {
 
 type Renderer struct {
 	ssrClient       SSRClient
-	resultPool      pond.ResultPool[inertiaprotocol.Result]
 	renderDuration  metric.Float64Histogram
-	t               *template.Template
-	telemetry       *inertiaotel.Config
+	t               *template.Template  // required, must be non-nil
+	telemetry       *inertiaotel.Config // required, defaults to inertiaotel.DefaultConfig
 	protocol        *inertiaprotocol.Renderer
-	rootViewID      string
+	rootViewID      string // required, defaults to DefaultRootViewID
 	version         string
 	jsonMarshalOpts []json.Options
 	rootViewAttrs   []pair[[]byte, []byte]
@@ -112,9 +111,11 @@ func New(t *template.Template, config *Config) *Renderer {
 		version:         config.Version,
 		rootViewID:      config.RootViewID,
 		rootViewAttrs:   attrs,
-		resultPool:      pond.NewResultPool[inertiaprotocol.Result](config.Concurrency),
 		telemetry:       config.Telemetry,
-		protocol:        inertiaprotocol.New(config.Telemetry),
+		protocol: inertiaprotocol.New(
+			pond.NewResultPool[inertiaprotocol.Result](config.Concurrency),
+			config.Telemetry,
+		),
 	}
 
 	var err error
@@ -211,7 +212,6 @@ func (r *Renderer) render(
 		PreserveFragment: renderCtx.PreserveFragment,
 		ClearHistory:     renderCtx.ClearHistory,
 		EncryptHistory:   renderCtx.EncryptHistory,
-		ResultPool:       r.resultPool,
 	})
 	if err != nil {
 		return Response{}, fmt.Errorf("inertia: an error occurred while rendering page: %w", err)

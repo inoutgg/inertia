@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"go.inout.gg/foundations/debug"
-	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -165,45 +164,4 @@ func NewMiddleware(renderer *Renderer, opts ...func(*MiddlewareConfig)) func(htt
 			rww.flush()
 		})
 	}
-}
-
-// RenderContext contains all configuration and data for rendering an Inertia.js page response.
-// It includes props, validation errors, history management options, and performance settings.
-type RenderContext = inertiahttp.RenderContext
-
-// Render sends an Inertia.js page response with the specified component and context.
-// It automatically detects whether to send JSON (for Inertia requests) or HTML (for full page loads).
-//
-// This function requires the Inertia middleware to be installed in the request chain.
-// Returns an error if the middleware is not found or if rendering fails.
-func Render(w http.ResponseWriter, r *http.Request, componentName string, rCtx RenderContext) error {
-	debug.Assert(w != nil, "ResponseWriter must not be nil")
-	debug.Assert(r != nil, "Request must not be nil")
-	debug.Assert(componentName != "", "component name must be non-empty")
-
-	scope := inertiahttp.RenderScopeFromRequest(r)
-
-	resp, err := scope.Render(r.Context(), componentName, rCtx)
-	if err != nil {
-		return err //nolint:wrapcheck
-	}
-
-	for key, value := range resp.Headers {
-		w.Header().Set(key, value)
-	}
-
-	w.WriteHeader(http.StatusOK)
-
-	must.Must(w.Write(resp.Body))
-
-	return nil
-}
-
-// MustRender is like Render, but panics if an error occurs.
-func MustRender(w http.ResponseWriter, req *http.Request, name string, r RenderContext) {
-	debug.Assert(w != nil, "ResponseWriter must not be nil")
-	debug.Assert(req != nil, "Request must not be nil")
-	debug.Assert(name != "", "component name must be non-empty")
-
-	must.Must1(Render(w, req, name, r))
 }

@@ -1,45 +1,102 @@
 package inertiahttp
 
-// import (
-// 	"testing"
+import (
+	"html/template"
+	"testing"
 
-// 	"github.com/go-json-experiment/json"
-// 	"github.com/stretchr/testify/assert"
-// 	"github.com/stretchr/testify/require"
-// 	"go.segfaultmedaddy.com/inertia/inertiaprop"
-// 	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
-// 	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
-// )
+	"github.com/go-json-experiment/json"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
-// func TestRenderer_render(t *testing.T) {
-// 	t.Parallel()
+	"go.segfaultmedaddy.com/inertia/inertiaotel"
+	"go.segfaultmedaddy.com/inertia/internal/inertiassr"
+)
 
-// 	t.Run("returns transport-neutral JSON response", func(t *testing.T) {
-// 		t.Parallel()
+func TestNew_Defaults(t *testing.T) {
+	t.Parallel()
 
-// 		// arrange
-// 		renderer := New(testTpl, &Config{Version: "1.0.0"})
-// 		req := inertiahttp.Request{
-// 			URL:       "/users",
-// 			IsInertia: true,
-// 			Version:   "1.0.0",
-// 		}
-// 		rCtx := NewRenderContext(WithProps(Props{inertiaprop.New("name", "Roman")}))
+	t.Run("it should apply default values for all required unset fields when config is nil", func(t *testing.T) {
+		t.Parallel()
 
-// 		// act
-// 		resp, err := renderer.render(t.Context(), req, "Users/Index", rCtx)
+		// arrange
+		tmpl := template.Must(template.New("test").Parse(`<html></html>`))
 
-// 		// assert
-// 		require.NoError(t, err)
-// 		assert.Equal(t, inertiaheader.ContentTypeJSON,
-// 			resp.Headers[inertiaheader.HeaderContentType])
-// 		assert.Equal(t, "true", resp.Headers[inertiaheader.HeaderXInertia])
+		// act
+		r := New(tmpl, nil)
 
-// 		var page map[string]any
+		// assert
+		assert.Equal(t, DefaultRootViewID, r.rootViewID)
+		assert.Equal(t, inertiaotel.DefaultConfig, r.telemetry)
+		assert.Nil(t, r.ssrClient)
+		assert.Empty(t, r.version)
+		assert.Same(t, tmpl, r.t)
+	})
 
-// 		err = json.Unmarshal(resp.Body, &page)
-// 		require.NoError(t, err)
-// 		assert.Equal(t, "Users/Index", page["component"])
-// 		assert.Equal(t, "/users", page["url"])
-// 	})
-// }
+	t.Run(
+		"it should default unset values to their defaults when config is partially populated",
+		func(t *testing.T) {
+			t.Parallel()
+
+			// arrange
+			tmpl := template.Must(template.New("test").Parse(`<html></html>`))
+			ctrl := gomock.NewController(t)
+			ssrClient := inertiassr.NewMockSSRClient(ctrl)
+
+			config := &Config{
+				SSRClient: ssrClient,
+				Version:   "1.0.0",
+			}
+
+			// act
+			r := New(tmpl, config)
+
+			// assert
+			assert.Equal(t, DefaultRootViewID, r.rootViewID)
+			assert.Equal(t, DefaultConcurrency, config.Concurrency)
+			assert.Equal(t, inertiaotel.DefaultConfig, r.telemetry)
+			// Set values are preserved.
+			assert.Same(t, ssrClient, r.ssrClient)
+			assert.Equal(t, "1.0.0", r.Version())
+			assert.Same(t, tmpl, r.t)
+		},
+	)
+}
+
+func TestNew_ConfigPropagation(t *testing.T) {
+	t.Parallel()
+
+	t.Run(
+		"it should propagate all config values to the renderer when config is fully populated",
+		func(t *testing.T) {
+			t.Parallel()
+
+			// arrange
+			tmpl := template.Must(template.New("test").Parse(`<html></html>`))
+			ctrl := gomock.NewController(t)
+			ssrClient := inertiassr.NewMockSSRClient(ctrl)
+			telemetry := inertiaotel.New()
+			jsonOpts := []json.Options{json.Deterministic(true)}
+
+			config := &Config{
+				SSRClient:          ssrClient,
+				RootViewAttrs:      map[string]string{"class": "foo"},
+				Telemetry:          telemetry,
+				Version:            "2.0.0",
+				RootViewID:         "custom-app",
+				JSONMarshalOptions: jsonOpts,
+				Concurrency:        4,
+			}
+
+			// act
+			r := New(tmpl, config)
+
+			// assert
+			assert.Same(t, tmpl, r.t)
+			assert.Same(t, ssrClient, r.ssrClient)
+			assert.Equal(t, "2.0.0", r.Version())
+			assert.Equal(t, "custom-app", r.rootViewID)
+			assert.Same(t, telemetry, r.telemetry)
+			assert.Equal(t, jsonOpts, r.jsonMarshalOpts)
+		},
+	)
+}

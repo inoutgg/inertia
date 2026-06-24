@@ -283,7 +283,7 @@ func TestMiddleware(t *testing.T) {
 		})
 
 		// act
-		middleware := newMiddleware(handler, New(tpl, &Config{Version: ""}))
+		middleware := newMiddleware(handler, New(tpl, nil))
 		middleware.ServeHTTP(w, r)
 
 		// assert

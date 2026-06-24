@@ -70,6 +70,8 @@ func sessionFromRequest(r *http.Request) (*session, error) {
 	}
 
 	var sess session
+
+	//nolint:gosec // TODO(segfaultmedaddy): revisit this since it might cause DoS
 	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&sess); err != nil {
 		d("failed to decode payload: %v", err)
 		return nil, fmt.Errorf("inertiaframe: failed to decode session: %w", err)
@@ -130,6 +132,7 @@ func (s *session) Save(w http.ResponseWriter) error {
 		Value:    base64.RawURLEncoding.EncodeToString(buf.Bytes()),
 		Path:     SessionPath,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now(),
 	}

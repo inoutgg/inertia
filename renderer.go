@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"net/http"
 
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/must"
 
-	"go.segfaultmedaddy.com/inertia/internal/inertiaheader"
 	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 )
 
@@ -58,17 +56,4 @@ func FromFS(fsys fs.FS, path string, config *Config) (*Renderer, error) {
 // MustFromFS is like FromFS, but panics if an error occurs.
 func MustFromFS(fsys fs.FS, path string, config *Config) *Renderer {
 	return must.Must(FromFS(fsys, path, config))
-}
-
-// ErrorBagFromRequest extracts the error bag name from the X-Inertia-Error-Bag header.
-//
-// Returns DefaultErrorBag if the header is not present.
-// Used to scope validation errors to specific forms on a page.
-func ErrorBagFromRequest(r *http.Request) string {
-	errorBag := r.Header.Get(inertiaheader.HeaderXInertiaErrorBag)
-	if errorBag == "" {
-		return DefaultErrorBag
-	}
-
-	return errorBag
 }

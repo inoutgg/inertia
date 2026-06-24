@@ -1,8 +1,13 @@
 package inertia
 
 import (
+	"go.segfaultmedaddy.com/inertia/internal/inertiahttp"
 	"go.segfaultmedaddy.com/inertia/internal/inertiaprop"
 )
+
+// RenderContext contains all configuration and data for rendering an Inertia.js page response.
+// It includes props, validation errors, history management options, and performance settings.
+type RenderContext = inertiahttp.RenderContext
 
 // RenderContextOption is a function that configures a RenderContext.
 type RenderContextOption func(*RenderContext)
