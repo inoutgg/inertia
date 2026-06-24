@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"go.segfaultmedaddy.com/inertia/inertiadeferred"
 	"go.segfaultmedaddy.com/inertia/inertiamerge"
 	"go.segfaultmedaddy.com/inertia/inertiaonce"
@@ -118,5 +120,26 @@ func TestDeferredProp(t *testing.T) {
 			}))).
 			ExpectPropIsNil("nullable").
 			Run()
+	})
+
+	t.Run("it should suppress deferredProps metadata when once key is in exceptOnceProps", func(t *testing.T) {
+		t.Parallel()
+
+		page := inertiatest.NewPropTestBuilder(t, inertiaprotocol.Request{
+			URL:             "/users",
+			ExceptOnceProps: []string{"posts"},
+		}).
+			With(
+				inertiadeferred.New("posts", inertiatest.NewTestLazyFunc(func(context.Context) (any, error) {
+					return []string{"p"}, nil
+				}),
+					inertiadeferred.WithOnce(inertiaonce.NewOnceOpts().Key("posts")),
+				),
+			).
+			ExpectNoProp("posts").
+			ExpectOnceProps("posts", "posts").
+			Run()
+
+		assert.Nil(t, page.DeferredProps, "deferredProps must be suppressed when once key is already loaded")
 	})
 }

@@ -303,3 +303,144 @@
  "version": "1.0.0"
 }
 ---
+
+[TestProp/it_should_skip_once_prop_value_resolution_when_its_key_appears_in_exceptOnceProps_header - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "timezone": "UTC"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_suppress_root-level_merge_entry_when_path-based_append_keys_are_present - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "conversation.messages"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_preserve_custom_once_key_in_onceProps_when_WithOnce_key_differs_from_prop_key - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "app-locale": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_not_skip_once_prop_when_Fresh_is_true_despite_key_being_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_suppress_deepMergeProps_and_matchPropsOn_for_reset_keys_when_DeepMerge_is_set - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "settings": {
+   "theme": "dark"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_qualify_matchOn_keys_with_the_prop_root_when_matchOn_paths_are_non-empty - 1]
+{
+ "component": "TestComponent",
+ "matchPropsOn": [
+  "conversation.messages.id"
+ ],
+ "mergeProps": [
+  "conversation.messages"
+ ],
+ "props": {
+  "conversation": {
+   "messages": [
+    "one"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_populate_deepMergeProps_and_matchPropsOn_when_NewDeepMerge_is_set - 1]
+{
+ "component": "TestComponent",
+ "deepMergeProps": [
+  "settings"
+ ],
+ "matchPropsOn": [
+  "settings.key"
+ ],
+ "props": {
+  "settings": {
+   "theme": "dark"
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestProp/it_should_ignore_empty_append,_prepend_and_matchOn_path_segments - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "posts.data",
+  "posts.items"
+ ],
+ "props": {
+  "posts": {
+   "data": [
+    "one"
+   ],
+   "items": [
+    "two"
+   ]
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

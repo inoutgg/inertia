@@ -8,6 +8,37 @@
 }
 ---
 
+[TestOptionalProp/should_pass_through_nil_value_when_prop_returns_nil - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "nullable": null
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestOptionalProp/should_exclude_value_from_props_when_partial_request_does_not_whitelist_it - 1]
+{
+ "component": "TestComponent",
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestOptionalProp/should_pass_through_false_value_when_prop_returns_false - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "flag": false
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
 [TestOptionalProp/should_skip_value_computation_on_initial_page_load - 1]
 {
  "component": "TestComponent",
@@ -28,43 +59,12 @@
 }
 ---
 
-[TestOptionalProp/should_exclude_value_from_props_when_partial_request_does_not_whitelist_it - 1]
-{
- "component": "TestComponent",
- "props": {},
- "url": "/users",
- "version": "1.0.0"
-}
----
-
 [TestOptionalProp/should_compute_multiple_props_in_parallel_when_prop_is_marked_concurrent - 1]
 {
  "component": "TestComponent",
  "props": {
   "a": "val-a",
   "b": "val-b"
- },
- "url": "/users",
- "version": "1.0.0"
-}
----
-
-[TestOptionalProp/should_pass_through_nil_value_when_prop_returns_nil - 1]
-{
- "component": "TestComponent",
- "props": {
-  "nullable": null
- },
- "url": "/users",
- "version": "1.0.0"
-}
----
-
-[TestOptionalProp/should_pass_through_false_value_when_prop_returns_false - 1]
-{
- "component": "TestComponent",
- "props": {
-  "flag": false
  },
  "url": "/users",
  "version": "1.0.0"

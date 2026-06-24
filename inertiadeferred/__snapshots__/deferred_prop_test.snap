@@ -13,12 +13,80 @@
 }
 ---
 
+[TestDeferredProp/should_group_props_in_deferredProps_when_WithGroup_is_set - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "group1": [
+   "a",
+   "b"
+  ],
+  "group2": [
+   "c"
+  ]
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
 [TestDeferredProp/should_pass_through_nil_value_when_prop_returns_nil - 1]
 {
  "component": "TestComponent",
  "props": {
   "nullable": null
  },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestDeferredProp/it_should_suppress_deferredProps_metadata_when_once_key_is_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "posts": {
+   "prop": "posts"
+  }
+ },
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestDeferredProp/should_populate_mergeProps_when_WithMerge_is_set - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "merged"
+  ]
+ },
+ "mergeProps": [
+  "merged"
+ ],
+ "props": {},
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestDeferredProp/should_populate_both_deferredProps_and_onceProps_when_WithOnce_is_set - 1]
+{
+ "component": "TestComponent",
+ "deferredProps": {
+  "default": [
+   "locale"
+  ]
+ },
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {},
  "url": "/users",
  "version": "1.0.0"
 }
@@ -42,60 +110,6 @@
  "props": {
   "deferred": "Deferred Content"
  },
- "url": "/users",
- "version": "1.0.0"
-}
----
-
-[TestDeferredProp/should_populate_mergeProps_when_WithMerge_is_set - 1]
-{
- "component": "TestComponent",
- "deferredProps": {
-  "default": [
-   "merged"
-  ]
- },
- "mergeProps": [
-  "merged"
- ],
- "props": {},
- "url": "/users",
- "version": "1.0.0"
-}
----
-
-[TestDeferredProp/should_group_props_in_deferredProps_when_WithGroup_is_set - 1]
-{
- "component": "TestComponent",
- "deferredProps": {
-  "group1": [
-   "a",
-   "b"
-  ],
-  "group2": [
-   "c"
-  ]
- },
- "props": {},
- "url": "/users",
- "version": "1.0.0"
-}
----
-
-[TestDeferredProp/should_populate_both_deferredProps_and_onceProps_when_WithOnce_is_set - 1]
-{
- "component": "TestComponent",
- "deferredProps": {
-  "default": [
-   "locale"
-  ]
- },
- "onceProps": {
-  "locale_key": {
-   "prop": "locale"
-  }
- },
- "props": {},
  "url": "/users",
  "version": "1.0.0"
 }

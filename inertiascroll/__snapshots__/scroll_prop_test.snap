@@ -197,3 +197,48 @@
  "version": "1.0.0"
 }
 ---
+
+[TestScrollProp/it_should_emit_multiple_scrollProps_entries_when_multiple_scroll_props_exist - 1]
+{
+ "component": "TestComponent",
+ "mergeProps": [
+  "users.data",
+  "notifications.data"
+ ],
+ "props": {
+  "notifications": {
+   "data": [
+    "n"
+   ]
+  },
+  "users": {
+   "data": [
+    "one"
+   ]
+  }
+ },
+ "scrollProps": {
+  "notifications": {
+   "currentPage": null,
+   "pageName": ""
+  },
+  "users": {
+   "currentPage": null,
+   "pageName": ""
+  }
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestScrollProp/it_should_leave_scrollProps_empty_when_no_scroll_props_are_present - 1]
+{
+ "component": "TestComponent",
+ "props": {
+  "name": "Roman"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---

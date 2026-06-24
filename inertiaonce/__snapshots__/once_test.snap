@@ -1,0 +1,65 @@
+
+[TestOnce/should_populate_onceProps_when_WithOnce_is_set - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "once_key": {
+   "prop": "onceable"
+  }
+ },
+ "props": {
+  "onceable": "secret",
+  "regular": "value"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestOnce/it_should_not_skip_once_prop_when_Fresh_is_true_despite_key_being_in_exceptOnceProps - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestOnce/it_should_preserve_custom_once_key_in_onceProps_when_WithOnce_key_differs_from_prop_key - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "app-locale": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "locale": "en"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
+
+[TestOnce/it_should_skip_once_prop_value_resolution_when_its_key_appears_in_exceptOnceProps_header - 1]
+{
+ "component": "TestComponent",
+ "onceProps": {
+  "locale_key": {
+   "prop": "locale"
+  }
+ },
+ "props": {
+  "timezone": "UTC"
+ },
+ "url": "/users",
+ "version": "1.0.0"
+}
+---
